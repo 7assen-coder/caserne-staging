@@ -1,6 +1,6 @@
-backend/db.sqlite3
-backend/__pycache__
-backend/etudiants/migrations
-.env
-.venv
-venv
+*db.sqlite3
+*__pycache__
+*migrations
+*.env
+*.venv
+*venv
