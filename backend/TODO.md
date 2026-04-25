@@ -1,0 +1,1 @@
+- change the serie back field to accept options
