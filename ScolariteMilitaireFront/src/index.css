@@ -1,0 +1,307 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Taille de base (lisibilité) */
+  html {
+    font-size: 21px;
+    -webkit-text-size-adjust: 100%;
+    color-scheme: light;
+  }
+  @media (min-width: 1280px) {
+    html {
+      font-size: 22px;
+    }
+  }
+  @media (min-width: 1536px) {
+    html {
+      font-size: 23px;
+    }
+  }
+
+  body {
+    @apply bg-white text-slate-900 antialiased font-medium;
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.02em;
+    /* couleur gérée par les classes (page-title, etc.) */
+    color: inherit;
+  }
+
+  h1 {
+    @apply text-3xl md:text-4xl lg:text-5xl font-semibold;
+  }
+  h2 {
+    @apply text-2xl md:text-3xl lg:text-4xl font-semibold;
+  }
+  h3 {
+    @apply text-xl md:text-2xl font-semibold;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  #root {
+    @apply min-h-full bg-white text-slate-900 antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-base font-medium
+           transition-all duration-150 min-h-[2.75rem] select-none;
+  }
+  .btn-primary {
+    @apply bg-navy text-white hover:bg-navy-800 active:scale-[0.98] shadow-sm
+           disabled:opacity-50 disabled:pointer-events-none
+           dark:bg-navy-700 dark:hover:bg-navy-600;
+  }
+  .btn-secondary {
+    @apply bg-white border border-light-gray text-navy hover:border-navy hover:bg-navy-50;
+  }
+  .btn-gold {
+    @apply bg-gold text-dark-navy font-semibold hover:bg-gold-400 shadow-gold active:scale-[0.98];
+  }
+  .btn-danger {
+    @apply bg-brand-red text-white hover:opacity-90 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  .btn-sm {
+    @apply px-3 py-2 text-sm min-h-[2.5rem] rounded-md;
+  }
+  .btn-lg {
+    @apply px-6 py-3.5 text-lg min-h-[3.15rem];
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-card ring-1 ring-light-gray/60;
+  }
+
+  .card-hover {
+    @apply transition-shadow duration-200 hover:shadow-card-hover;
+  }
+
+  .input {
+    @apply min-h-[3rem] w-full rounded-lg border border-light-gray bg-white px-4 py-3 text-base text-slate-900
+           placeholder:text-text-muted
+           transition-colors
+           focus:border-gold/70 focus:outline-none focus:ring-2 focus:ring-gold/30;
+  }
+
+  .label {
+    @apply mb-2 block text-sm font-semibold uppercase tracking-wide text-slate-600;
+  }
+
+  .login-input {
+    @apply w-full rounded-xl border border-light-gray bg-white text-base
+           min-h-[3.15rem] py-3.5 pl-4 pr-4
+           focus:outline-none focus:ring-2 focus:ring-gold/35 focus:border-gold/80
+           transition-colors;
+  }
+  .login-input-compact {
+    @apply min-h-[2.65rem] py-2.5 text-[0.9375rem] rounded-lg;
+  }
+
+  /* champs regroupés (bordure + focus) */
+  .login-form-control {
+    @apply flex items-center gap-3 rounded-xl border border-slate-200/95 bg-slate-50/95 px-3.5 min-h-[3rem]
+      shadow-[inset_0_1px_0_0_rgba(255,255,255,0.85)]
+      transition-all duration-200
+      focus-within:border-slate-300 focus-within:bg-white focus-within:ring-[3px] focus-within:ring-navy-900/[0.08]
+      focus-within:shadow-sm;
+  }
+  .login-form-control input {
+    @apply flex-1 min-w-0 border-0 bg-transparent py-2.5 text-[0.95rem] text-navy-900 placeholder:text-text-muted
+      shadow-none ring-0 outline-none focus:ring-0;
+  }
+
+  .login-form-control--lg {
+    @apply min-h-[3.5rem] px-4 rounded-2xl gap-3.5;
+  }
+  .login-form-control--lg input {
+    @apply text-lg py-3;
+  }
+
+  .login-card-input {
+    @apply w-full min-h-[3.5rem] sm:min-h-[4rem] px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl border border-light-gray bg-white
+      text-lg sm:text-xl text-navy-900 placeholder:text-text-muted
+      focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold transition-colors;
+  }
+
+  .login-card-field-label {
+    @apply block text-sm sm:text-base font-semibold uppercase tracking-wide text-text-light mb-2;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border;
+  }
+
+  .table-base {
+    @apply w-full border-collapse text-base;
+  }
+  .table-base thead th {
+    @apply whitespace-nowrap border-b border-light-gray bg-off-white px-4 py-4 text-left text-base font-semibold uppercase tracking-wide text-slate-600;
+  }
+  .table-base tbody td {
+    @apply border-b border-light-gray/80 px-4 py-4 align-middle text-base text-slate-900;
+  }
+  .table-base tbody tr {
+    @apply transition-colors;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-off-white;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-base transition-all;
+  }
+  .nav-link-compact {
+    @apply px-3 py-2.5 gap-2.5;
+  }
+  .nav-link-inactive {
+    @apply text-slate-700 hover:bg-slate-100 hover:text-slate-900;
+  }
+  .nav-link-active {
+    @apply bg-navy-50 text-navy shadow-inner ring-1 ring-navy-100;
+  }
+
+  .page-header {
+    @apply flex items-start justify-between gap-4 flex-wrap;
+  }
+
+  .page-title {
+    @apply font-serif text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl md:text-6xl;
+  }
+
+  .page-subtitle {
+    @apply mt-1.5 text-lg text-text-light md:text-xl;
+  }
+
+  .section-title {
+    @apply font-serif text-xl font-semibold text-slate-900 md:text-2xl lg:text-3xl;
+  }
+
+  .data-card {
+    @apply rounded-lg border border-light-gray bg-white p-4 shadow-sm;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+.sidebar-pattern {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-enter {
+  animation: fadeInUp 260ms ease-out both;
+}
+
+/* carrousel login (Ken Burns) — off si reduced-motion */
+@keyframes loginKenburns {
+  0% {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.1) translate3d(-1.25%, -0.75%, 0);
+  }
+}
+.animate-login-kenburns {
+  animation: loginKenburns 16s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-login-kenburns {
+    animation: none;
+  }
+}
+
+@keyframes loginMeshDrift {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-3%, 2%) scale(1.05);
+    opacity: 0.85;
+  }
+}
+.login-hero-mesh {
+  animation: loginMeshDrift 22s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-hero-mesh {
+    animation: none;
+    opacity: 0.65;
+  }
+}
+
+@keyframes loginPanelPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.login-panel-glow {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(27, 42, 74, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(253, 185, 19, 0.06), transparent);
+  animation: loginPanelPulse 14s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+.login-panel-glow {
+  animation: none;
+    opacity: 0.45;
+  }
+}

@@ -1,0 +1,215 @@
+import { useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
+import EspLoginBackdrop from '../components/login/EspLoginBackdrop';
+import LoginTopBar from '../components/login/LoginTopBar';
+import LoginLangSwitch from '../components/login/LoginLangSwitch';
+import Button from '../components/common/Button';
+import { useAuth } from '../hooks/useAuth';
+
+function isEspEmail(v) {
+  const s = String(v).trim().toLowerCase();
+  return /^[^\s@]+@esp\.mr$/i.test(s);
+}
+
+function sanitizeMrPhoneDigits(raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  return digits.replace(/^[^234]+/, '').slice(0, 8);
+}
+
+function isValidMrPhone8(v) {
+  return /^[234]\d{7}$/.test(String(v));
+}
+
+function blockNonDigitKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'End', 'Home'];
+  if (allowed.includes(e.key)) return;
+  if (e.key.length === 1 && !/^\d$/.test(e.key)) e.preventDefault();
+}
+
+export default function LoginPage() {
+  const { isAuthenticated, login } = useAuth();
+  const [channel, setChannel] = useState('email');
+  const [email, setEmail] = useState('a.brahimi@esp.mr');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [sessionLongue, setSessionLongue] = useState(true);
+  const [lang, setLang] = useState('FR');
+  const [formErr, setFormErr] = useState('');
+
+  const handleChannelChange = (next) => {
+    setFormErr('');
+    setChannel(next);
+  };
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+
+  const identifierOk = channel === 'email' ? isEspEmail(email) : isValidMrPhone8(phone);
+  const loginFormOk = identifierOk && password.trim().length > 0;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setFormErr('');
+    if (channel === 'email' && !isEspEmail(email)) {
+      setFormErr('Utilisez une adresse @esp.mr.');
+      return;
+    }
+    if (channel === 'phone' && !isValidMrPhone8(phone)) {
+      setFormErr('Numéro : 8 chiffres, commence par 2, 3 ou 4.');
+      return;
+    }
+    if (!password.trim()) {
+      setFormErr('Mot de passe requis.');
+      return;
+    }
+    if (channel === 'email') login(email.trim().toLowerCase());
+    else login(phone);
+  };
+
+  return (
+    <div className="relative min-h-screen min-h-[100dvh] overflow-hidden bg-[#060d16]">
+      <div className="absolute inset-0 z-0">
+        <EspLoginBackdrop />
+      </div>
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_100%_70%_at_50%_38%,rgba(5,10,18,0.42),transparent_72%)]"
+        aria-hidden
+      />
+
+      <LoginTopBar lang={lang} onLangChange={setLang} logoTo="/login" prominent overlay showLanguages={false} />
+
+      <main className="relative z-10 flex min-h-screen min-h-[100dvh] flex-col items-center justify-center px-4 sm:px-8 lg:px-12 pt-24 pb-20 sm:pt-28 sm:pb-24">
+        <div className="w-full max-w-xl sm:max-w-2xl lg:max-w-3xl">
+          <div className="text-center mb-8 sm:mb-10">
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.32em] text-white/65 mb-3 font-sans">
+              Portail scolarité
+            </p>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight font-sans drop-shadow-lg">
+              Connexion
+            </h1>
+          </div>
+
+          <div className="rounded-3xl border border-white/[0.14] bg-white shadow-[0_24px_80px_-12px_rgba(0,0,0,0.45)] ring-1 ring-black/[0.06] overflow-hidden">
+            <div className="flex items-center justify-end border-b border-light-gray px-6 py-4 sm:px-8 sm:py-5 bg-off-white/90">
+              <LoginLangSwitch value={lang} onChange={setLang} variant="light" size="lg" />
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-8 p-6 sm:p-10 lg:p-12 font-sans">
+              <div className="space-y-6 sm:space-y-8 min-h-[14rem] sm:min-h-[15rem]">
+                {formErr && (
+                  <p className="text-base sm:text-lg font-medium text-brand-red bg-red-50 border border-red-100 rounded-xl px-4 py-3.5">
+                    {formErr}
+                  </p>
+                )}
+
+                <div className="space-y-6 sm:space-y-7">
+                  <p className="text-base sm:text-lg text-text-light leading-snug">
+                    Espace personnel — accès sécurisé.
+                  </p>
+                  <div>
+                    <span className="login-card-field-label">Connexion</span>
+                    <div className="flex rounded-xl border-2 border-light-gray p-1 bg-off-white gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleChannelChange('email')}
+                        className={`flex-1 rounded-lg py-3.5 sm:py-4 text-base sm:text-lg font-bold transition ${
+                          channel === 'email'
+                            ? 'bg-white text-navy shadow-md ring-2 ring-navy/10'
+                            : 'text-text-light hover:text-navy'
+                        }`}
+                      >
+                        E-mail
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleChannelChange('phone')}
+                        className={`flex-1 rounded-lg py-3.5 sm:py-4 text-base sm:text-lg font-bold transition ${
+                          channel === 'phone'
+                            ? 'bg-white text-navy shadow-md ring-2 ring-navy/10'
+                            : 'text-text-light hover:text-navy'
+                        }`}
+                      >
+                        Téléphone
+                      </button>
+                    </div>
+                  </div>
+                  {channel === 'email' ? (
+                    <label className="block">
+                      <span className="login-card-field-label">E-mail</span>
+                      <input
+                        type="email"
+                        className="login-card-input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="prenom.nom@esp.mr"
+                        autoComplete="username"
+                      />
+                      <p className="mt-2 text-sm text-text-light">Suffixe @esp.mr</p>
+                    </label>
+                  ) : (
+                    <label className="block">
+                      <span className="login-card-field-label">Mobile</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="tel-national"
+                        maxLength={8}
+                        className="login-card-input font-mono tracking-widest"
+                        value={phone}
+                        onChange={(e) => setPhone(sanitizeMrPhoneDigits(e.target.value))}
+                        onKeyDown={blockNonDigitKey}
+                        placeholder="ex. 31234567"
+                      />
+                      <p className="mt-2 text-sm text-text-light">8 chiffres, préfixe 2 / 3 / 4</p>
+                    </label>
+                  )}
+                  <label className="block">
+                    <span className="login-card-field-label flex flex-wrap items-center justify-between gap-2">
+                      <span>Mot de passe</span>
+                      <Link
+                        to="/login/recovery"
+                        className="text-sm sm:text-base font-semibold normal-case tracking-normal text-navy hover:text-brand-red"
+                      >
+                        Mot de passe oublié
+                      </Link>
+                    </span>
+                    <input
+                      type="password"
+                      className="login-card-input"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                    />
+                  </label>
+                  <label className="flex items-center gap-4 cursor-pointer select-none py-1">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 sm:h-6 sm:w-6 rounded border-light-gray text-navy focus:ring-navy/25 shrink-0"
+                      checked={sessionLongue}
+                      onChange={(e) => setSessionLongue(e.target.checked)}
+                    />
+                    <span className="text-base sm:text-lg text-text-light leading-snug">Rester connecté</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t-2 border-light-gray">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  disabled={!loginFormOk}
+                  className="w-full justify-center min-h-[3.5rem] sm:min-h-[3.75rem] text-lg"
+                >
+                  Se connecter
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
