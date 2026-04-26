@@ -1,0 +1,72 @@
+import { useEffect } from 'react';
+import { X } from 'lucide-react';
+
+/**
+ * طبقة كاملة فوق الصفحة (full-screen layer).
+ * - chrome=true: Header بسيط مع عنوان وزر إغلاق + محتوى قابل للتمرير.
+ * - chrome=false: فقط overlay + container (بدون header) لاستضافة صفحات كاملة (مثل DemandeReviewView).
+ */
+export default function FullScreenLayer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  chrome = true,
+  children,
+  className = '',
+  contentClassName = '',
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80]">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
+        aria-label="Fermer"
+        onClick={onClose}
+      />
+      <div
+        className={`relative h-full w-full overflow-hidden bg-white shadow-pop ring-1 ring-light-gray ${className}`}
+        role="dialog"
+        aria-modal
+        aria-label={title || 'Fenêtre'}
+      >
+        {chrome ? (
+          <>
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-light-gray bg-white px-5 py-4 sm:px-6 sm:py-5">
+              <div className="min-w-0">
+                {title && <h2 className="truncate font-serif text-xl font-semibold text-slate-900 sm:text-2xl">{title}</h2>}
+                {subtitle && <p className="mt-1 text-sm text-text-light">{subtitle}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="-mr-2 -mt-2 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-light-gray bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </header>
+            <div className={`h-[calc(100%-4.25rem)] overflow-auto ${contentClassName}`}>{children}</div>
+          </>
+        ) : (
+          <div className={`h-full overflow-auto ${contentClassName}`}>{children}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
