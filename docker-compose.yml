@@ -26,6 +26,15 @@ services:
     depends_on:
       - db
 
+  frontend:
+    build:
+      context: ./ScolariteMilitaireFront
+      dockerfile: Dockerfile
+    ports:
+      - "9081:80"
+    depends_on:
+      - backend
+
 volumes:
   pg_data:
 
