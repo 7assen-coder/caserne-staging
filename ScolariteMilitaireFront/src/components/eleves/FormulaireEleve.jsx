@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import Button from '../common/Button';
 import SelectField from '../common/SelectField';
 import CloudUploadZone from './CloudUploadZone';
-import { FILIERES, NIVEAUX_SCOLARITE, VOIES_ACCES_ETUDIANT } from '../../utils/constants';
+import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
 
 const STEPS = [
   { id: 0, label: 'État civil' },
@@ -32,18 +32,23 @@ const DEFAULT = {
   ecoleBac: '',
   anneePremiereInscription: '',
   datePremiereInscription: '',
-  residentAvecParents: '',
+  residentAvecParents: true,
   compteBankily: '',
-  sexe: 'M',
+  sexe: 'H',
+  voieAcces: '',
+  diplomeAcces: '',
+  etablissementDiplome: '',
+  adressePrimaire: '',
+  adresseSecondaire: '',
+  tel1: '',
+  tel2Whatsapp: '',
+  emailPro: '',
+  emailPerso: '',
   filiere: DEFAULT_FILIERE,
   scolarite: {
     departement: DEFAULT_FILIERE,
     filiere: DEFAULT_FILIERE,
     niveau: NIVEAUX_SCOLARITE[0],
-    anneeUni1ere: '2024-2025',
-    voieAcces: VOIES_ACCES_ETUDIANT[0].value,
-    diplomeAcces: '',
-    etablissementPremierCycle: '',
     semestreActuel: '',
     donneesSemestres: '',
     diplome: '',
@@ -53,13 +58,13 @@ const DEFAULT = {
     parcours: '',
   },
   pieces: {
-    /** Portrait officiel (aligné sur le dépôt mobile + contrôle scolarité) */
-    photoIdentite: null,
-    carteIdentite: null,
-    releveBac: null,
-    /** Un seul PDF : relevés S1 à S5 regroupés */
-    releveNotesSemestres: null,
+    cin: null,
+    acteNaissance: null,
+    diplomeAcces: null,
     diplomeBac: null,
+    photoIdentiteMilitaire: null,
+    photoIdentiteCivile: null,
+    photoMilitaireIntegrale: null,
   },
   parents: {
     prenomPere: '',
@@ -157,14 +162,14 @@ function serializePieces(pieces) {
 
 function normalizePieces(pieces) {
   const p = pieces && typeof pieces === 'object' ? { ...pieces } : {};
-  const legacy = [1, 2, 3, 4, 5].map((n) => p[`releveS${n}`]).find((x) => x != null) ?? null;
-  for (let n = 1; n <= 5; n++) delete p[`releveS${n}`];
   return {
-    photoIdentite: p.photoIdentite ?? null,
-    carteIdentite: p.carteIdentite ?? null,
-    releveBac: p.releveBac ?? null,
-    releveNotesSemestres: p.releveNotesSemestres ?? legacy ?? null,
+    cin: p.cin ?? null,
+    acteNaissance: p.acteNaissance ?? null,
+    diplomeAcces: p.diplomeAcces ?? null,
     diplomeBac: p.diplomeBac ?? null,
+    photoIdentiteMilitaire: p.photoIdentiteMilitaire ?? null,
+    photoIdentiteCivile: p.photoIdentiteCivile ?? null,
+    photoMilitaireIntegrale: p.photoMilitaireIntegrale ?? null,
   };
 }
 
@@ -208,14 +213,23 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
   };
 
   const handleNext = async () => {
-    if (step >= STEPS.length - 1) return;
+    const lastStep = STEPS.length - 1;
     const nextStep = step + 1;
     setStepError('');
     if (onStepSubmit) {
       setSubmitting(true);
       try {
         await onStepSubmit(step, values);
-        setStep(nextStep);
+        if (step < lastStep) {
+          setStep(nextStep);
+        } else {
+          const emailSync = values.emailPerso || values.emailPro || '';
+          await onSubmit?.({
+            ...values,
+            emailPerso: values.emailPerso || emailSync,
+            pieces: serializePieces(values.pieces),
+          });
+        }
       } catch (err) {
         const msg = err?.response?.data
           ? Object.entries(err.response.data)
@@ -228,7 +242,7 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
       }
       return;
     }
-    setStep(nextStep);
+    if (step < lastStep) setStep(nextStep);
   };
 
   const filiereOptions = FILIERES.map((x) => ({ value: x, label: x }));
@@ -286,34 +300,43 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
           <>
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Identité & inscription (SI)
+                État civil
               </h4>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <Field label="Matricule" value={values.matricule} onChange={(v) => update('matricule', v)} required />
-                <Field label="Nom" value={values.nom} onChange={(v) => update('nom', v)} required />
-                <Field label="Prénom" value={values.prenom} onChange={(v) => update('prenom', v)} required />
-                <Field label="N° NNI" value={values.nni} onChange={(v) => update('nni', v)} />
-                <Field label="N° Bac" value={values.numeroBac} onChange={(v) => update('numeroBac', v)} />
+                <Field label="Numéro Bac" value={values.numeroBac} onChange={(v) => update('numeroBac', v)} />
+                <Field label="NNI" value={values.nni} onChange={(v) => update('nni', v)} />
                 <Field
                   label="Date de naissance"
                   type="date"
                   value={values.dateNaissance}
                   onChange={(v) => update('dateNaissance', v)}
                 />
+                <Field label="Prénom" value={values.prenom} onChange={(v) => update('prenom', v)} required />
+                <Field label="Nom de famille" value={values.nom} onChange={(v) => update('nom', v)} required />
                 <Field label="Lieu de naissance" value={values.lieuNaissance} onChange={(v) => update('lieuNaissance', v)} />
                 <Field label="Nationalité" value={values.nationalite} onChange={(v) => update('nationalite', v)} />
                 <SelectField
-                  label="Catégorie du Bac"
+                  label="Sexe"
+                  value={values.sexe}
+                  onChange={(v) => update('sexe', v)}
+                  options={[
+                    { value: 'H', label: 'H' },
+                    { value: 'F', label: 'F' },
+                  ]}
+                />
+                <SelectField
+                  label="Catégorie Bac"
                   value={values.categorieBac}
                   onChange={(v) => update('categorieBac', v)}
                   options={[
                     { value: 'National', label: 'National' },
-                    { value: 'Étranger', label: 'Étranger' },
+                    { value: 'Etranger', label: 'Etranger' },
                   ]}
                 />
-                <Field label="Série du Bac" value={values.serieBac} onChange={(v) => update('serieBac', v)} />
+                <Field label="Série Bac" value={values.serieBac} onChange={(v) => update('serieBac', v)} />
                 <Field label="Moyenne Bac" value={values.moyenneBac} onChange={(v) => update('moyenneBac', v)} />
-                <Field label="École du Bac" value={values.ecoleBac} onChange={(v) => update('ecoleBac', v)} />
+                <Field label="École Bac" value={values.ecoleBac} onChange={(v) => update('ecoleBac', v)} />
                 <Field
                   label="Année première inscription"
                   value={values.anneePremiereInscription}
@@ -325,50 +348,31 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
                   value={values.datePremiereInscription}
                   onChange={(v) => update('datePremiereInscription', v)}
                 />
+                <Field label="Voie d'accès" value={values.voieAcces} onChange={(v) => update('voieAcces', v)} />
+                <Field label="Diplôme d'accès" value={values.diplomeAcces} onChange={(v) => update('diplomeAcces', v)} />
                 <Field
-                  label="Adresse primaire"
-                  value={values.contact.adresse}
-                  onChange={(v) => update('contact.adresse', v)}
-                  required
+                  label="Établissement diplôme"
+                  value={values.etablissementDiplome}
+                  onChange={(v) => update('etablissementDiplome', v)}
                 />
-                <Field
-                  label="Téléphone principal (tel1)"
-                  value={values.contact.telephone}
-                  onChange={(v) => update('contact.telephone', v)}
-                  required
-                />
-                <SelectField
-                  label="Résident avec les parents"
-                  value={values.residentAvecParents}
-                  onChange={(v) => update('residentAvecParents', v)}
-                  options={[
-                    { value: '', label: '—' },
-                    { value: 'Oui', label: 'Oui' },
-                    { value: 'Non', label: 'Non' },
-                  ]}
-                />
+                <Field label="Adresse primaire" value={values.adressePrimaire} onChange={(v) => update('adressePrimaire', v)} required />
+                <Field label="Adresse secondaire" value={values.adresseSecondaire} onChange={(v) => update('adresseSecondaire', v)} />
                 <Field label="Compte Bankily" value={values.compteBankily} onChange={(v) => update('compteBankily', v)} />
+                <Field label="Email professionnel" value={values.emailPro} onChange={(v) => update('emailPro', v)} />
+                <Field label="Email personnel" value={values.emailPerso} onChange={(v) => update('emailPerso', v)} />
+                <Field label="Téléphone principal" value={values.tel1} onChange={(v) => update('tel1', v)} required />
+                <Field label="Téléphone WhatsApp" value={values.tel2Whatsapp} onChange={(v) => update('tel2Whatsapp', v)} />
+                <Field label="Facebook" value={values.facebook} onChange={(v) => update('facebook', v)} />
+                <Field label="LinkedIn" value={values.linkedin} onChange={(v) => update('linkedin', v)} />
                 <SelectField
-                  label="Sexe"
-                  value={values.sexe}
-                  onChange={(v) => update('sexe', v)}
+                  label="Résident avec parents"
+                  value={values.residentAvecParents ? 'true' : 'false'}
+                  onChange={(v) => update('residentAvecParents', v === 'true')}
                   options={[
-                    { value: 'M', label: 'Masculin' },
-                    { value: 'F', label: 'Féminin' },
+                    { value: 'true', label: 'true' },
+                    { value: 'false', label: 'false' },
                   ]}
                 />
-              </div>
-            </FormPanel>
-            <FormPanel>
-              <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Parents (réf. dossier)
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <Field label="Prénom père" value={values.parents.prenomPere} onChange={(v) => update('parents.prenomPere', v)} />
-                <Field label="Fonction père" value={values.parents.fonctionPere} onChange={(v) => update('parents.fonctionPere', v)} />
-                <Field label="Prénom mère" value={values.parents.prenomMere} onChange={(v) => update('parents.prenomMere', v)} />
-                <Field label="Nom mère" value={values.parents.nomMere} onChange={(v) => update('parents.nomMere', v)} />
-                <Field label="Fonction mère" value={values.parents.fonctionMere} onChange={(v) => update('parents.fonctionMere', v)} />
               </div>
             </FormPanel>
           </>
@@ -377,11 +381,11 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         {step === 1 && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Scolarité académique
+              Scolarité
             </h4>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <SelectField
-                label="Département / filière"
+                label="Département"
                 value={values.scolarite.filiere}
                 onChange={(v) => {
                   update('scolarite.filiere', v);
@@ -391,37 +395,10 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
                 options={filiereOptions}
               />
               <SelectField
-                label="Niveau"
+                label="Niveau actuel"
                 value={values.scolarite.niveau}
                 onChange={(v) => update('scolarite.niveau', v)}
                 options={NIVEAUX_SCOLARITE.map((x) => ({ value: x, label: x }))}
-              />
-              <Field
-                label="Année univ. 1ʳᵉ inscription"
-                value={values.scolarite.anneeUni1ere}
-                onChange={(v) => update('scolarite.anneeUni1ere', v)}
-              />
-              <SelectField
-                label="Voie d’accès"
-                value={values.scolarite.voieAcces}
-                onChange={(v) => update('scolarite.voieAcces', v)}
-                options={VOIES_ACCES_ETUDIANT}
-              />
-              <SelectField
-                label="Diplôme d’accès (1er cycle)"
-                value={values.scolarite.diplomeAcces}
-                onChange={(v) => update('scolarite.diplomeAcces', v)}
-                options={[
-                  { value: '', label: '—' },
-                  { value: 'Licence', label: 'Licence' },
-                  { value: 'CNIM', label: 'CNIM' },
-                  { value: 'Autre', label: 'Autre' },
-                ]}
-              />
-              <Field
-                label="Établissement (diplôme 1er cycle)"
-                value={values.scolarite.etablissementPremierCycle}
-                onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
               />
               <Field label="Semestre actuel" value={values.scolarite.semestreActuel} onChange={(v) => update('scolarite.semestreActuel', v)} />
               <Field label="Données semestres" value={values.scolarite.donneesSemestres} onChange={(v) => update('scolarite.donneesSemestres', v)} />
@@ -448,45 +425,58 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
 
         {step === 2 && (
           <FormPanel className="!p-4 sm:!p-6">
-            <h4 className="mb-1 font-serif text-base font-semibold text-slate-50">Dossier — pièces jointes</h4>
+            <h4 className="mb-1 font-serif text-base font-semibold text-slate-50">Pièces & diplômes</h4>
             <p className="mb-5 max-w-2xl text-xs leading-relaxed text-slate-400">
-              Photo d’identité, pièces administratives et relevés. Formats :{' '}
-              <span className="text-gold/90">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier (démo).
+              Pièces demandées pour le dossier. Formats :{' '}
+              <span className="text-gold/90">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <CloudUploadZone
-                  label="Photo d’identité (portrait du candidat)"
-                  hint="Fond neutre, visage visible — requis pour le dossier (comme l’app mobile)"
-                  value={values.pieces.photoIdentite}
-                  onChange={(f) => update('pieces.photoIdentite', f)}
-                  accept="image/jpeg,image/png,image/webp,image/*"
+                label="Carte d'identité (CIN)"
+                hint="Document d'identité"
+                  value={values.pieces.cin}
+                  onChange={(f) => update('pieces.cin', f)}
                 />
               </div>
               <CloudUploadZone
-                label="Carte d’identité"
-                hint="Scan recto-verso ou PDF"
-                value={values.pieces.carteIdentite}
-                onChange={(f) => update('pieces.carteIdentite', f)}
+                label="Acte de naissance"
+                hint="Document officiel"
+                value={values.pieces.acteNaissance}
+                onChange={(f) => update('pieces.acteNaissance', f)}
               />
               <CloudUploadZone
-                label="Relevé de notes — Bac"
-                hint="Bulletin ou relevé officiel"
-                value={values.pieces.releveBac}
-                onChange={(f) => update('pieces.releveBac', f)}
-              />
-              <CloudUploadZone
-                label="Relevé de notes (S1 à S5)"
-                hint="Un seul PDF regroupant tous les semestres"
-                value={values.pieces.releveNotesSemestres}
-                onChange={(f) => update('pieces.releveNotesSemestres', f)}
-                accept="application/pdf,.pdf"
+                label="Diplôme d'accès"
+                hint="Fichier justificatif"
+                value={values.pieces.diplomeAcces}
+                onChange={(f) => update('pieces.diplomeAcces', f)}
               />
               <CloudUploadZone
                 label="Diplôme du Bac"
-                hint="Copie conforme ou attestation"
+                hint="Copie du diplôme"
                 value={values.pieces.diplomeBac}
                 onChange={(f) => update('pieces.diplomeBac', f)}
+              />
+              <CloudUploadZone
+                label="Photo d'identité militaire"
+                hint="Photo format identité"
+                value={values.pieces.photoIdentiteMilitaire}
+                onChange={(f) => update('pieces.photoIdentiteMilitaire', f)}
+                  accept="image/jpeg,image/png,image/webp,image/*"
+                />
+              <CloudUploadZone
+                label="Photo d'identité civile"
+                hint="Photo format identité"
+                value={values.pieces.photoIdentiteCivile}
+                onChange={(f) => update('pieces.photoIdentiteCivile', f)}
+                accept="image/jpeg,image/png,image/webp,image/*"
+              />
+              <CloudUploadZone
+                label="Photo militaire intégrale"
+                hint="Photo complète"
+                value={values.pieces.photoMilitaireIntegrale}
+                onChange={(f) => update('pieces.photoMilitaireIntegrale', f)}
+                accept="image/jpeg,image/png,image/webp,image/*"
               />
             </div>
           </FormPanel>
@@ -495,41 +485,23 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         {step === 3 && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Contact (SI — détail)
+              Contacts parents
             </h4>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Field
-                label="N° tél. 1 (appels)"
-                value={values.contact.telephone}
-                onChange={(v) => update('contact.telephone', v)}
-              />
-              <Field
-                label="N° tél. 2 WhatsApp (étudiant)"
-                value={values.contact.tel2}
-                onChange={(v) => update('contact.tel2', v)}
-              />
-              <Field label="Facebook" value={values.facebook} onChange={(v) => update('facebook', v)} />
-              <Field label="LinkedIn" value={values.linkedin} onChange={(v) => update('linkedin', v)} />
-              <div className="md:col-span-3">
-                <p className="label">Messagerie institutionnelle</p>
-                <Field label="E-mail professionnel" value={values.contact.emailPro} onChange={(v) => update('contact.emailPro', v)} />
-              </div>
-              <Field label="E-mail personnel" value={values.contact.emailPerso} onChange={(v) => update('contact.emailPerso', v)} />
-              <Field label="Adresse (résidence principale)" value={values.contact.adresse} onChange={(v) => update('contact.adresse', v)} />
-              <Field
-                label="Adresse secondaire"
-                value={values.contact.adresseSecondaire}
-                onChange={(v) => update('contact.adresseSecondaire', v)}
-              />
-              <Field label="Tél. père" value={values.contact.telPere} onChange={(v) => update('contact.telPere', v)} />
-              <Field label="Tél. père WhatsApp" value={values.contact.telPereWhatsapp} onChange={(v) => update('contact.telPereWhatsapp', v)} />
-              <Field label="Tél. mère" value={values.contact.telMere} onChange={(v) => update('contact.telMere', v)} />
-              <Field label="Tél. mère WhatsApp" value={values.contact.telMereWhatsapp} onChange={(v) => update('contact.telMereWhatsapp', v)} />
+              <Field label="Prénom père" value={values.parents.prenomPere} onChange={(v) => update('parents.prenomPere', v)} />
+              <Field label="Fonction père" value={values.parents.fonctionPere} onChange={(v) => update('parents.fonctionPere', v)} />
+              <Field label="Téléphone père" value={values.contact.telPere} onChange={(v) => update('contact.telPere', v)} />
+              <Field label="WhatsApp père" value={values.contact.telPereWhatsapp} onChange={(v) => update('contact.telPereWhatsapp', v)} />
+              <Field label="Prénom mère" value={values.parents.prenomMere} onChange={(v) => update('parents.prenomMere', v)} />
+              <Field label="Nom mère" value={values.parents.nomMere} onChange={(v) => update('parents.nomMere', v)} />
+              <Field label="Fonction mère" value={values.parents.fonctionMere} onChange={(v) => update('parents.fonctionMere', v)} />
+              <Field label="Téléphone mère" value={values.contact.telMere} onChange={(v) => update('contact.telMere', v)} />
+              <Field label="WhatsApp mère" value={values.contact.telMereWhatsapp} onChange={(v) => update('contact.telMereWhatsapp', v)} />
               <Field label="Contact urgence" value={values.contact.contactUrgence} onChange={(v) => update('contact.contactUrgence', v)} />
               <Field label="Nom urgence" value={values.contact.nomUrgence} onChange={(v) => update('contact.nomUrgence', v)} />
-              <Field label="Tél. urgence" value={values.contact.telUrgence} onChange={(v) => update('contact.telUrgence', v)} />
+              <Field label="Téléphone urgence" value={values.contact.telUrgence} onChange={(v) => update('contact.telUrgence', v)} />
               <Field
-                label="Tél. urgence WhatsApp"
+                label="WhatsApp urgence"
                 value={values.contact.telUrgenceWhatsapp}
                 onChange={(v) => update('contact.telUrgenceWhatsapp', v)}
               />
@@ -540,13 +512,13 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         {step === 4 && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Santé
+              Dossier santé
             </h4>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field label="Groupe sanguin" value={values.sante.groupeSanguin} onChange={(v) => update('sante.groupeSanguin', v)} />
               <Field label="Assureur" value={values.sante.assureur} onChange={(v) => update('sante.assureur', v)} />
-              <Field label="N° assuré" value={values.sante.numeroAssure} onChange={(v) => update('sante.numeroAssure', v)} />
-              <Field label="Antécédents" value={values.sante.antecedents} onChange={(v) => update('sante.antecedents', v)} />
+              <Field label="Numéro assuré" value={values.sante.numeroAssure} onChange={(v) => update('sante.numeroAssure', v)} />
+              <Field label="Antécédents médicaux" value={values.sante.antecedents} onChange={(v) => update('sante.antecedents', v)} />
               <Field label="Maladies chroniques" value={values.sante.maladiesChroniques} onChange={(v) => update('sante.maladiesChroniques', v)} />
               <Field label="Médicaments à vie" value={values.sante.medicaments} onChange={(v) => update('sante.medicaments', v)} />
               <Field label="Poids (kg)" value={values.sante.poids} onChange={(v) => update('sante.poids', v)} />
@@ -624,12 +596,12 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
           )}
         </div>
         <div className="flex gap-2">
-          {step < STEPS.length - 1 && (
+          {onStepSubmit && (
             <Button type="button" variant="primary" onClick={handleNext} disabled={submitting}>
-              {submitting ? 'Envoi…' : 'Suivant'}
+              {submitting ? 'Envoi…' : step < STEPS.length - 1 ? 'Suivant' : 'Terminer'}
             </Button>
           )}
-          {step === STEPS.length - 1 && (
+          {!onStepSubmit && step === STEPS.length - 1 && (
             <Button type="submit" variant="primary" disabled={submitting}>
               {submitting ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
@@ -643,7 +615,7 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
 function Field({ label, value, onChange, type = 'text', required }) {
   return (
     <label className="block">
-      <span className="label">
+      <span className="mb-1 block text-sm font-medium leading-snug text-slate-700">
         {label}
         {required && <span className="text-brand-red"> *</span>}
       </span>

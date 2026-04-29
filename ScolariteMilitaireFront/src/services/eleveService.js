@@ -31,6 +31,8 @@ function adaptEleveFromApi(item) {
     tel2Whatsapp: item.tel2_whatsapp ?? '',
     facebook: item.facebook ?? '',
     linkedin: item.linkedin ?? '',
+    filiere: item.dossier_academique?.departement ?? '',
+    photoUrl: item.documents?.photo_identite_militaire ?? '',
     scolarite: {
       departement: item.dossier_academique?.departement ?? '',
       filiere: item.dossier_academique?.departement ?? '',
@@ -128,16 +130,16 @@ function toElevePayload(values) {
     ecole_bac: values.ecoleBac || '',
     annee_premiere_inscription: values.anneePremiereInscription || '',
     date_premiere_inscription: values.datePremiereInscription || null,
-    voie_acces: values.scolarite?.voieAcces || values.voieAcces || '',
-    diplome_acces: values.scolarite?.diplomeAcces || values.diplomeAcces || 'N/A',
-    etablissement_diplome: values.scolarite?.etablissementPremierCycle || values.etablissementDiplome || '',
-    adresse_primaire: values.contact?.adresse || values.adressePrimaire || 'N/A',
+    voie_acces: values.voieAcces || '',
+    diplome_acces: values.diplomeAcces || '',
+    etablissement_diplome: values.etablissementDiplome || '',
+    adresse_primaire: values.adressePrimaire || values.contact?.adresse || '',
     adresse_secondaire: values.contact?.adresseSecondaire || values.adresseSecondaire || '',
     resident_avec_parents: values.residentAvecParents === 'Oui' || values.residentAvecParents === true,
     compte_bankily: values.compteBankily || '',
-    email_pro: values.contact?.emailPro || values.emailPro || 'user@example.com',
-    email_perso: values.contact?.emailPerso || values.emailPerso || 'user@example.com',
-    tel1: values.contact?.telephone || values.tel1 || 'N/A',
+    email_pro: values.emailPro || values.contact?.emailPro || '',
+    email_perso: values.emailPerso || values.contact?.emailPerso || '',
+    tel1: values.tel1 || values.contact?.telephone || '',
     tel2_whatsapp: values.contact?.tel2 || values.tel2Whatsapp || '',
     facebook: values.facebook || '',
     linkedin: values.linkedin || '',
@@ -219,7 +221,7 @@ export const eleveService = {
       longueur_manche: dm.longueurManche || '',
       longueur_dos: dm.longueurDos || '',
       longueur_cote: dm.longueurCote || '',
-      pointure: Number(dm.pointure || 0),
+      pointure: dm.pointure === '' || dm.pointure == null ? null : Number(dm.pointure),
       eleve: eleveId,
     });
   },
@@ -237,7 +239,7 @@ export const eleveService = {
       longueur_manche: dm.longueurManche || '',
       longueur_dos: dm.longueurDos || '',
       longueur_cote: dm.longueurCote || '',
-      pointure: Number(dm.pointure || 0),
+      pointure: dm.pointure === '' || dm.pointure == null ? null : Number(dm.pointure),
       eleve: eleveId,
     });
   },
@@ -274,45 +276,26 @@ export const eleveService = {
   createDocuments(eleveId, values) {
     const fd = new FormData();
     const docs = values.pieces || {};
-    const isFile = (v) => v instanceof File;
-    const files = {
-      cin: docs.carteIdentite,
-      acte_naissance: docs.releveNotesSemestres,
-      diplome_acces: docs.releveBac,
-      diplome_bac: docs.diplomeBac,
-      photo_identite_militaire: docs.photoIdentite,
-      photo_identite_civile: docs.photoIdentite,
-      photo_militaire_integrale: docs.photoIdentite,
-    };
-    const invalidField = Object.entries(files).find(([, v]) => !isFile(v));
-    if (invalidField) {
-      throw new Error(`Le champ ${invalidField[0]} doit être un fichier.`);
-    }
-
-    if (docs.carteIdentite instanceof File) fd.append('cin', docs.carteIdentite);
-    if (docs.releveNotesSemestres instanceof File) fd.append('acte_naissance', docs.releveNotesSemestres);
-    if (docs.releveBac instanceof File) fd.append('diplome_acces', docs.releveBac);
+    if (docs.cin instanceof File) fd.append('cin', docs.cin);
+    if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
+    if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
-    if (docs.photoIdentite instanceof File) {
-      fd.append('photo_identite_militaire', docs.photoIdentite);
-      fd.append('photo_identite_civile', docs.photoIdentite);
-      fd.append('photo_militaire_integrale', docs.photoIdentite);
-    }
+    if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
+    if (docs.photoIdentiteCivile instanceof File) fd.append('photo_identite_civile', docs.photoIdentiteCivile);
+    if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
     return api.post('/documents/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   updateDocuments(id, eleveId, values) {
     const fd = new FormData();
     const docs = values.pieces || {};
-    if (docs.carteIdentite instanceof File) fd.append('cin', docs.carteIdentite);
-    if (docs.releveNotesSemestres instanceof File) fd.append('acte_naissance', docs.releveNotesSemestres);
-    if (docs.releveBac instanceof File) fd.append('diplome_acces', docs.releveBac);
+    if (docs.cin instanceof File) fd.append('cin', docs.cin);
+    if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
+    if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
-    if (docs.photoIdentite instanceof File) {
-      fd.append('photo_identite_militaire', docs.photoIdentite);
-      fd.append('photo_identite_civile', docs.photoIdentite);
-      fd.append('photo_militaire_integrale', docs.photoIdentite);
-    }
+    if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
+    if (docs.photoIdentiteCivile instanceof File) fd.append('photo_identite_civile', docs.photoIdentiteCivile);
+    if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
     return api.put(`/documents/${id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
