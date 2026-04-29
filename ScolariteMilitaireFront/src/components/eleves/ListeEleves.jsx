@@ -21,6 +21,8 @@ export default function ListeEleves() {
   const [key, setKey] = useState(0);
   const { data, loading } = useFetch(() => eleveService.list(filters), [filters, key]);
   const [ficheEleve, setFicheEleve] = useState(null);
+  const [ficheEleveData, setFicheEleveData] = useState(null);
+  const [ficheLoading, setFicheLoading] = useState(false);
   const [selectedEleveId, setSelectedEleveId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -36,10 +38,7 @@ export default function ListeEleves() {
     hebergementId: null,
   });
 
-  const ficheResolu = useMemo(() => {
-    if (!ficheEleve?.id) return null;
-    return data?.find((e) => e.id === ficheEleve.id) ?? ficheEleve;
-  }, [ficheEleve, data]);
+  const ficheResolu = useMemo(() => ficheEleveData, [ficheEleveData]);
   const selectedEleve = useMemo(
     () => (selectedEleveId ? (data ?? []).find((e) => e.id === selectedEleveId) ?? null : null),
     [selectedEleveId, data],
@@ -68,17 +67,17 @@ export default function ListeEleves() {
       ecole_bac: e.ecoleBac ?? '',
       annee_premiere_inscription: e.anneePremiereInscription ?? '',
       date_premiere_inscription: e.datePremiereInscription ?? '',
-      voie_acces: e.scolarite?.voieAcces ?? '',
-      diplome_acces: e.scolarite?.diplomeAcces ?? '',
-      etablissement_diplome: e.scolarite?.etablissementPremierCycle ?? '',
-      adresse_primaire: e.contact?.adresse ?? '',
-      adresse_secondaire: e.contact?.adresseSecondaire ?? '',
+      voie_acces: e.voieAcces ?? '',
+      diplome_acces: e.diplomeAcces ?? '',
+      etablissement_diplome: e.etablissementDiplome ?? '',
+      adresse_primaire: e.adressePrimaire ?? '',
+      adresse_secondaire: e.adresseSecondaire ?? '',
       resident_avec_parents: e.residentAvecParents ?? '',
       compte_bankily: e.compteBankily ?? '',
-      email_pro: e.contact?.emailPro ?? '',
-      email_perso: e.contact?.emailPerso ?? '',
-      tel1: e.contact?.telephone ?? '',
-      tel2_whatsapp: e.contact?.tel2 ?? '',
+      email_pro: e.emailPro ?? '',
+      email_perso: e.emailPerso ?? '',
+      tel1: e.tel1 ?? '',
+      tel2_whatsapp: e.tel2Whatsapp ?? '',
       facebook: e.facebook ?? '',
       linkedin: e.linkedin ?? '',
     }));
@@ -123,13 +122,15 @@ export default function ListeEleves() {
     },
   ];
 
-  if (ficheResolu) {
+  if (ficheEleve?.id) {
     return (
       <div className="flex min-h-[min(100vh,900px)] w-[calc(100%+2rem)] max-w-none -mx-4 flex-col md:-mx-8 md:w-[calc(100%+4rem)] lg:-mx-10 lg:w-[calc(100%+5rem)]">
         <EleveFicheView
-          eleve={ficheResolu}
+          eleve={ficheResolu ?? selectedEleve ?? ficheEleve}
+          loading={ficheLoading}
           onBack={() => {
             setFicheEleve(null);
+            setFicheEleveData(null);
             setEditing(null);
           }}
           onEditDossier={() => setEditing(ficheResolu)}
@@ -262,7 +263,16 @@ export default function ListeEleves() {
               <>
                 <button
                   type="button"
-                  onClick={() => setFicheEleve(selectedEleve)}
+                  onClick={async () => {
+                    setFicheEleve({ id: selectedEleve.id });
+                    setFicheLoading(true);
+                    try {
+                      const fullEleve = await eleveService.get(selectedEleve.id);
+                      setFicheEleveData(fullEleve);
+                    } finally {
+                      setFicheLoading(false);
+                    }
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
                   title="Voir le détail"
                   aria-label="Voir le détail"
@@ -373,18 +383,6 @@ export default function ListeEleves() {
               flow.dossierAcademiqueId = res?.data?.id ?? flow.dossierAcademiqueId;
             }
             if (step === 2) {
-              const p = values.pieces || {};
-              const requiredFiles = [
-                { key: 'photoIdentite', label: 'Photo d’identité', value: p.photoIdentite },
-                { key: 'carteIdentite', label: 'Carte d’identité', value: p.carteIdentite },
-                { key: 'releveNotesSemestres', label: 'Acte de naissance (fichier lié)', value: p.releveNotesSemestres },
-                { key: 'releveBac', label: 'Diplôme d’accès (fichier lié)', value: p.releveBac },
-                { key: 'diplomeBac', label: 'Diplôme Bac', value: p.diplomeBac },
-              ];
-              const missing = requiredFiles.filter((f) => !(f.value instanceof File)).map((f) => f.label);
-              if (missing.length > 0) {
-                throw new Error(`Fichiers obligatoires manquants: ${missing.join(', ')}.`);
-              }
               const res = flow.documentsId
                 ? await eleveService.updateDocuments(flow.documentsId, eleveId, values)
                 : await eleveService.createDocuments(eleveId, values);
@@ -408,17 +406,19 @@ export default function ListeEleves() {
                 : await eleveService.createDossierMilitaire(eleveId, values);
               flow.dossierMilitaireId = res?.data?.id ?? flow.dossierMilitaireId;
             }
+            if (step === 6) {
+              const res = flow.hebergementId
+                ? await eleveService.updateHebergement(flow.hebergementId, eleveId, values)
+                : await eleveService.createHebergement(eleveId, values);
+              flow.hebergementId = res?.data?.id ?? flow.hebergementId;
+            }
           }}
-          onSubmit={async (values) => {
+          onSubmit={async () => {
             const flow = createFlowRef.current;
             const eleveId = flow.eleveId || createEleveIdRef.current || createContext.eleveId;
             if (!eleveId) {
               throw new Error('L\'étudiant doit être créé à l\'étape 1');
             }
-            const hebergementRes = flow.hebergementId
-              ? await eleveService.updateHebergement(flow.hebergementId, eleveId, values)
-              : await eleveService.createHebergement(eleveId, values);
-            flow.hebergementId = hebergementRes?.data?.id ?? flow.hebergementId;
             setCreating(false);
             createEleveIdRef.current = null;
             setCreateContext({ eleveId: null });
