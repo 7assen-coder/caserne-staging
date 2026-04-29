@@ -38,7 +38,7 @@ function Item({ label, value, dir, className = '' }) {
   );
 }
 
-export default function EleveFicheView({ eleve, onBack, onEditDossier }) {
+export default function EleveFicheView({ eleve, onBack, onEditDossier, loading = false }) {
   const [imgErr, setImgErr] = useState(false);
   const c = eleve;
   if (!c) return null;
@@ -58,6 +58,7 @@ export default function EleveFicheView({ eleve, onBack, onEditDossier }) {
               <p className="truncate text-xs text-slate-500 sm:text-sm">
                 {c.prenom} {c.nom} · {c.matricule}
               </p>
+              {loading && <p className="text-xs text-slate-400">Chargement des données complètes...</p>}
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
