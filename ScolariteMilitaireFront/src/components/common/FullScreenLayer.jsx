@@ -1,19 +1,12 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-/**
- * طبقة كاملة فوق الصفحة (full-screen layer).
- * - chrome=true و chromeScrollBody=true (افتراضي): تمرير واحد على منطقة المحتوى تحت العنوان (مناسب للنماذج الطويلة).
- * - chrome=true و chromeScrollBody=false: لا overflow-y على جسم المحتوى؛ للمحتوى الذي يدير التمرير بنفسه (نادر).
- * - chrome=false: overlay كامل؛ التمرير على الحاوية عادةً لصفحات طويلة.
- */
 export default function FullScreenLayer({
   open,
   onClose,
   title,
   subtitle,
   chrome = true,
-  /** إذا كان false مع chrome، لا يُطبَّق overflow-y على جسم المحتوى (النموذج متعدد الخطوات يمرّر داخلياً). */
   chromeScrollBody = true,
   children,
   className = '',

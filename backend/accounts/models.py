@@ -3,8 +3,6 @@ from django.db import models
 
 
 class UserProfile(models.Model):
-    """Profil métier pour les utilisateurs du portail (distinct du modèle élève)."""
-
     FONCTION_CHOICES = (
         ('terrain', 'terrain'),
         ('encadrement', 'encadrement'),

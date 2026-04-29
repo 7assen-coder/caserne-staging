@@ -1,10 +1,3 @@
-/**
- * Export liste étudiants — mise en page inspirée des documents académiques (titres centrés,
- * marges, tableaux sobres ; rendu proche des conventions « article » LaTeX sans fichier .tex).
- * PDF : jsPDF + autopTable (Times).
- * Word : DOCX avec logo ESP.
- * Excel : grille lisible avec colonnes dimensionnées.
- */
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -26,7 +19,6 @@ import { saveAs } from 'file-saver';
 const INSTITUTION_SHORT = 'École Supérieure Polytechnique';
 const INSTITUTION_AR = 'المدرسة العليا متعددة التقنيات';
 
-/** Charge le logo depuis /esp-logo.png (public). */
 export async function fetchEspLogoBuffer() {
   const res = await fetch(`${import.meta.env.BASE_URL}esp-logo.png`);
   if (!res.ok) throw new Error('Logo ESP introuvable (esp-logo.png).');
@@ -43,7 +35,6 @@ export async function fetchEspLogoDataUrl() {
   return `data:image/png;base64,${btoa(binary)}`;
 }
 
-/** Données tabulaires pour les exports */
 export function rowsToExportMatrix(eleves) {
   return eleves.map((e) => [
     e.matricule ?? '',

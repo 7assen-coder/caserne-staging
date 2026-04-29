@@ -91,9 +91,6 @@ function isPdfFichier(fichier) {
   return String(fichier.nom || '').toLowerCase().endsWith('.pdf');
 }
 
-/**
- * Aperçu plein écran (image ou PDF) — « Aperçu » sur la ligne de la pièce.
- */
 function ApercuPieceModal({ open, onClose, fichier, label }) {
   if (!open || !fichier?.apercuUrl) return null;
   return (

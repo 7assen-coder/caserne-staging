@@ -76,7 +76,6 @@ export const SECTIONS = [
 ];
 export const PROMOTIONS = ['Promotion 2022', 'Promotion 2023', 'Promotion 2024', 'Promotion 2025'];
 
-/** Départements SI (6 filières officielles) */
 export const DEPARTEMENTS = [
   { code: 'GM', label: 'GM — Génie mécanique' },
   { code: 'IRT', label: 'IRT — Informatique, réseaux et télécommunications' },
@@ -86,13 +85,10 @@ export const DEPARTEMENTS = [
   { code: 'MPG', label: 'MPG — Mine, pétrole et gaz' },
 ];
 
-/** Libellés pour filtres, listes et dossier étudiant */
 export const FILIERES = DEPARTEMENTS.map((d) => d.label);
 
-/** Niveaux d’études (ordre affiché dans le formulaire élève) */
 export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD', '6e E', '6e DD'];
 
-/** Voies d’accès (SI) — options imposées */
 export const VOIES_ACCES_ETUDIANT = [
   { value: 'Voix 1', label: 'Voix 1' },
   { value: 'Voix 2', label: 'Voix 2' },

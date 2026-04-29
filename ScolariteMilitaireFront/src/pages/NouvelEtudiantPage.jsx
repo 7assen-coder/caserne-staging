@@ -4,9 +4,6 @@ import { ArrowLeft } from 'lucide-react';
 import FormulaireEleve from '../components/eleves/FormulaireEleve';
 import { eleveService } from '../services/eleveService';
 
-/**
- * Création d'un étudiant en page dédiée (pleine largeur, hors overlay).
- */
 export default function NouvelEtudiantPage() {
   const navigate = useNavigate();
   const createEleveIdRef = useRef(null);

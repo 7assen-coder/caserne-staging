@@ -1,15 +1,5 @@
-/**
- * Grilles issues de l’offre publique ESP — section Formation (filtres semestre / pôle).
- * IRT : aligné sur les fiches modules visibles pour le S1 (codes HE, IRT, ST…, volumes CM/TD/TP, UE, pôle).
- * Autres départements : même URL `https://www.esp.mr/formation/{code}` (remplacer `irt` par `gc`, `gm`, etc.)
- * et structure de colonnes identique ; contenu indicatif tant que la grille n’est pas intégrée.
- *
- * @see https://www.esp.mr/formation/irt
- */
-
 export const FORMATION_SITE_BASE = 'https://www.esp.mr/formation';
 
-/** @param {string} codeDept ex. 'irt', 'gc', 'gm', 'ge', 'sid', 'mpg' */
 export function formationUrl(codeDept) {
   const c = String(codeDept || 'irt')
     .toLowerCase()
@@ -17,11 +7,6 @@ export function formationUrl(codeDept) {
   return `${FORMATION_SITE_BASE}/${c || 'irt'}`;
 }
 
-/**
- * Extrait le code département (irt, gc, …) depuis un libellé filière type "IRT — …" ou code seul.
- * @param {string|undefined} filiereLabel
- * @returns {string}
- */
 export function departementCodeDepuisFiliere(filiereLabel) {
   if (!filiereLabel) return 'irt';
   const s = String(filiereLabel).trim();
@@ -32,23 +17,6 @@ export function departementCodeDepuisFiliere(filiereLabel) {
   return 'irt';
 }
 
-/**
- * Module affiché sur le site (formation) — champs communs attestations & relevés.
- * @typedef {{
- *   code: string,
- *   intitule: string,
- *   credits: number,
- *   heuresTotal: number,
- *   ue: string,
- *   pole: string,
- *   cm: number,
- *   td: number,
- *   tp: number,
- *   semestre: 'S1'|'S2',
- * }} EspModuleRef
- */
-
-/** S1 — département IRT, tels qu’affichés sur la carte « Formation » (extrait utilisateur). */
 export const MODULES_ESP_IRT_S1 = [
   {
     code: 'HE12',
@@ -124,10 +92,6 @@ export const MODULES_ESP_IRT_S1 = [
   },
 ];
 
-/**
- * S2 — structure identique (à synchroniser avec la page Formation, filtre S2).
- * Données de démonstration en attendant reprise à l’identique du site.
- */
 export const MODULES_ESP_IRT_S2 = [
   {
     code: 'HE21',
@@ -167,7 +131,6 @@ export const MODULES_ESP_IRT_S2 = [
   },
 ];
 
-/** Contenu indicatif pour les autres départements (même gabarit, liens vers la page dédiée). */
 function modulesStubAutreDept(codeDept) {
   const u = formationUrl(codeDept);
   return [
@@ -186,10 +149,6 @@ function modulesStubAutreDept(codeDept) {
   ];
 }
 
-/**
- * @param {string} dept
- * @param {1|2|3} annee
- */
 export function getParcoursAnneeFormations(dept, annee) {
   const d = (dept || 'irt').toLowerCase();
   if (d === 'irt') {
@@ -232,7 +191,6 @@ function sumCredits(list) {
 
 export const REFERENTIEL_MODULES_IRT = [...MODULES_ESP_IRT_S1, ...MODULES_ESP_IRT_S2];
 
-/** Fusionne une ligne de relevé avec la fiche module du site (même code). */
 export function enrichirModuleAvecReferenceEsp(m) {
   const ref = REFERENTIEL_MODULES_IRT.find((r) => r.code === m.code) || null;
   if (!ref) return m;

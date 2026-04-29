@@ -62,10 +62,6 @@ const TITRES = {
   presence: "Rapport — Présence & appels (extraits récents)",
 };
 
-/**
- * @param {'inscriptions'|'suspendus'|'presence'} rapportType
- * @param {'pdf'|'pptx'|'xlsx'} format
- */
 export async function exportRapportDashboard(rapportType, format) {
   const { head, body } = getTable(rapportType);
   const title = TITRES[rapportType] || 'Rapport';

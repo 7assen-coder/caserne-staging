@@ -91,7 +91,6 @@ function rowsReleveHtml(modules) {
     .join('');
 }
 
-/** Aperçu PDF : attestation de parcours (grille identique au site Formation). */
 export function printAttestationParcoursIrt(eleve) {
   const annee = anneeDepuisCycle(eleve.cycle);
   const fil = eleve.scolarite?.filiere || eleve.filiere;
@@ -137,7 +136,6 @@ export function printAttestationParcoursIrt(eleve) {
   openPrintFromHtmlString('Attestation parcours', inner);
 }
 
-/** Aperçu PDF : relevé de notes (sans colonne mention ; codes V, NV, E, VCI, VCE). */
 export function printReleveSemestreHtml(eleve, semestreIndex = 0) {
   const releves = eleve.relevesSemestres;
   if (!releves?.length) {

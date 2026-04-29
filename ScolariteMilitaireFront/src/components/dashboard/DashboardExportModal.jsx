@@ -97,7 +97,6 @@ export default function DashboardExportModal({ open, onClose }) {
   const [semIndex, setSemIndex] = useState(0);
   const [busy, setBusy] = useState(false);
 
-  // Filtres étudiants (attestation + relevé)
   const [qMat, setQMat] = useState('');
   const [fDept, setFDept] = useState('');
   const [fAnnee, setFAnnee] = useState('');

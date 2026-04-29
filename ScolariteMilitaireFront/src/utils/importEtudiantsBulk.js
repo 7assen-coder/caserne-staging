@@ -26,9 +26,6 @@ function toSexe(v) {
   return 'H';
 }
 
-/**
- * Transforme une ligne import (Excel / CSV via XLSX) en payloads API.
- */
 export function rowToImportPayload(raw) {
   const matricule = String(pick(raw, 'matricule', 'Matricule')).trim();
   const nom = String(pick(raw, 'nom_famille', 'nom', 'Nom', 'Nom_de_famille')).trim();
@@ -189,7 +186,6 @@ export async function downloadWordImportTemplate() {
     '33123456',
   ];
 
-  /** Largeur utile approximative du tableau sur une page paysage A4 (évite colonnes ultra-étroites). */
   const tableTotalTwips = convertMillimetersToTwip(248);
   const n = hdr.length;
   const baseColTwips = Math.floor(tableTotalTwips / n);
@@ -266,9 +262,6 @@ export async function downloadWordImportTemplate() {
   saveAs(blob, `modele-import-etudiants-word-${new Date().toISOString().slice(0, 10)}.docx`);
 }
 
-/**
- * Extrait les lignes du premier tableau d’un fichier Word (.docx) converti en HTML.
- */
 export async function parseWordDocxTableRows(arrayBuffer) {
   const mammoth = await import('mammoth');
   const { value } = await mammoth.convertToHtml({ arrayBuffer });

@@ -1,8 +1,5 @@
 import { ChevronDown } from 'lucide-react';
 
-/**
- * Liste déroulante alignée sur les champs `.input` du formulaire élève (chevron, appearance-none).
- */
 export default function SelectField({ label, value, onChange, options, required, id }) {
   const selectId = id ?? (label ? `select-${String(label).replace(/\s+/g, '-').slice(0, 24)}` : undefined);
   return (

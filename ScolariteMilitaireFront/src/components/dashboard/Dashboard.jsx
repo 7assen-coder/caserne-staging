@@ -5,7 +5,7 @@ import {
   Clock,
   UserPlus,
   ChevronRight,
-  Sparkles,
+  CalendarDays,
 } from 'lucide-react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
@@ -98,7 +98,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 max-w-3xl space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full border border-light-gray bg-white px-3 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-text-light shadow-sm">
-                <Sparkles size={12} className="text-gold-700" />
+                <CalendarDays size={12} className="text-gold-700" />
                 {formatted}
               </div>
               <h1 className="page-title !text-4xl !leading-[1.05] sm:!text-5xl md:!text-6xl !text-slate-900">

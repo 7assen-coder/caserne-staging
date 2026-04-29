@@ -53,11 +53,9 @@ const DEFAULT = {
     parcours: '',
   },
   pieces: {
-    /** Portrait officiel (aligné sur le dépôt mobile + contrôle scolarité) */
     photoIdentite: null,
     carteIdentite: null,
     releveBac: null,
-    /** Un seul PDF : relevés S1 à S5 regroupés */
     releveNotesSemestres: null,
     diplomeBac: null,
   },

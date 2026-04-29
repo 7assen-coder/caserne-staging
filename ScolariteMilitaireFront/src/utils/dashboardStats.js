@@ -1,6 +1,3 @@
-/**
- * Indicateurs tableau de bord dérivés de la liste étudiants (API).
- */
 export function eleveNeedsAttention(e) {
   const tel = String(e.contact?.telephone ?? e.tel1 ?? '').trim();
   const badTel = !tel || tel === '00000000' || tel === 'N/A';
@@ -20,9 +17,6 @@ export function alertLabelForEleve(e) {
   return 'À suivre';
 }
 
-/**
- * [{ filiere, total, dossiersComplets, dossiersASurveiller }]
- */
 export function repartitionParFiliere(rows) {
   const map = new Map();
   rows.forEach((r) => {

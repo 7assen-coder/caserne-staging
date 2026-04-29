@@ -1,4 +1,3 @@
-/** Libellés officiels-style pour le relevé de notes en ligne. */
 export const DECISION_CODE_LABELS = {
   V: 'Em — Validé',
   NV: 'Em — Non validé',
@@ -7,11 +6,6 @@ export const DECISION_CODE_LABELS = {
   VCE: 'Em — Validé par compensation globale (VCE)',
 };
 
-/**
- * Décision affichable pour une ligne de module.
- * @param {object} m
- * @returns {keyof typeof DECISION_CODE_LABELS}
- */
 export function getDecisionCode(m) {
   if (m?.codeDecision) return m.codeDecision;
   const n = Number(m?.note);

@@ -1,9 +1,5 @@
 const LANGS = ['FR', 'AR'];
 
-/**
- * Segment FR | AR — style type formulaires SaaS (pill).
- * variant="onDark" : pour barre sur fond photo (recovery / header sombre).
- */
 export default function LoginLangSwitch({ value, onChange, variant = 'light', className = '', size = 'default' }) {
   const isDark = variant === 'onDark';
   const isLg = size === 'lg';
