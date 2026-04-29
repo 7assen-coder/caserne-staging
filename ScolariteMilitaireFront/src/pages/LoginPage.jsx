@@ -5,26 +5,12 @@ import LoginTopBar from '../components/login/LoginTopBar';
 import LoginLangSwitch from '../components/login/LoginLangSwitch';
 import Button from '../components/common/Button';
 import { useAuth } from '../hooks/useAuth';
+import { sanitizeMrPhoneDigits, isValidMrPhone8, blockNonDigitKey } from '../utils/mrPhone';
+import { formatApiError } from '../utils/apiErrors';
 
 function isEspEmail(v) {
   const s = String(v).trim().toLowerCase();
   return /^[^\s@]+@esp\.mr$/i.test(s);
-}
-
-function sanitizeMrPhoneDigits(raw) {
-  const digits = String(raw ?? '').replace(/\D/g, '');
-  return digits.replace(/^[^234]+/, '').slice(0, 8);
-}
-
-function isValidMrPhone8(v) {
-  return /^[234]\d{7}$/.test(String(v));
-}
-
-function blockNonDigitKey(e) {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const allowed = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'End', 'Home'];
-  if (allowed.includes(e.key)) return;
-  if (e.key.length === 1 && !/^\d$/.test(e.key)) e.preventDefault();
 }
 
 function firstErr(val) {
@@ -116,9 +102,10 @@ export default function LoginPage() {
       if (d?.phone) setPhoneErr(firstErr(d.phone));
       if (d?.password) setPasswordErr(firstErr(d.password));
       if (d?.non_field_errors) setFormErr(firstErr(d.non_field_errors));
-      else if (d?.detail) setFormErr(firstErr(d.detail));
-      else if (typeof d === 'string') setFormErr(d);
-      else setFormErr(err.message || 'Connexion impossible.');
+      else if (d?.detail != null) {
+        setFormErr(typeof d.detail === 'string' ? d.detail : formatApiError(err));
+      } else if (typeof d === 'string') setFormErr(d);
+      else setFormErr(formatApiError(err));
     } finally {
       setSubmitting(false);
     }

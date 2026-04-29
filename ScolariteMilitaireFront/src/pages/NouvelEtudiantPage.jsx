@@ -67,7 +67,7 @@ export default function NouvelEtudiantPage() {
         </div>
       </div>
 
-      <div className="xl:col-span-12 min-h-0 w-full rounded-2xl border border-light-gray bg-white shadow-[0_1px_3px_rgba(15,27,51,0.06)] px-4 pb-10 pt-4 sm:px-8 sm:pb-12 sm:pt-6">
+      <div className="xl:col-span-12 min-h-0 w-full max-w-full overflow-x-hidden rounded-2xl border border-light-gray bg-white px-3 pb-10 pt-4 shadow-[0_1px_3px_rgba(15,27,51,0.06)] sm:px-8 sm:pb-12 sm:pt-6">
         <FormulaireEleve
           onStepSubmit={async (step, values) => {
             const flow = createFlowRef.current;

@@ -122,7 +122,10 @@ function toElevePayload(values) {
     date_naissance: values.dateNaissance || null,
     lieu_naissance: values.lieuNaissance || '',
     nationalite: values.nationalite || '',
-    categorie_bac: values.categorieBac || 'National',
+    categorie_bac:
+      values.categorieBac === 'Étranger' || values.categorieBac === 'Etranger'
+        ? 'Etranger'
+        : values.categorieBac || 'National',
     serie_bac: values.serieBac || '',
     moyenne_bac: values.moyenneBac || '0',
     ecole_bac: values.ecoleBac || '',
