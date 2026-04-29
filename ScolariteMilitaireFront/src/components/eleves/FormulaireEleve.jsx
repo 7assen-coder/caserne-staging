@@ -234,11 +234,8 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
   const filiereOptions = FILIERES.map((x) => ({ value: x, label: x }));
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex max-h-[75vh] flex-col space-y-5 rounded-xl border border-light-gray bg-white p-1 sm:p-2"
-    >
-      <div className="relative flex items-start justify-between gap-1 border-b border-light-gray pb-4 sm:gap-2">
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <div className="relative flex shrink-0 items-start justify-between gap-1 border-b border-light-gray pb-4 sm:gap-2">
         <div
           className="pointer-events-none absolute left-[10%] right-[10%] top-[15px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:block"
           aria-hidden
@@ -276,7 +273,7 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         })}
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto pr-1">
+      <div className="space-y-5">
         {stepError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {stepError}
@@ -612,29 +609,25 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-light-gray bg-off-white pt-4">
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Annuler
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-light-gray bg-off-white pt-4">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Annuler
+        </Button>
+        {step > 0 && (
+          <Button type="button" variant="secondary" onClick={() => setStep((s) => s - 1)}>
+            Précédent
           </Button>
-          {step > 0 && (
-            <Button type="button" variant="secondary" onClick={() => setStep((s) => s - 1)}>
-              Précédent
-            </Button>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {step < STEPS.length - 1 && (
-            <Button type="button" variant="primary" onClick={handleNext} disabled={submitting}>
-              {submitting ? 'Envoi…' : 'Suivant'}
-            </Button>
-          )}
-          {step === STEPS.length - 1 && (
-            <Button type="submit" variant="primary" disabled={submitting}>
-              {submitting ? 'Enregistrement…' : 'Enregistrer'}
-            </Button>
-          )}
-        </div>
+        )}
+        {step < STEPS.length - 1 && (
+          <Button type="button" variant="primary" onClick={handleNext} disabled={submitting}>
+            {submitting ? 'Envoi…' : 'Suivant'}
+          </Button>
+        )}
+        {step === STEPS.length - 1 && (
+          <Button type="submit" variant="primary" disabled={submitting}>
+            {submitting ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        )}
       </div>
     </form>
   );

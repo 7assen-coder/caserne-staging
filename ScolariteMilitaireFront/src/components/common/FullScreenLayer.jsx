@@ -3,8 +3,9 @@ import { X } from 'lucide-react';
 
 /**
  * طبقة كاملة فوق الصفحة (full-screen layer).
- * - chrome=true: Header بسيط مع عنوان وزر إغلاق + محتوى قابل للتمرير.
- * - chrome=false: فقط overlay + container (بدون header) لاستضافة صفحات كاملة (مثل DemandeReviewView).
+ * - chrome=true و chromeScrollBody=true (افتراضي): تمرير واحد على منطقة المحتوى تحت العنوان (مناسب للنماذج الطويلة).
+ * - chrome=true و chromeScrollBody=false: لا overflow-y على جسم المحتوى؛ للمحتوى الذي يدير التمرير بنفسه (نادر).
+ * - chrome=false: overlay كامل؛ التمرير على الحاوية عادةً لصفحات طويلة.
  */
 export default function FullScreenLayer({
   open,
@@ -12,6 +13,8 @@ export default function FullScreenLayer({
   title,
   subtitle,
   chrome = true,
+  /** إذا كان false مع chrome، لا يُطبَّق overflow-y على جسم المحتوى (النموذج متعدد الخطوات يمرّر داخلياً). */
+  chromeScrollBody = true,
   children,
   className = '',
   contentClassName = '',
@@ -60,10 +63,18 @@ export default function FullScreenLayer({
                 <X size={20} />
               </button>
             </header>
-            <div className={`h-[calc(100%-4.25rem)] overflow-auto ${contentClassName}`}>{children}</div>
+            <div
+              className={
+                chromeScrollBody
+                  ? `h-[calc(100%-4.25rem)] min-h-0 overflow-y-auto ${contentClassName}`
+                  : `flex h-[calc(100%-4.25rem)] min-h-0 flex-col overflow-hidden ${contentClassName}`
+              }
+            >
+              {children}
+            </div>
           </>
         ) : (
-          <div className={`h-full overflow-auto ${contentClassName}`}>{children}</div>
+          <div className={`h-full overflow-y-auto ${contentClassName}`}>{children}</div>
         )}
       </div>
     </div>

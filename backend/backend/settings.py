@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ SECRET_KEY = 'django-insecure-b1yk9ocnx-heapopytef8a_6zb-fo6jwyoccg&m032e4q_xia%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["187.124.219.82"]
+ALLOWED_HOSTS = ["187.124.219.82", "localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -38,13 +39,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third party apps
     'rest_framework',
+    'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
-    
-    # Local apps
+    'accounts',
     'etudiants',
 ]
 
@@ -88,8 +87,11 @@ DATABASES = {
         'NAME': os.environ.get('DB_NAME','esp'),
         'USER': os.environ.get('DB_USER','esp'),
         'PASSWORD': os.environ.get('DB_PASSWORD','esp'),
-        'HOST': os.environ.get('DB_HOST','db'),
-        'PORT': os.environ.get('DB_PORT','5432'),
+        # Défaut localhost pour dev hors Docker ; docker-compose définit DB_HOST=db.
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        # Hors Docker : Postgres Docker exposé sur l'hôte en 5433 (évite Postgres local souvent sur 5432).
+        # Dans Docker : compose définit DB_PORT=5432 vers le service db.
+        'PORT': os.environ.get('DB_PORT', '5433'),
     }
 }
 
@@ -136,16 +138,35 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Media Files (pour les PDF et Images)
-import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = True # A changer en production
+# CORS (credentials + cookies JWT)
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
+JWT_COOKIE_ACCESS_NAME = 'esp_access'
+JWT_COOKIE_REFRESH_NAME = 'esp_refresh'
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
+    'ROTATE_REFRESH_TOKENS': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
 # Django Rest Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'accounts.authentication.CookieJWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 }
 
 # Spectacular Configuration

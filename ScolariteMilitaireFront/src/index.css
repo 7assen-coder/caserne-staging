@@ -186,7 +186,7 @@
   }
 
   .page-header {
-    @apply flex items-start justify-between gap-4 flex-wrap;
+    @apply flex items-center justify-between gap-4 flex-wrap;
   }
 
   .page-title {

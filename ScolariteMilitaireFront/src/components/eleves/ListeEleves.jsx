@@ -1,13 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Pencil, Filter, Eye, Trash2, FileSpreadsheet } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Pencil,
+  Filter,
+  Eye,
+  Trash2,
+  Upload,
+  FileDown,
+} from 'lucide-react';
 import Card from '../common/Card';
-import Button from '../common/Button';
 import DataTable from '../common/DataTable';
 import FullScreenLayer from '../common/FullScreenLayer';
 import SelectField from '../common/SelectField';
 import FormulaireEleve from './FormulaireEleve';
-import EleveFicheView from './EleveFicheView';
 import { useFetch } from '../../hooks/useFetch';
 import { eleveService } from '../../services/eleveService';
 import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
@@ -23,19 +30,6 @@ export default function ListeEleves() {
   const [ficheEleve, setFicheEleve] = useState(null);
   const [selectedEleveId, setSelectedEleveId] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [creating, setCreating] = useState(false);
-  const [createContext, setCreateContext] = useState({ eleveId: null });
-  const createEleveIdRef = useRef(null);
-  const createFlowRef = useRef({
-    eleveId: null,
-    dossierAcademiqueId: null,
-    documentsId: null,
-    contactsParentsId: null,
-    dossierSanteId: null,
-    dossierMilitaireId: null,
-    hebergementId: null,
-  });
-
   const ficheResolu = useMemo(() => {
     if (!ficheEleve?.id) return null;
     return data?.find((e) => e.id === ficheEleve.id) ?? ficheEleve;
@@ -45,48 +39,6 @@ export default function ListeEleves() {
     [selectedEleveId, data],
   );
   const rows = data ?? [];
-
-  const n = rows.length;
-
-  const handleExportXlsx = async () => {
-    if (!rows.length) return;
-    const XLSX = await import('xlsx');
-    const exportRows = rows.map((e) => ({
-      id: e.id,
-      matricule: e.matricule ?? '',
-      prenom: e.prenom ?? '',
-      nom_famille: e.nom ?? '',
-      sexe: e.sexe ?? '',
-      nni: e.nni ?? '',
-      num_bac: e.numeroBac ?? '',
-      date_naissance: e.dateNaissance ?? '',
-      lieu_naissance: e.lieuNaissance ?? '',
-      nationalite: e.nationalite ?? '',
-      categorie_bac: e.categorieBac ?? '',
-      serie_bac: e.serieBac ?? '',
-      moyenne_bac: e.moyenneBac ?? '',
-      ecole_bac: e.ecoleBac ?? '',
-      annee_premiere_inscription: e.anneePremiereInscription ?? '',
-      date_premiere_inscription: e.datePremiereInscription ?? '',
-      voie_acces: e.scolarite?.voieAcces ?? '',
-      diplome_acces: e.scolarite?.diplomeAcces ?? '',
-      etablissement_diplome: e.scolarite?.etablissementPremierCycle ?? '',
-      adresse_primaire: e.contact?.adresse ?? '',
-      adresse_secondaire: e.contact?.adresseSecondaire ?? '',
-      resident_avec_parents: e.residentAvecParents ?? '',
-      compte_bankily: e.compteBankily ?? '',
-      email_pro: e.contact?.emailPro ?? '',
-      email_perso: e.contact?.emailPerso ?? '',
-      tel1: e.contact?.telephone ?? '',
-      tel2_whatsapp: e.contact?.tel2 ?? '',
-      facebook: e.facebook ?? '',
-      linkedin: e.linkedin ?? '',
-    }));
-    const ws = XLSX.utils.json_to_sheet(exportRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Etudiants');
-    XLSX.writeFile(wb, `etudiants-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
 
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
@@ -141,7 +93,7 @@ export default function ListeEleves() {
             title="Modifier le dossier"
             subtitle="Mise à jour des informations — formulaire multi-étapes"
             chrome
-            contentClassName="p-5 sm:p-6"
+            contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
           >
             <FormulaireEleve
               eleve={editing}
@@ -172,28 +124,13 @@ export default function ListeEleves() {
         <div className="min-w-0 flex-1">
           <h1 className="page-title">Gestion des étudiants</h1>
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          icon={Plus}
-          onClick={() => {
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-            setCreating(true);
-          }}
-          className="shrink-0"
+        <Link
+          to="/eleves/nouveau"
+          className="btn btn-primary btn-lg shrink-0 inline-flex items-center gap-2"
         >
-          Nouvel étudiant
-        </Button>
+          <Plus size={18} aria-hidden />
+          <span>Nouvel étudiant</span>
+        </Link>
       </div>
 
       <Card
@@ -245,19 +182,25 @@ export default function ListeEleves() {
       <Card className="xl:col-span-12">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-light-gray pb-3">
           <div className="text-sm text-slate-500">
-            {selectedEleve ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné` : 'Sélectionnez un étudiant'}
+            {selectedEleve
+              ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné`
+              : 'Sélectionnez un étudiant dans le tableau'}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportXlsx}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-              title="Exporter Excel"
-              aria-label="Exporter Excel"
+            <Link
+              to="/eleves/import"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-white px-3 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-slate-50"
             >
-              <FileSpreadsheet size={18} />
-              Export Excel (.xlsx)
-            </button>
+              <Upload size={18} aria-hidden />
+              Importer
+            </Link>
+            <Link
+              to="/eleves/export"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy/90"
+            >
+              <FileDown size={18} aria-hidden />
+              Exporter
+            </Link>
             {selectedEleve && (
               <>
                 <button
@@ -315,7 +258,7 @@ export default function ListeEleves() {
           title="Modifier le dossier"
           subtitle="Mise à jour des informations — formulaire multi-étapes"
           chrome
-          contentClassName="p-5 sm:p-6"
+          contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
         >
           <FormulaireEleve
             eleve={editing}
@@ -328,127 +271,6 @@ export default function ListeEleves() {
           />
         </FullScreenLayer>
       )}
-
-      <FullScreenLayer
-        open={creating}
-        onClose={() => {
-          setCreating(false);
-          createEleveIdRef.current = null;
-          setCreateContext({ eleveId: null });
-          createFlowRef.current = {
-            eleveId: null,
-            dossierAcademiqueId: null,
-            documentsId: null,
-            contactsParentsId: null,
-            dossierSanteId: null,
-            dossierMilitaireId: null,
-            hebergementId: null,
-          };
-        }}
-        title="Nouvel étudiant"
-        subtitle="Création d’un dossier — formulaire multi-étapes"
-        chrome
-        contentClassName="p-5 sm:p-6"
-      >
-        <FormulaireEleve
-          onStepSubmit={async (step, values) => {
-            const flow = createFlowRef.current;
-            if (step === 0) {
-              if (flow.eleveId) {
-                await eleveService.update(flow.eleveId, values);
-              } else {
-                const created = await eleveService.createEleve(values);
-                flow.eleveId = created.id;
-                createEleveIdRef.current = created.id;
-                setCreateContext({ eleveId: created.id });
-              }
-              return;
-            }
-            const eleveId = flow.eleveId || createEleveIdRef.current || createContext.eleveId;
-            if (!eleveId) throw new Error('Création élève non effectuée.');
-            if (step === 1) {
-              const res = flow.dossierAcademiqueId
-                ? await eleveService.updateDossierAcademique(flow.dossierAcademiqueId, eleveId, values)
-                : await eleveService.createDossierAcademique(eleveId, values);
-              flow.dossierAcademiqueId = res?.data?.id ?? flow.dossierAcademiqueId;
-            }
-            if (step === 2) {
-              const p = values.pieces || {};
-              const requiredFiles = [
-                { key: 'photoIdentite', label: 'Photo d’identité', value: p.photoIdentite },
-                { key: 'carteIdentite', label: 'Carte d’identité', value: p.carteIdentite },
-                { key: 'releveNotesSemestres', label: 'Acte de naissance (fichier lié)', value: p.releveNotesSemestres },
-                { key: 'releveBac', label: 'Diplôme d’accès (fichier lié)', value: p.releveBac },
-                { key: 'diplomeBac', label: 'Diplôme Bac', value: p.diplomeBac },
-              ];
-              const missing = requiredFiles.filter((f) => !(f.value instanceof File)).map((f) => f.label);
-              if (missing.length > 0) {
-                throw new Error(`Fichiers obligatoires manquants: ${missing.join(', ')}.`);
-              }
-              const res = flow.documentsId
-                ? await eleveService.updateDocuments(flow.documentsId, eleveId, values)
-                : await eleveService.createDocuments(eleveId, values);
-              flow.documentsId = res?.data?.id ?? flow.documentsId;
-            }
-            if (step === 3) {
-              const res = flow.contactsParentsId
-                ? await eleveService.updateContactsParents(flow.contactsParentsId, eleveId, values)
-                : await eleveService.createContactsParents(eleveId, values);
-              flow.contactsParentsId = res?.data?.id ?? flow.contactsParentsId;
-            }
-            if (step === 4) {
-              const res = flow.dossierSanteId
-                ? await eleveService.updateDossierSante(flow.dossierSanteId, eleveId, values)
-                : await eleveService.createDossierSante(eleveId, values);
-              flow.dossierSanteId = res?.data?.id ?? flow.dossierSanteId;
-            }
-            if (step === 5) {
-              const res = flow.dossierMilitaireId
-                ? await eleveService.updateDossierMilitaire(flow.dossierMilitaireId, eleveId, values)
-                : await eleveService.createDossierMilitaire(eleveId, values);
-              flow.dossierMilitaireId = res?.data?.id ?? flow.dossierMilitaireId;
-            }
-          }}
-          onSubmit={async (values) => {
-            const flow = createFlowRef.current;
-            const eleveId = flow.eleveId || createEleveIdRef.current || createContext.eleveId;
-            if (!eleveId) {
-              throw new Error('L\'étudiant doit être créé à l\'étape 1');
-            }
-            const hebergementRes = flow.hebergementId
-              ? await eleveService.updateHebergement(flow.hebergementId, eleveId, values)
-              : await eleveService.createHebergement(eleveId, values);
-            flow.hebergementId = hebergementRes?.data?.id ?? flow.hebergementId;
-            setCreating(false);
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-            setKey((k) => k + 1);
-          }}
-          onCancel={() => {
-            setCreating(false);
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-          }}
-        />
-      </FullScreenLayer>
     </div>
   );
 }

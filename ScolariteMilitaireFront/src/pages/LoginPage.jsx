@@ -27,43 +27,101 @@ function blockNonDigitKey(e) {
   if (e.key.length === 1 && !/^\d$/.test(e.key)) e.preventDefault();
 }
 
+function firstErr(val) {
+  if (val == null) return '';
+  return Array.isArray(val) ? val[0] : String(val);
+}
+
 export default function LoginPage() {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, login, bootstrapped } = useAuth();
   const [channel, setChannel] = useState('email');
-  const [email, setEmail] = useState('a.brahimi@esp.mr');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [sessionLongue, setSessionLongue] = useState(true);
   const [lang, setLang] = useState('FR');
+  const [emailErr, setEmailErr] = useState('');
+  const [phoneErr, setPhoneErr] = useState('');
+  const [passwordErr, setPasswordErr] = useState('');
   const [formErr, setFormErr] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChannelChange = (next) => {
     setFormErr('');
+    setEmailErr('');
+    setPhoneErr('');
+    setPasswordErr('');
     setChannel(next);
   };
+
+  if (!bootstrapped) {
+    return (
+      <div className="relative flex min-h-screen min-h-[100dvh] items-center justify-center bg-[#060d16] text-white">
+        <p className="text-lg font-medium">Chargement…</p>
+      </div>
+    );
+  }
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const identifierOk = channel === 'email' ? isEspEmail(email) : isValidMrPhone8(phone);
-  const loginFormOk = identifierOk && password.trim().length > 0;
+  const loginFormOk = identifierOk && password.trim().length > 0 && !submitting;
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const validateClientOrSetErrors = () => {
+    setEmailErr('');
+    setPhoneErr('');
+    setPasswordErr('');
     setFormErr('');
-    if (channel === 'email' && !isEspEmail(email)) {
-      setFormErr('Utilisez une adresse @esp.mr.');
-      return;
-    }
-    if (channel === 'phone' && !isValidMrPhone8(phone)) {
-      setFormErr('Numéro : 8 chiffres, commence par 2, 3 ou 4.');
-      return;
+    let ok = true;
+    if (channel === 'email') {
+      if (!email.trim()) {
+        setEmailErr('Champ requis.');
+        ok = false;
+      } else if (!isEspEmail(email)) {
+        setEmailErr('Format invalide.');
+        ok = false;
+      }
+    } else {
+      if (!phone.trim()) {
+        setPhoneErr('Champ requis.');
+        ok = false;
+      } else if (!isValidMrPhone8(phone)) {
+        setPhoneErr('Format invalide.');
+        ok = false;
+      }
     }
     if (!password.trim()) {
-      setFormErr('Mot de passe requis.');
-      return;
+      setPasswordErr('Mot de passe requis.');
+      ok = false;
     }
-    if (channel === 'email') login(email.trim().toLowerCase());
-    else login(phone);
+    return ok;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateClientOrSetErrors()) return;
+    setSubmitting(true);
+    setFormErr('');
+    try {
+      await login({
+        channel,
+        email,
+        phone,
+        password,
+        remember_me: sessionLongue,
+      });
+    } catch (err) {
+      const d = err.response?.data;
+      if (d?.email) setEmailErr(firstErr(d.email));
+      if (d?.phone) setPhoneErr(firstErr(d.phone));
+      if (d?.password) setPasswordErr(firstErr(d.password));
+      if (d?.non_field_errors) setFormErr(firstErr(d.non_field_errors));
+      else if (d?.detail) setFormErr(firstErr(d.detail));
+      else if (typeof d === 'string') setFormErr(d);
+      else setFormErr(err.message || 'Connexion impossible.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -96,11 +154,11 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-8 p-6 sm:p-10 lg:p-12 font-sans">
               <div className="space-y-6 sm:space-y-8 min-h-[14rem] sm:min-h-[15rem]">
-                {formErr && (
+                {formErr ? (
                   <p className="text-base sm:text-lg font-medium text-brand-red bg-red-50 border border-red-100 rounded-xl px-4 py-3.5">
                     {formErr}
                   </p>
-                )}
+                ) : null}
 
                 <div className="space-y-6 sm:space-y-7">
                   <p className="text-base sm:text-lg text-text-light leading-snug">
@@ -138,13 +196,24 @@ export default function LoginPage() {
                       <span className="login-card-field-label">E-mail</span>
                       <input
                         type="email"
-                        className="login-card-input"
+                        className={`login-card-input ${emailErr ? 'ring-2 ring-brand-red/40' : ''}`}
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setEmailErr('');
+                          setFormErr('');
+                        }}
+                        onBlur={() => {
+                          const v = email.trim();
+                          if (!v) return;
+                          if (!isEspEmail(v)) setEmailErr('Format invalide.');
+                        }}
                         placeholder="prenom.nom@esp.mr"
                         autoComplete="username"
                       />
-                      <p className="mt-2 text-sm text-text-light">Suffixe @esp.mr</p>
+                      {emailErr ? (
+                        <p className="mt-2 text-sm font-medium text-brand-red">{emailErr}</p>
+                      ) : null}
                     </label>
                   ) : (
                     <label className="block">
@@ -155,13 +224,24 @@ export default function LoginPage() {
                         pattern="[0-9]*"
                         autoComplete="tel-national"
                         maxLength={8}
-                        className="login-card-input font-mono tracking-widest"
+                        className={`login-card-input font-mono tracking-widest ${phoneErr ? 'ring-2 ring-brand-red/40' : ''}`}
                         value={phone}
-                        onChange={(e) => setPhone(sanitizeMrPhoneDigits(e.target.value))}
+                        onChange={(e) => {
+                          setPhone(sanitizeMrPhoneDigits(e.target.value));
+                          setPhoneErr('');
+                          setFormErr('');
+                        }}
+                        onBlur={() => {
+                          const v = phone.trim();
+                          if (!v) return;
+                          if (!isValidMrPhone8(v)) setPhoneErr('Format invalide.');
+                        }}
                         onKeyDown={blockNonDigitKey}
-                        placeholder="ex. 31234567"
+                        placeholder="31234567"
                       />
-                      <p className="mt-2 text-sm text-text-light">8 chiffres, préfixe 2 / 3 / 4</p>
+                      {phoneErr ? (
+                        <p className="mt-2 text-sm font-medium text-brand-red">{phoneErr}</p>
+                      ) : null}
                     </label>
                   )}
                   <label className="block">
@@ -176,12 +256,19 @@ export default function LoginPage() {
                     </span>
                     <input
                       type="password"
-                      className="login-card-input"
+                      className={`login-card-input ${passwordErr ? 'ring-2 ring-brand-red/40' : ''}`}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setPasswordErr('');
+                        setFormErr('');
+                      }}
                       placeholder="••••••••"
                       autoComplete="current-password"
                     />
+                    {passwordErr ? (
+                      <p className="mt-2 text-sm font-medium text-brand-red">{passwordErr}</p>
+                    ) : null}
                   </label>
                   <label className="flex items-center gap-4 cursor-pointer select-none py-1">
                     <input
@@ -203,7 +290,7 @@ export default function LoginPage() {
                   disabled={!loginFormOk}
                   className="w-full justify-center min-h-[3.5rem] sm:min-h-[3.75rem] text-lg"
                 >
-                  Se connecter
+                  {submitting ? 'Connexion…' : 'Se connecter'}
                 </Button>
               </div>
             </form>

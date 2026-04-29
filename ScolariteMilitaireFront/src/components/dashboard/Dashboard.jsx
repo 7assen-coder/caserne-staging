@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -8,7 +9,13 @@ import {
 } from 'lucide-react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
-import { kpiScolarite, inscriptionsParFiliere, aSurveillerEleves } from '../../data/mockData';
+import { useFetch } from '../../hooks/useFetch';
+import { eleveService } from '../../services/eleveService';
+import {
+  eleveNeedsAttention,
+  alertLabelForEleve,
+  repartitionParFiliere,
+} from '../../utils/dashboardStats';
 
 function KpiBlock({ icon: Icon, label, value, hint, accent = 'navy' }) {
   const isGold = accent === 'gold';
@@ -45,6 +52,23 @@ function KpiBlock({ icon: Icon, label, value, hint, accent = 'navy' }) {
 }
 
 export default function Dashboard() {
+  const { data: rows, loading, error } = useFetch(() => eleveService.list({}), []);
+
+  const kpis = useMemo(() => {
+    const list = rows ?? [];
+    return {
+      total: list.length,
+      dossiersASurveiller: list.filter(eleveNeedsAttention).length,
+    };
+  }, [rows]);
+
+  const parFiliere = useMemo(() => repartitionParFiliere(rows ?? []), [rows]);
+
+  const aSurveiller = useMemo(() => {
+    const list = rows ?? [];
+    return [...list].filter(eleveNeedsAttention).slice(0, 5);
+  }, [rows]);
+
   const formatted = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -54,13 +78,11 @@ export default function Dashboard() {
 
   return (
     <div className="relative min-h-0">
-      {/* Fond atmosphérique (limité au contenu) */}
       <div
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
         aria-hidden
       >
         <div className="absolute -left-24 -top-32 h-72 w-72 rounded-full bg-gold/15 blur-3xl" />
-        {/* Blob très léger (évite l'effet « noir » en bas à droite) */}
         <div className="absolute -bottom-24 right-0 h-80 w-80 rounded-full bg-slate-200/35 blur-3xl" />
         <div
           className="absolute inset-0 opacity-[0.25]"
@@ -72,7 +94,6 @@ export default function Dashboard() {
       </div>
 
       <div className="relative space-y-8 md:space-y-10 lg:space-y-12">
-        {/* En-tête */}
         <header className="overflow-hidden rounded-3xl border border-light-gray bg-white p-6 shadow-card md:p-8 lg:p-10">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 max-w-3xl space-y-4">
@@ -99,46 +120,56 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* KPI */}
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            Impossible de charger les données du tableau de bord. Vérifiez la connexion à l&apos;API et votre session.
+          </div>
+        ) : null}
+
         <section aria-label="Indicateurs" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiBlock
             icon={Users}
             label="Étudiants"
-            value={kpiScolarite.etudiantsActifs.toLocaleString('fr-FR')}
+            value={loading ? '…' : kpis.total.toLocaleString('fr-FR')}
             accent="navy"
-            hint="Données mockées (démo)"
+            hint="Effectifs selon la liste chargée depuis le SI."
           />
           <KpiBlock
             icon={Clock}
-            label="Inscriptions en attente"
-            value={String(kpiScolarite.inscriptionsEnAttente)}
+            label="Dossiers à compléter"
+            value={loading ? '…' : String(kpis.dossiersASurveiller)}
             accent="gold"
-            hint="Données mockées (démo)"
+            hint="Coordonnées type téléphone / e-mail placeholder ou manquantes."
           />
         </section>
 
-        {/* Deux colonnes, hauteur = contenu (pas d’étirement pour éviter le vide sous le tableau) */}
         <div className="grid min-h-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
           <div className="min-w-0 lg:col-span-7 xl:col-span-8">
             <Card
               className="overflow-hidden"
               bodyClassName="!p-5 md:!p-6"
               title="Répartition par filière"
-              subtitle="Comptage mocké des inscriptions"
+              subtitle="Basée sur les départements enregistrés pour chaque étudiant."
               accent="gold"
             >
               <div className="flex flex-col gap-3">
-                {inscriptionsParFiliere.map((f) => (
-                  <div
-                    key={f.filiere}
-                    className="flex items-center justify-between rounded-xl border border-light-gray bg-white p-4"
-                  >
-                    <span className="text-sm font-medium text-slate-900">{f.filiere}</span>
-                    <span className="text-sm font-semibold text-amber-700">
-                      {f.confirmees} validées / {f.enAttente} en attente
-                    </span>
-                  </div>
-                ))}
+                {loading ? (
+                  <p className="text-sm text-text-light">Chargement…</p>
+                ) : parFiliere.length === 0 ? (
+                  <p className="text-sm text-text-light">Aucun étudiant à afficher.</p>
+                ) : (
+                  parFiliere.map((f) => (
+                    <div
+                      key={f.filiere}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-light-gray bg-white p-4"
+                    >
+                      <span className="text-sm font-medium text-slate-900">{f.filiere}</span>
+                      <span className="text-sm font-semibold text-amber-700">
+                        {f.dossiersComplets} dossiers complets / {f.dossiersASurveiller} à compléter
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </Card>
           </div>
@@ -158,26 +189,32 @@ export default function Dashboard() {
               }
             >
               <ul className="flex flex-col gap-2">
-                {aSurveillerEleves.slice(0, 5).map((e) => (
-                  <li
-                    key={e.id}
-                    className="flex items-center gap-3 rounded-xl border border-light-gray bg-white p-3 transition hover:border-slate-300 hover:bg-off-white"
-                  >
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-navy-gradient text-sm font-bold text-white ring-1 ring-slate-200">
-                      {e.prenom?.[0]}
-                      {e.nom?.[0]}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-slate-900">
-                        {e.nom} {e.prenom}
-                      </p>
-                      <p className="truncate text-2xs text-text-light">{e.matricule}</p>
-                    </div>
-                    <Badge tone="alerte" className="!text-2xs">
-                      {e.alertLabel}
-                    </Badge>
-                  </li>
-                ))}
+                {loading ? (
+                  <li className="text-sm text-text-light">Chargement…</li>
+                ) : aSurveiller.length === 0 ? (
+                  <li className="text-sm text-text-light">Aucun dossier à compléter détecté.</li>
+                ) : (
+                  aSurveiller.map((e) => (
+                    <li
+                      key={e.id}
+                      className="flex items-center gap-3 rounded-xl border border-light-gray bg-white p-3 transition hover:border-slate-300 hover:bg-off-white"
+                    >
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-navy-gradient text-sm font-bold text-white ring-1 ring-slate-200">
+                        {e.prenom?.[0]}
+                        {e.nom?.[0]}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-slate-900">
+                          {e.nom} {e.prenom}
+                        </p>
+                        <p className="truncate text-2xs text-text-light">{e.matricule}</p>
+                      </div>
+                      <Badge tone="alerte" className="!text-2xs">
+                        {alertLabelForEleve(e)}
+                      </Badge>
+                    </li>
+                  ))
+                )}
               </ul>
             </Card>
           </div>
