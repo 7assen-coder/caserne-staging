@@ -176,7 +176,7 @@ function normalizePieces(pieces) {
 function FormPanel({ children, className = '' }) {
   return (
     <div
-      className={`rounded-2xl border border-light-gray bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-2xl border border-slate-200 bg-slate-50/65 p-5 shadow-sm ${className}`}
     >
       {children}
     </div>
@@ -250,9 +250,13 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
   return (
     <form
       onSubmit={submit}
-      className="flex max-h-[75vh] flex-col space-y-5 rounded-xl border border-light-gray bg-white p-1 sm:p-2"
+      className="flex max-h-[75vh] flex-col space-y-5 rounded-2xl border border-slate-200 bg-white p-2 sm:p-3"
     >
-      <div className="relative flex items-start justify-between gap-1 border-b border-light-gray pb-4 sm:gap-2">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-3">
+        <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Étape {step + 1} sur {STEPS.length}
+        </div>
+        <div className="relative flex items-start justify-between gap-1 sm:gap-2">
         <div
           className="pointer-events-none absolute left-[10%] right-[10%] top-[15px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:block"
           aria-hidden
@@ -268,12 +272,12 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
               className="relative z-[1] flex min-w-0 flex-1 flex-col items-center gap-1.5"
             >
               <span
-                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold shadow-lg transition sm:h-10 sm:w-10 ${
+                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition sm:h-10 sm:w-10 ${
                   act
                     ? 'border-gold bg-amber-50 text-gold-700 ring-2 ring-gold/20'
                     : done
                       ? 'border-esp-green/50 bg-emerald-50 text-emerald-700'
-                      : 'border-light-gray bg-off-white text-slate-600'
+                      : 'border-slate-300 bg-white text-slate-600'
                 }`}
               >
                 {done ? <Check size={17} strokeWidth={2.5} /> : i + 1}
@@ -288,6 +292,7 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
             </button>
           );
         })}
+        </div>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto pr-1">
@@ -425,10 +430,12 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
 
         {step === 2 && (
           <FormPanel className="!p-4 sm:!p-6">
-            <h4 className="mb-1 font-serif text-base font-semibold text-slate-50">Pièces & diplômes</h4>
-            <p className="mb-5 max-w-2xl text-xs leading-relaxed text-slate-400">
+            <h4 className="mb-1 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
+              Pièces & diplômes
+            </h4>
+            <p className="mb-5 max-w-2xl text-xs leading-relaxed text-text-light">
               Pièces demandées pour le dossier. Formats :{' '}
-              <span className="text-gold/90">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier.
+              <span className="font-semibold text-navy">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -584,7 +591,7 @@ export default function FormulaireEleve({ eleve, onSubmit, onCancel, onStepSubmi
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-light-gray bg-off-white pt-4">
+      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-1 pt-4 backdrop-blur">
         <div className="flex gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>
             Annuler

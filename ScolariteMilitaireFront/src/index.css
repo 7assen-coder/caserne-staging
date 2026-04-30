@@ -57,7 +57,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid #f59e0b;
+    outline: 2px solid #76ae70;
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -74,7 +74,7 @@
            dark:bg-navy-700 dark:hover:bg-navy-600;
   }
   .btn-secondary {
-    @apply bg-white border border-light-gray text-navy hover:border-navy hover:bg-navy-50;
+    @apply bg-white border border-navy-200 text-navy-800 hover:border-navy-400 hover:bg-navy-50;
   }
   .btn-gold {
     @apply bg-gold text-dark-navy font-semibold hover:bg-gold-400 shadow-gold active:scale-[0.98];
@@ -94,7 +94,7 @@
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-card ring-1 ring-light-gray/60;
+    @apply bg-white rounded-xl shadow-card ring-1 ring-slate-200/80;
   }
 
   .card-hover {
@@ -105,7 +105,7 @@
     @apply min-h-[3rem] w-full rounded-lg border border-light-gray bg-white px-4 py-3 text-base text-slate-900
            placeholder:text-text-muted
            transition-colors
-           focus:border-gold/70 focus:outline-none focus:ring-2 focus:ring-gold/30;
+           focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-200;
   }
 
   .label {
@@ -160,7 +160,7 @@
     @apply w-full border-collapse text-base;
   }
   .table-base thead th {
-    @apply whitespace-nowrap border-b border-light-gray bg-off-white px-4 py-4 text-left text-base font-semibold uppercase tracking-wide text-slate-600;
+    @apply whitespace-nowrap border-b border-navy-100 bg-navy-50 px-4 py-4 text-left text-base font-semibold uppercase tracking-wide text-navy-800;
   }
   .table-base tbody td {
     @apply border-b border-light-gray/80 px-4 py-4 align-middle text-base text-slate-900;
@@ -169,7 +169,7 @@
     @apply transition-colors;
   }
   .table-base tbody tr:hover {
-    @apply bg-off-white;
+    @apply bg-navy-50/50;
   }
 
   .nav-link {
@@ -179,10 +179,10 @@
     @apply px-3 py-2.5 gap-2.5;
   }
   .nav-link-inactive {
-    @apply text-slate-700 hover:bg-slate-100 hover:text-slate-900;
+    @apply text-slate-100 hover:bg-white/10 hover:text-white;
   }
   .nav-link-active {
-    @apply bg-navy-50 text-navy shadow-inner ring-1 ring-navy-100;
+    @apply bg-white/15 text-white shadow-inner ring-1 ring-white/20;
   }
 
   .page-header {
@@ -191,6 +191,7 @@
 
   .page-title {
     @apply font-serif text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl md:text-6xl;
+    text-wrap: balance;
   }
 
   .page-subtitle {
@@ -227,8 +228,8 @@
 
 .sidebar-pattern {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
