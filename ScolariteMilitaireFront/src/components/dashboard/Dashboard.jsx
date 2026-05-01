@@ -5,10 +5,16 @@ import {
   UserPlus,
   ChevronRight,
   Sparkles,
+  Activity,
 } from 'lucide-react';
 import Card from '../common/Card';
 import Badge from '../common/Badge';
-import { kpiScolarite, inscriptionsParFiliere, aSurveillerEleves } from '../../data/mockData';
+import {
+  kpiScolarite,
+  inscriptionsParFiliere,
+  aSurveillerEleves,
+  activiteRecenteScolarite,
+} from '../../data/mockData';
 
 function KpiBlock({ icon: Icon, label, value, hint, accent = 'navy' }) {
   const isGold = accent === 'gold';
@@ -100,7 +106,7 @@ export default function Dashboard() {
         </header>
 
         {/* KPI */}
-        <section aria-label="Indicateurs" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Indicateurs" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <KpiBlock
             icon={Users}
             label="Étudiants"
@@ -116,6 +122,30 @@ export default function Dashboard() {
             hint="Données mockées (démo)"
           />
         </section>
+
+        <Card
+          title="Activité récente"
+          subtitle="Dernières opérations scolarité (données démo)"
+          accent="navy"
+          bodyClassName="!p-4 md:!p-5"
+        >
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {activiteRecenteScolarite.map((item) => (
+              <li
+                key={`${item.heure}-${item.texte}`}
+                className="flex items-start gap-3 rounded-xl border border-light-gray bg-white p-3"
+              >
+                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-navy-50 text-navy">
+                  <Activity size={16} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-text-light">{item.heure}</p>
+                  <p className="mt-0.5 text-sm text-slate-900">{item.texte}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
 
         {/* Deux colonnes, hauteur = contenu (pas d’étirement pour éviter le vide sous le tableau) */}
         <div className="grid min-h-0 grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">

@@ -160,18 +160,34 @@ export default function ListeEleves() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-8 md:gap-10 xl:grid-cols-12 xl:gap-x-8">
-      <nav className="text-base text-text-light xl:col-span-12">
-        <Link to="/dashboard" className="hover:text-navy">
-          Accueil
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="text-navy font-semibold">Étudiants</span>
+    <div className="grid grid-cols-1 gap-7 md:gap-8 xl:grid-cols-12 xl:gap-x-8">
+      <nav className="xl:col-span-12">
+        <div className="inline-flex items-center gap-2 rounded-full border border-light-gray bg-white px-3 py-1.5 text-sm text-text-light shadow-sm">
+          <Link to="/dashboard" className="font-medium transition hover:text-navy">
+            Accueil
+          </Link>
+          <span>/</span>
+          <span className="font-semibold text-navy">Étudiants</span>
+        </div>
       </nav>
 
       <div className="page-header xl:col-span-12">
         <div className="min-w-0 flex-1">
           <h1 className="page-title">Gestion des étudiants</h1>
+          <p className="mt-2 text-base text-text-light">
+            Suivi des dossiers, recherche rapide et actions administratives.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-navy-100 bg-navy-50 px-3 py-1 text-xs font-semibold text-navy">
+              Total: {n} étudiant{n > 1 ? 's' : ''}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+              Département: {filters.departement || 'Tous'}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+              Niveau: {filters.annee || 'Tous'}
+            </span>
+          </div>
         </div>
         <Button
           variant="primary"
@@ -201,21 +217,27 @@ export default function ListeEleves() {
         title="Filtres"
         subtitle="Département, année (niveau), recherche nominative"
         className="xl:col-span-12"
+        accent="navy"
+        bodyClassName="!pt-4"
         actions={
-          <span className="text-text-muted dark:text-slate-500 inline-flex items-center gap-1 text-sm">
+          <span className="text-text-muted dark:text-slate-500 inline-flex items-center gap-1 text-sm font-semibold">
             <Filter size={14} /> {loading ? 'Chargement…' : 'Prêt'}
           </span>
         }
       >
-        <div className="flex flex-col gap-5 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="rounded-2xl border border-light-gray bg-slate-50/70 p-4 md:p-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:flex-wrap lg:items-end">
           <div className="relative min-w-0 flex-1 lg:min-w-[240px]">
             <span className="label">Recherche</span>
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-text-muted" />
+              <Search
+                size={15}
+                className="absolute left-3 top-1/2 z-[1] -translate-y-1/2 text-text-muted"
+              />
               <input
                 type="text"
                 placeholder="Nom, prénom, matricule…"
-                className="input pl-9"
+                className="input border-slate-200 bg-white pl-9 shadow-sm"
                 value={filters.q}
                 onChange={(e) => setFilters({ ...filters, q: e.target.value })}
                 aria-label="Recherche par nom, prénom ou matricule"
@@ -241,18 +263,19 @@ export default function ListeEleves() {
             />
           </div>
         </div>
+        </div>
       </Card>
 
-      <Card className="xl:col-span-12">
+      <Card className="xl:col-span-12" accent="gold">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-light-gray pb-3">
-          <div className="text-sm text-slate-500">
+          <div className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-sm text-slate-600">
             {selectedEleve ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné` : 'Sélectionnez un étudiant'}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleExportXlsx}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
               title="Exporter Excel"
               aria-label="Exporter Excel"
             >
@@ -273,7 +296,7 @@ export default function ListeEleves() {
                       setFicheLoading(false);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
                   title="Voir le détail"
                   aria-label="Voir le détail"
                 >
@@ -283,7 +306,7 @@ export default function ListeEleves() {
                 <button
                   type="button"
                   onClick={() => setEditing(selectedEleve)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
                   title="Modifier"
                   aria-label="Modifier"
                 >
@@ -299,7 +322,7 @@ export default function ListeEleves() {
                     setSelectedEleveId(null);
                     setKey((k) => k + 1);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
                   title="Supprimer"
                   aria-label="Supprimer"
                 >
@@ -310,12 +333,14 @@ export default function ListeEleves() {
             )}
           </div>
         </div>
-        <DataTable
-          columns={columns}
-          rows={rows}
-          pageSize={12}
-          onRowClick={(row) => setSelectedEleveId(row.id)}
-        />
+        <div className="overflow-hidden rounded-2xl border border-light-gray bg-white">
+          <DataTable
+            columns={columns}
+            rows={rows}
+            pageSize={12}
+            onRowClick={(row) => setSelectedEleveId(row.id)}
+          />
+        </div>
       </Card>
 
       {editing && (
