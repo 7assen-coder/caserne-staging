@@ -10,6 +10,7 @@ class ContactParentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DossierSanteSerializer(serializers.ModelSerializer):
+    imc = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
     class Meta:
         model = DossierSante
         fields = '__all__'
