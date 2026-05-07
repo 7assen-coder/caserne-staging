@@ -65,15 +65,8 @@ export const TYPES_ABSENCE = [
   { value: 'activite', label: 'Activité' },
 ];
 
-export const COMPAGNIES = ['Compagnie Alpha', 'Compagnie Bravo', 'Compagnie Charlie'];
-export const SECTIONS = [
-  'Section 1A',
-  'Section 1B',
-  'Section 2A',
-  'Section 2B',
-  'Section 3A',
-  'Section 3B',
-];
+export const COMPAGNIES = ['1ʳᵉ Compagnie', '2ᵉ Compagnie'];
+export const SECTIONS = ['Section 1', 'Section 2', 'Section 3', 'Section 4'];
 export const PROMOTIONS = ['Promotion 2022', 'Promotion 2023', 'Promotion 2024', 'Promotion 2025'];
 
 export const DEPARTEMENTS = [
@@ -87,9 +80,11 @@ export const DEPARTEMENTS = [
 
 export const FILIERES = DEPARTEMENTS.map((d) => d.label);
 
-export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD', '6e E', '6e DD'];
+export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD'];
 
 export const VOIES_ACCES_ETUDIANT = [
-  { value: 'Voix 1', label: 'Voix 1' },
-  { value: 'Voix 2', label: 'Voix 2' },
+  { value: 'Voie 1 — Interne', label: 'Voie 1 — Interne' },
+  { value: 'Voie 1 — Externe', label: 'Voie 1 — Externe' },
+  { value: 'Voie 2 — Interne', label: 'Voie 2 — Interne' },
+  { value: 'Voie 2 — Externe', label: 'Voie 2 — Externe' },
 ];
