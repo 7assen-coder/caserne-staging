@@ -7,6 +7,8 @@ import ElevesPage from './pages/ElevesPage';
 import NouvelEtudiantPage from './pages/NouvelEtudiantPage';
 import ExportEtudiantsPage from './pages/ExportEtudiantsPage';
 import ImportEtudiantsPage from './pages/ImportEtudiantsPage';
+import MobilitePage from './pages/MobilitePage';
+import NouvelUtilisateurPage from './pages/NouvelUtilisateurPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useAuth } from './hooks/useAuth';
 import { FONCTIONS } from './utils/constants';
@@ -82,6 +84,22 @@ export default function App() {
           element={
             <Protected roles={ROLES_SCOLA}>
               <NouvelEtudiantPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/eleves/mobilite"
+          element={
+            <Protected roles={ROLES_SCOLA}>
+              <MobilitePage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/utilisateurs/nouveau"
+          element={
+            <Protected roles={ROLES_SCOLA}>
+              <NouvelUtilisateurPage />
             </Protected>
           }
         />
