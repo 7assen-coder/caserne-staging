@@ -12,16 +12,13 @@ import { getPermissions } from '../utils/userRole';
 import { formatApiError } from '../utils/apiErrors';
 import {
   PARCOURS_MOBILITE_OPTIONS,
-  RAISONS_DOUBLE_DIPLOME,
-  RAISONS_ECHANGE,
 } from '../data/etudiantOptions';
-import { getAcademicYearOptions } from '../utils/anneeUniversitaire';
+import { deriveMobiliteAnneeFin, getAcademicYearOptions } from '../utils/anneeUniversitaire';
 
 const DEFAULT_MOBILITE = {
   type: '',
   etablissement: '',
   specialite: '',
-  raison: '',
   anneeDebut: '',
   anneeFin: '',
 };
@@ -316,12 +313,20 @@ function AjouterMobiliteForm({ students, onSaved, onCancel }) {
     });
   };
 
+  const mobiliteAnneeFinAffichee = useMemo(
+    () => deriveMobiliteAnneeFin(mobilite.anneeDebut, mobilite.type),
+    [mobilite.anneeDebut, mobilite.type],
+  );
+
   const validate = () => {
     const e = {};
     if (!mobilite.type) e.type = 'Sélectionner SE ou DD.';
     if (!mobilite.etablissement.trim()) e.etablissement = 'Établissement d’accueil obligatoire.';
     if (!mobilite.specialite.trim()) e.specialite = 'Spécialité obligatoire.';
-    if (!mobilite.raison) e.raison = 'Raison obligatoire.';
+    const ad = String(mobilite.anneeDebut ?? '').trim();
+    if (ad && !/^\d{4}-\d{4}$/.test(ad)) {
+      e.anneeDebut = 'Format année : AAAA-AAAA (ex. 2025-2026).';
+    }
     return e;
   };
 
@@ -345,7 +350,12 @@ function AjouterMobiliteForm({ students, onSaved, onCancel }) {
         ...selected,
         statut: selected.statut || 'actif',
         scolarite: { ...(selected.scolarite || {}) },
-        mobilite,
+        mobilite: {
+          ...mobilite,
+          raison: '',
+          anneeFin:
+            deriveMobiliteAnneeFin(mobilite.anneeDebut, mobilite.type) || '',
+        },
       };
       const existingDossierAcademiqueId =
         selected.dossierAcademiqueId
@@ -368,8 +378,6 @@ function AjouterMobiliteForm({ students, onSaved, onCancel }) {
       setSubmitting(false);
     }
   };
-
-  const raisonOptions = mobilite.type === 'Semestre d’échange' ? RAISONS_ECHANGE : RAISONS_DOUBLE_DIPLOME;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-x-6">
@@ -492,25 +500,17 @@ function AjouterMobiliteForm({ students, onSaved, onCancel }) {
               error={errors.specialite}
             />
             <SelectField
-              label="Raison"
-              value={mobilite.raison}
-              onChange={(v) => updateMobilite('raison', v)}
-              options={raisonOptions}
-              required
-              error={errors.raison}
-            />
-            <SelectField
               label="Année universitaire de début"
               value={mobilite.anneeDebut}
               onChange={(v) => updateMobilite('anneeDebut', v)}
               options={anneeOptions}
             />
-            <SelectField
-              label="Année universitaire de fin"
-              value={mobilite.anneeFin}
-              onChange={(v) => updateMobilite('anneeFin', v)}
-              options={anneeOptions}
-            />
+            <div className="md:col-span-2">
+              <span className="label">Année de fin</span>
+              <div className="input min-h-[44px] flex items-center tabular-nums text-slate-900 sm:min-h-[2.5rem]">
+                {mobiliteAnneeFinAffichee || '—'}
+              </div>
+            </div>
           </div>
         </div>
 

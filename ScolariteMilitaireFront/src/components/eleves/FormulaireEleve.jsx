@@ -24,14 +24,12 @@ import {
   SECTIONS_OPTIONS,
   compagnieAttendueDepuisNiveau,
   PARCOURS_MOBILITE_OPTIONS,
-  RAISONS_DOUBLE_DIPLOME,
-  RAISONS_ECHANGE,
   ROLE_STEPS_VISIBLES,
 } from '../../data/etudiantOptions';
 import { PAYS_OPTIONS } from '../../data/pays';
 import { WILAYAS_OPTIONS, getCommuneOptionsForWilaya } from '../../data/wilayasMauritanie';
 import { computeIMC, classifyIMC, formatIMC } from '../../utils/imc';
-import { getCurrentAcademicYear, getAcademicYearOptions, todayIso } from '../../utils/anneeUniversitaire';
+import { getCurrentAcademicYear, getAcademicYearOptions, todayIso, deriveMobiliteAnneeFin } from '../../utils/anneeUniversitaire';
 import { generateFicheTaillesPdf, parseFicheTaillesText } from '../../utils/ficheTaillesPdf';
 
 const ALL_STEPS = [
@@ -93,7 +91,6 @@ function buildDefaults() {
       type: '',
       etablissement: '',
       specialite: '',
-      raison: '',
       anneeDebut: '',
       anneeFin: '',
     },
@@ -282,6 +279,16 @@ export default function FormulaireEleve({
     return parts.length > 0 ? parts.join(', ') : values.lieuNaissance || '';
   }, [values.nationalite, values.wilayaNaissance, values.communeNaissance, values.lieuNaissance]);
 
+  const augmentMobiliteAnneesFin = (v) => {
+    const fin = deriveMobiliteAnneeFin(v.mobilite?.anneeDebut, v.mobilite?.type);
+    return { ...v, mobilite: { ...v.mobilite, anneeFin: fin || '' } };
+  };
+
+  const mobiliteAnneeFinDerived = deriveMobiliteAnneeFin(
+    values.mobilite?.anneeDebut,
+    values.mobilite?.type,
+  );
+
   const submit = async (e) => {
     e.preventDefault();
     setSubmitErr('');
@@ -294,11 +301,12 @@ export default function FormulaireEleve({
     }
     setSubmitting(true);
     try {
-      const finalValues = {
+      let finalValues = {
         ...values,
         lieuNaissance: composedLieuNaissance || values.lieuNaissance || '',
         sante: { ...values.sante, imc: imcFormatted },
       };
+      if (mode === 'mobilite') finalValues = augmentMobiliteAnneesFin(finalValues);
       if (onStepSubmit) {
         await onStepSubmit(stepKeys[step], finalValues, { stepIndex: step, isFinal: true });
       }
@@ -327,11 +335,14 @@ export default function FormulaireEleve({
     }
     setFieldErrors({});
     const nextStep = step + 1;
-    const stepValues = {
+    let stepValues = {
       ...values,
       lieuNaissance: composedLieuNaissance || values.lieuNaissance || '',
       sante: { ...values.sante, imc: imcFormatted },
     };
+    if (mode === 'mobilite' && stepKeys[step] === 'mobilite') {
+      stepValues = augmentMobiliteAnneesFin(stepValues);
+    }
     if (onStepSubmit) {
       setSubmitting(true);
       try {
@@ -561,9 +572,9 @@ export default function FormulaireEleve({
                   required
                   error={fieldErrors.numeroBac}
                   inputMode="numeric"
-                  maxLength={8}
+                  maxLength={5}
                   onKeyDown={blockNonDigitKey}
-                  placeholder="8 chiffres"
+                  placeholder="1 à 5 chiffres"
                 />
                 <SelectField
                   label="Catégorie du Bac"
@@ -793,29 +804,17 @@ export default function FormulaireEleve({
                 error={fieldErrors['mobilite.specialite']}
               />
               <SelectField
-                label="Raison de la mobilité"
-                value={values.mobilite.raison}
-                onChange={(v) => update('mobilite.raison', v)}
-                options={
-                  values.mobilite.type === 'Semestre d’échange'
-                    ? RAISONS_ECHANGE
-                    : RAISONS_DOUBLE_DIPLOME
-                }
-                required
-                error={fieldErrors['mobilite.raison']}
-              />
-              <SelectField
                 label="Année universitaire de début"
                 value={values.mobilite.anneeDebut}
                 onChange={(v) => update('mobilite.anneeDebut', v)}
                 options={anneeMobiliteOptions}
               />
-              <SelectField
-                label="Année universitaire de fin"
-                value={values.mobilite.anneeFin}
-                onChange={(v) => update('mobilite.anneeFin', v)}
-                options={anneeMobiliteOptions}
-              />
+              <div className="md:col-span-2">
+                <span className="label">Année de fin</span>
+                <div className="input min-h-[44px] flex items-center tabular-nums text-slate-900 sm:min-h-[2.5rem]">
+                  {mobiliteAnneeFinDerived || '—'}
+                </div>
+              </div>
             </div>
           </FormPanel>
         )}

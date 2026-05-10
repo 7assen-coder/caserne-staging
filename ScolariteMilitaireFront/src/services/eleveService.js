@@ -1,5 +1,6 @@
 import { api } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
+import { todayIso, getCurrentAcademicYear } from '../utils/anneeUniversitaire';
 
 function splitLieuNaissance(lieu) {
   if (!lieu) return { wilaya: '', commune: '' };
@@ -176,24 +177,27 @@ function statutToParcours(statut) {
 function toElevePayload(values) {
   return {
     matricule: values.matricule || '',
-    num_bac: values.numeroBac || '',
+    num_bac: String(values.numeroBac ?? '').trim() || '—',
     nni: values.nni || '',
     sexe: values.sexe === 'F' ? 'F' : 'H',
     prenom: values.prenom || '',
     nom_famille: values.nom || '',
     date_naissance: values.dateNaissance || null,
     lieu_naissance: composeLieuNaissance(values) || '—',
-    nationalite: values.nationalite || '',
+    nationalite: (values.nationalite ?? '').toString().trim() || '—',
     categorie_bac:
       values.categorieBac === 'Étranger' || values.categorieBac === 'Etranger'
         ? 'Etranger'
         : values.categorieBac || 'National',
-    serie_bac: values.serieBac || '',
+    serie_bac: (values.serieBac ?? '').trim() || '—',
     moyenne_bac: values.moyenneBac || '0',
-    ecole_bac: values.ecoleBac || '',
-    annee_premiere_inscription: values.anneePremiereInscription || values.scolarite?.anneeUni1ere || '',
-    date_premiere_inscription: values.datePremiereInscription || null,
-    voie_acces: values.scolarite?.voieAcces || values.voieAcces || '',
+    ecole_bac: (values.ecoleBac ?? '').trim() || '—',
+    annee_premiere_inscription:
+      (values.anneePremiereInscription || values.scolarite?.anneeUni1ere || '').trim()
+      || getCurrentAcademicYear(),
+    date_premiere_inscription:
+      String(values.datePremiereInscription ?? '').trim() || todayIso(),
+    voie_acces: values.scolarite?.voieAcces || values.voieAcces || '—',
     diplome_acces: values.scolarite?.diplomeAcces || values.diplomeAcces || 'N/A',
     etablissement_diplome: values.scolarite?.etablissementPremierCycle || values.etablissementDiplome || '',
     adresse_primaire: values.contact?.adresse || values.adressePrimaire || 'N/A',

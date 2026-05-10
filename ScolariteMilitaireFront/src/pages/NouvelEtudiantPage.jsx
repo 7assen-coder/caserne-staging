@@ -72,6 +72,7 @@ export default function NouvelEtudiantPage() {
           ? await eleveService.updateDossierAcademique(flow.dossierAcademiqueId, eleveId, values)
           : await eleveService.createDossierAcademique(eleveId, values);
         flow.dossierAcademiqueId = res?.data?.id ?? flow.dossierAcademiqueId;
+        await eleveService.update(eleveId, values);
         return;
       }
 
@@ -100,6 +101,7 @@ export default function NouvelEtudiantPage() {
           ? await eleveService.updateContactsParents(flow.contactsParentsId, eleveId, values)
           : await eleveService.createContactsParents(eleveId, values);
         flow.contactsParentsId = res?.data?.id ?? flow.contactsParentsId;
+        await eleveService.update(eleveId, values);
         return;
       }
 

@@ -33,43 +33,19 @@ function isInMobilite(e) {
   return Boolean(m && (m.type || m.etablissement || m.specialite));
 }
 
-function QuickAction({ icon: Icon, title, subtitle, to, variant = 'navy', disabled }) {
-  const variants = {
-    navy: {
-      base: 'bg-gradient-to-br from-navy-700 to-navy-900 text-white border-navy-900',
-      icon: 'bg-white/10 text-gold ring-white/15',
-      title: 'text-white',
-      subtitle: 'text-slate-300',
-      arrow: 'text-gold',
-    },
-    gold: {
-      base: 'bg-gradient-to-br from-gold to-gold-500 text-dark-navy border-gold-600',
-      icon: 'bg-dark-navy/20 text-dark-navy ring-dark-navy/30',
-      title: 'text-dark-navy',
-      subtitle: 'text-dark-navy/80',
-      arrow: 'text-dark-navy',
-    },
-    light: {
-      base: 'bg-white text-slate-900 border-light-gray hover:border-navy/30',
-      icon: 'bg-navy-50 text-navy ring-navy/15',
-      title: 'text-slate-900',
-      subtitle: 'text-slate-500',
-      arrow: 'text-navy',
-    },
-  };
-  const v = variants[variant] || variants.light;
+function QuickAction({ icon: Icon, title, subtitle, to, primary = false, disabled }) {
   if (disabled) {
     return (
       <div
         aria-disabled
-        className={`group relative flex flex-col gap-3 rounded-2xl border p-4 opacity-50 sm:p-5 ${v.base}`}
+        className="group relative flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-5 opacity-45"
       >
-        <span className={`grid h-11 w-11 place-items-center rounded-xl ring-1 ${v.icon}`}>
-          <Icon size={20} aria-hidden />
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-200/80 text-slate-400">
+          <Icon size={22} aria-hidden strokeWidth={1.75} />
         </span>
         <div className="min-w-0">
-          <p className={`text-[0.95rem] font-semibold leading-tight ${v.title}`}>{title}</p>
-          <p className={`mt-1 truncate text-xs ${v.subtitle}`}>Accès non autorisé pour votre rôle.</p>
+          <p className="text-[0.95rem] font-semibold leading-snug text-slate-600">{title}</p>
+          <p className="mt-1 text-xs text-slate-400">Indisponible pour ce rôle.</p>
         </div>
       </div>
     );
@@ -77,48 +53,67 @@ function QuickAction({ icon: Icon, title, subtitle, to, variant = 'navy', disabl
   return (
     <Link
       to={to}
-      className={`group relative flex flex-col gap-3 overflow-hidden rounded-2xl border p-4 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-pop sm:p-5 ${v.base}`}
+      className={`group relative flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-200 ${
+        primary
+          ? 'border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-[0_12px_40px_-24px_rgba(15,23,42,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_48px_-20px_rgba(15,23,42,0.75)]'
+          : 'border-slate-200/90 bg-white text-slate-800 shadow-[0_2px_8px_-4px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_32px_-16px_rgba(15,23,42,0.12)]'
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={`grid h-11 w-11 place-items-center rounded-xl ring-1 ${v.icon}`}>
-          <Icon size={20} aria-hidden />
+        <span
+          className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+            primary
+              ? 'bg-white/[0.12] text-amber-200/95 ring-1 ring-white/10'
+              : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200/70 group-hover:bg-slate-900 group-hover:text-amber-200 group-hover:ring-slate-800'
+          }`}
+        >
+          <Icon size={22} aria-hidden strokeWidth={1.75} />
         </span>
         <ChevronRight
           size={18}
-          className={`transition group-hover:translate-x-0.5 ${v.arrow}`}
+          strokeWidth={1.75}
+          className={`shrink-0 transition group-hover:translate-x-0.5 ${
+            primary ? 'text-white/50 group-hover:text-amber-200/90' : 'text-slate-300 group-hover:text-slate-600'
+          }`}
           aria-hidden
         />
       </div>
       <div className="min-w-0">
-        <p className={`text-[0.95rem] font-semibold leading-tight ${v.title}`}>{title}</p>
-        <p className={`mt-1 truncate text-xs ${v.subtitle}`}>{subtitle}</p>
+        <p className={`text-[0.95rem] font-semibold leading-snug ${primary ? 'text-white' : 'text-slate-900'}`}>
+          {title}
+        </p>
+        <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${primary ? 'text-slate-300' : 'text-slate-500'}`}>
+          {subtitle}
+        </p>
       </div>
     </Link>
   );
 }
 
-function Kpi({ icon: Icon, label, value, hint, accent = 'navy', loading }) {
-  const accents = {
-    navy: { bar: 'bg-gradient-to-b from-navy-500 to-navy-900', icon: 'bg-navy text-gold' },
-    gold: { bar: 'bg-gradient-to-b from-gold-300 to-gold-600', icon: 'bg-gold text-dark-navy' },
-    emerald: { bar: 'bg-gradient-to-b from-emerald-400 to-emerald-700', icon: 'bg-emerald-700 text-white' },
-    red: { bar: 'bg-gradient-to-b from-amber-400 to-red-600', icon: 'bg-brand-red text-white' },
+function Kpi({ icon: Icon, label, value, hint, tone = 'slate', loading }) {
+  const tones = {
+    slate: 'from-slate-50 to-white text-slate-700 ring-slate-200/70',
+    blue: 'from-sky-50/80 to-white text-sky-800 ring-sky-200/50',
+    amber: 'from-amber-50/70 to-white text-amber-900 ring-amber-200/40',
+    rose: 'from-rose-50/70 to-white text-rose-900 ring-rose-200/40',
+    emerald: 'from-emerald-50/70 to-white text-emerald-900 ring-emerald-200/40',
   };
-  const a = accents[accent] || accents.navy;
+  const t = tones[tone] || tones.slate;
   return (
-    <div className="group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-light-gray bg-white/95 shadow-card backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className={`absolute inset-y-0 left-0 w-1 ${a.bar}`} aria-hidden />
-      <div className="flex h-full flex-col justify-between gap-3 p-4 pl-5 sm:p-5 sm:pl-6">
-        <span className={`grid h-10 w-10 place-items-center rounded-lg shadow-inset ring-1 ring-black/5 ${a.icon}`}>
-          <Icon size={18} strokeWidth={2.1} aria-hidden />
+    <div
+      className={`relative flex min-h-[7.75rem] flex-col justify-between rounded-2xl bg-gradient-to-b p-5 shadow-[0_2px_8px_-4px_rgba(15,23,42,0.06)] ring-1 ring-inset ${t}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/85 text-current shadow-sm ring-1 ring-slate-200/60">
+          <Icon size={20} strokeWidth={1.75} aria-hidden />
         </span>
-        <div>
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-          <p className="mt-0.5 font-sans text-[2rem] font-bold leading-none tabular-nums tracking-tight text-navy-900">
-            {loading ? <span className="inline-block h-7 w-12 animate-pulse rounded bg-slate-200" /> : value}
-          </p>
-          {hint ? <p className="mt-1.5 text-xs leading-snug text-slate-500">{hint}</p> : null}
-        </div>
+      </div>
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">{label}</p>
+        <p className="mt-1 font-sans text-[1.875rem] font-semibold tabular-nums tracking-tight text-slate-900">
+          {loading ? <span className="inline-block h-8 w-14 animate-pulse rounded-lg bg-slate-200/80" /> : value}
+        </p>
+        {hint ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p> : null}
       </div>
     </div>
   );
@@ -132,16 +127,19 @@ function FiliereRow({ row, max, total }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="truncate text-sm font-semibold text-slate-900">{row.filiere}</span>
         <span className="shrink-0 tabular-nums text-xs text-slate-500">
-          <span className="font-bold text-navy-900">{total}</span> · {row.dossiersComplets} OK · {row.dossiersASurveiller} ⚠
+          <span className="font-semibold text-slate-800">{total}</span>{' '}
+          <span className="text-slate-400">·</span> {row.dossiersComplets}{' '}
+          <span className="text-emerald-600">complets</span> · {row.dossiersASurveiller}{' '}
+          <span className="text-amber-600">suite</span>
         </span>
       </div>
-      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100">
         <div
-          className="absolute inset-y-0 left-0 flex h-full overflow-hidden rounded-full"
+          className="absolute inset-y-0 left-0 flex h-full overflow-hidden rounded-full bg-slate-200/70"
           style={{ width: `${widthPct}%` }}
         >
-          <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600" style={{ width: `${completePct}%` }} />
-          <div className="h-full bg-gradient-to-r from-gold-300 to-gold-500" style={{ width: `${100 - completePct}%` }} />
+          <div className="h-full bg-emerald-500/85" style={{ width: `${completePct}%` }} />
+          <div className="h-full bg-amber-400/85" style={{ width: `${100 - completePct}%` }} />
         </div>
       </div>
     </div>
@@ -206,54 +204,51 @@ export default function Dashboard() {
   const anneeUni = getCurrentAcademicYear();
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <header className="relative overflow-hidden rounded-3xl bg-hero-fade text-white shadow-pop ring-1 ring-navy-900/40">
+    <div className="space-y-8 md:space-y-10">
+      <header className="relative overflow-hidden rounded-[1.75rem] border border-slate-200/70 bg-gradient-to-br from-white via-slate-50/80 to-slate-100/40 shadow-[0_20px_50px_-38px_rgba(15,23,42,0.35)] ring-1 ring-slate-900/[0.03]">
         <div
-          className="pointer-events-none absolute inset-0 bg-grid-faint"
-          style={{ backgroundSize: '24px 24px' }}
+          className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-gradient-to-br from-indigo-400/10 via-sky-400/5 to-transparent blur-3xl"
           aria-hidden
         />
-        <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-gold/15 blur-3xl" aria-hidden />
-        <div className="pointer-events-none absolute -left-20 -bottom-24 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" aria-hidden />
-
-        <div className="relative px-5 pb-7 pt-6 sm:px-7 sm:pb-8 sm:pt-7 md:px-10 md:pb-10 md:pt-9">
-          <div className="min-w-0 max-w-3xl">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                <Link to="/dashboard" className="flex min-w-0 items-center gap-3 outline-none ring-offset-2 ring-offset-navy-900 focus-visible:ring-2 focus-visible:ring-gold">
-                  <EspLogo className="h-10 w-10 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.16em] text-white/80">Scolarité</p>
-                    <p className="truncate text-base font-semibold text-white">ESP Militaire</p>
-                  </div>
-                </Link>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-100">
-                    <CalendarDays size={14} aria-hidden className="shrink-0 opacity-90" />
-                    <span className="capitalize">{formattedDate}</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-gold/35 bg-gold/10 px-2.5 py-1.5 text-xs font-semibold text-gold-200">
-                    <ShieldCheck size={14} aria-hidden className="shrink-0" />
-                    {ROLE_LABEL[role]}
-                  </span>
-                  <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 sm:w-auto">
-                    Année {anneeUni}
-                  </span>
-                </div>
-            </div>
-
-            <h1 className="mt-5 font-sans text-[1.7rem] font-bold leading-tight tracking-tight text-white sm:text-4xl md:text-[2.65rem]">
-                {greeting},{' '}
-                <span className="text-gold">
-                  {userPrenom}
-                  {userNom ? ` ${userNom}` : ''}
-                </span>
-              </h1>
-              <p className="mt-1.5 max-w-2xl text-sm text-slate-300 sm:text-base">
-                Synthèse des indicateurs ci-dessous.
-              </p>
+        <div
+          className="pointer-events-none absolute -left-32 bottom-0 h-64 w-64 rounded-full bg-gradient-to-tr from-amber-200/15 to-transparent blur-3xl"
+          aria-hidden
+        />
+        <div className="relative px-5 py-7 sm:px-8 sm:py-8 md:px-10 md:py-9">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+            <Link
+              to="/dashboard"
+              className="flex min-w-0 max-w-md items-center gap-3.5 rounded-xl outline-none transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-slate-400/50"
+            >
+              <EspLogo className="h-10 w-10 shrink-0 rounded-full ring-2 ring-white shadow-sm" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Scolarité</p>
+                <p className="truncate text-base font-semibold text-slate-900">ESP Militaire</p>
+              </div>
+            </Link>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
+                <CalendarDays size={14} className="text-slate-400" aria-hidden />
+                <span className="capitalize">{formattedDate}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-amber-100 shadow-sm">
+                <ShieldCheck size={14} aria-hidden className="opacity-90" />
+                {ROLE_LABEL[role]}
+              </span>
+              <span className="inline-flex w-full items-center justify-center rounded-full bg-slate-200/50 px-3 py-1.5 text-xs font-medium text-slate-700 backdrop-blur-sm sm:w-auto">
+                {anneeUni}
+              </span>
             </div>
           </div>
-        <div className="h-1.5 w-full bg-esp-ribbon" aria-hidden />
+
+          <h1 className="mt-7 max-w-3xl font-sans text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-slate-900 sm:text-[2.125rem] md:text-[2.5rem]">
+            {greeting},{' '}
+            <span className="bg-gradient-to-r from-amber-700 to-amber-500 bg-clip-text font-semibold text-transparent">
+              {userPrenom}
+              {userNom ? ` ${userNom}` : ''}
+            </span>
+          </h1>
+        </div>
       </header>
 
       {error ? (
@@ -266,13 +261,10 @@ export default function Dashboard() {
       ) : null}
 
       <section aria-label="Actions rapides">
-        <div className="mb-3 flex items-end justify-between gap-2">
-          <div>
-            <h2 className="font-sans text-base font-bold uppercase tracking-[0.14em] text-slate-700 sm:text-lg">
-              Actions rapides
-            </h2>
-            <div className="mt-1 h-0.5 w-12 rounded-full bg-gold" />
-          </div>
+        <div className="mb-4">
+          <h2 className="font-sans text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
+            Accès rapides
+          </h2>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <QuickAction
@@ -280,7 +272,7 @@ export default function Dashboard() {
             title="Nouvel étudiant"
             subtitle="Créer un dossier complet"
             to="/eleves/nouveau"
-            variant="navy"
+            primary
             disabled={!perms.canCreateStudent}
           />
           <QuickAction
@@ -288,7 +280,6 @@ export default function Dashboard() {
             title="Mobilité (DD / SE)"
             subtitle="Étudiants en double diplôme ou échange"
             to="/eleves/mobilite"
-            variant="gold"
             disabled={!perms.canCreateMobilite}
           />
           <QuickAction
@@ -296,34 +287,28 @@ export default function Dashboard() {
             title="Importer"
             subtitle="Liste d’étudiants en masse"
             to="/eleves/import"
-            variant="light"
           />
           <QuickAction
             icon={FileDown}
             title="Exporter"
             subtitle="Excel, PDF, Word"
             to="/eleves/export"
-            variant="light"
           />
           <QuickAction
             icon={UserCog}
             title="Nouvel utilisateur"
             subtitle="Compte avec rôle (admin, encadrant…)"
             to="/utilisateurs/nouveau"
-            variant="light"
             disabled={perms.canCreateUserRoles.length === 0}
           />
         </div>
       </section>
 
       <section aria-label="Indicateurs">
-        <div className="mb-3 flex items-end justify-between gap-2">
-          <div>
-            <h2 className="font-sans text-base font-bold uppercase tracking-[0.14em] text-slate-700 sm:text-lg">
-              Indicateurs clés
-            </h2>
-            <div className="mt-1 h-0.5 w-12 rounded-full bg-gold" />
-          </div>
+        <div className="mb-4">
+          <h2 className="font-sans text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
+            Vue d’ensemble
+          </h2>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <Kpi
@@ -331,7 +316,7 @@ export default function Dashboard() {
             label="Étudiants"
             value={kpis.total.toLocaleString('fr-FR')}
             hint={loading ? null : `${kpis.completionPct}% dossiers complets`}
-            accent="navy"
+            tone="blue"
             loading={loading}
           />
           <Kpi
@@ -339,7 +324,7 @@ export default function Dashboard() {
             label="En mobilité"
             value={kpis.enMobilite.toLocaleString('fr-FR')}
             hint="Double diplôme + Échange"
-            accent="gold"
+            tone="amber"
             loading={loading}
           />
           <Kpi
@@ -347,7 +332,7 @@ export default function Dashboard() {
             label="À compléter"
             value={kpis.dossiersASurveiller.toLocaleString('fr-FR')}
             hint="Coordonnées manquantes"
-            accent="red"
+            tone="rose"
             loading={loading}
           />
           <Kpi
@@ -355,30 +340,24 @@ export default function Dashboard() {
             label="Compagnies"
             value={kpis.compagnies.toLocaleString('fr-FR')}
             hint="Compagnies actives"
-            accent="emerald"
+            tone="emerald"
             loading={loading}
           />
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-5 md:gap-6 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-6 md:gap-7 lg:grid-cols-12">
         <section className="lg:col-span-7 xl:col-span-8">
-          <div className="overflow-hidden rounded-2xl border border-light-gray bg-white shadow-card">
-            <header className="flex items-start justify-between gap-3 border-b border-light-gray bg-gradient-to-r from-navy-50 to-white px-5 py-4">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_-20px_rgba(15,23,42,0.12)]">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4 md:px-6">
               <div className="min-w-0">
-                <h3 className="font-sans text-sm font-bold uppercase tracking-[0.14em] text-navy">
-                  Répartition par filière
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  <span className="font-semibold text-emerald-700">●</span> dossiers complets ·{' '}
-                  <span className="font-semibold text-gold-700">●</span> à compléter
-                </p>
+                <h3 className="font-sans text-base font-semibold text-slate-900">Répartition par filière</h3>
               </div>
               <Link
                 to="/eleves"
-                className="inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-navy transition hover:bg-navy-50"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
               >
-                Voir tout <ChevronRight size={14} />
+                Liste <ChevronRight size={14} />
               </Link>
             </header>
             <div className="px-5 py-5">
@@ -409,25 +388,20 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <aside className="space-y-5 md:space-y-6 lg:col-span-5 xl:col-span-4">
-          <div className="overflow-hidden rounded-2xl border border-light-gray bg-white shadow-card">
-            <header className="flex items-start justify-between gap-3 border-b border-light-gray bg-gradient-to-r from-amber-50 to-white px-5 py-4">
+        <aside className="space-y-6 md:space-y-7 lg:col-span-5 xl:col-span-4">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_-20px_rgba(15,23,42,0.1)]">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 md:px-6">
               <div>
-                <h3 className="font-sans text-sm font-bold uppercase tracking-[0.14em] text-amber-800">
-                  Dossiers à compléter
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Priorité : coordonnées manquantes ou invalides.
-                </p>
+                <h3 className="font-sans text-base font-semibold text-slate-900">Dossiers à compléter</h3>
               </div>
               <Link
                 to="/eleves"
-                className="inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
               >
-                Tout voir <ChevronRight size={14} />
+                Liste <ChevronRight size={14} />
               </Link>
             </header>
-            <ul className="divide-y divide-light-gray">
+            <ul className="divide-y divide-slate-100">
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3">
@@ -447,7 +421,7 @@ export default function Dashboard() {
               ) : (
                 aSurveiller.map((e) => (
                   <li key={e.id} className="flex items-center gap-3 px-5 py-3 transition hover:bg-slate-50">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-navy-gradient text-xs font-bold text-gold ring-1 ring-navy-700">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white ring-1 ring-slate-900/10">
                       {(e.prenom?.[0] || '').toUpperCase()}
                       {(e.nom?.[0] || '').toUpperCase()}
                     </span>
@@ -466,26 +440,21 @@ export default function Dashboard() {
             </ul>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-light-gray bg-white shadow-card">
-            <header className="flex items-start justify-between gap-3 border-b border-light-gray bg-gradient-to-r from-gold-100/60 to-white px-5 py-4">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_-20px_rgba(15,23,42,0.1)]">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 md:px-6">
               <div>
-                <h3 className="font-sans text-sm font-bold uppercase tracking-[0.14em] text-gold-700">
-                  Mobilité récente
-                </h3>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Aperçu des mobilités DD / SE.
-                </p>
+                <h3 className="font-sans text-base font-semibold text-slate-900">Mobilité récente</h3>
               </div>
               {perms.canCreateMobilite ? (
                 <Link
                   to="/eleves/mobilite"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-gold-700 transition hover:bg-gold-100/60"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
                 >
-                  Tout voir <ChevronRight size={14} />
+                  Liste <ChevronRight size={14} />
                 </Link>
               ) : null}
             </header>
-            <ul className="divide-y divide-light-gray">
+            <ul className="divide-y divide-slate-100">
               {loading ? (
                 [1, 2].map((i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3">
@@ -547,32 +516,27 @@ export default function Dashboard() {
       </div>
 
       {repartitionCompagnies.length > 0 ? (
-        <section className="rounded-xl border border-light-gray bg-white shadow-card">
-          <header className="flex flex-col gap-3 border-b border-light-gray px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="font-sans text-base font-semibold text-slate-900">Répartition par compagnie</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Effectifs des étudiants groupés par compagnie.
-              </p>
-            </div>
+        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_-20px_rgba(15,23,42,0.1)]">
+          <header className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <h2 className="font-sans text-base font-semibold text-slate-900">Répartition par compagnie</h2>
             <Link
               to="/eleves"
-              className="inline-flex shrink-0 items-center gap-1 self-start rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-navy"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
             >
-              Filtrer <ArrowRight size={14} aria-hidden />
+              Liste <ArrowRight size={14} aria-hidden />
             </Link>
           </header>
-          <div className="grid grid-cols-2 gap-px overflow-hidden bg-light-gray sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-px overflow-hidden bg-slate-200/60 sm:grid-cols-3 lg:grid-cols-4">
             {repartitionCompagnies.map((c) => {
               const pct = kpis.total > 0 ? Math.round((c.total / kpis.total) * 100) : 0;
               return (
                 <div
                   key={c.compagnie}
-                  className="flex flex-col gap-2 bg-white p-4 transition hover:bg-slate-50"
+                  className="flex flex-col gap-2 bg-white p-4 transition hover:bg-slate-50/90"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="grid h-8 w-8 place-items-center rounded-md bg-navy-50 text-navy ring-1 ring-navy/15">
-                      <GraduationCap size={14} aria-hidden />
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-700 ring-1 ring-slate-200/80">
+                      <GraduationCap size={14} aria-hidden strokeWidth={1.75} />
                     </span>
                     <span className="truncate text-xs font-semibold uppercase tracking-wide text-slate-600">
                       {c.compagnie}
@@ -585,7 +549,10 @@ export default function Dashboard() {
                     <span className="text-xs tabular-nums text-slate-500">{pct}%</span>
                   </div>
                   <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full bg-navy transition-[width] duration-500" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-slate-700 to-slate-900 transition-[width] duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
               );

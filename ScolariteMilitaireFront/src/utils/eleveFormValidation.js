@@ -9,7 +9,8 @@ export { SERIE_BAC_VALUES, SERIE_BAC_OPTIONS };
 
 const DIGITS_MATRICULE = /^\d{5}$/;
 const DIGITS_NNI = /^\d{10}$/;
-const DIGITS_NUM_BAC = /^\d{8}$/;
+/** N° Bac : 1 à 5 chiffres (maximum 5) */
+const DIGITS_NUM_BAC = /^\d{1,5}$/;
 
 function reqMsg(label) {
   return `${label} est obligatoire.`;
@@ -28,7 +29,7 @@ export function sanitizeNni(raw) {
 }
 
 export function sanitizeNumBac(raw) {
-  return digitsOnly(raw, 8);
+  return digitsOnly(raw, 5);
 }
 
 export function sanitizeDecimal(raw) {
@@ -99,7 +100,9 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
 
   const nb = String(values.numeroBac ?? '').trim();
   if (!nb) errors.numeroBac = reqMsg('Le numéro de Bac');
-  else if (!DIGITS_NUM_BAC.test(nb)) errors.numeroBac = 'Le numéro de Bac doit contenir exactement 8 chiffres.';
+  else if (!DIGITS_NUM_BAC.test(nb)) {
+    errors.numeroBac = 'Le numéro de Bac doit contenir entre 1 et 5 chiffres.';
+  }
 
   if (!String(values.dateNaissance ?? '').trim()) errors.dateNaissance = reqMsg('La date de naissance');
 
@@ -176,9 +179,6 @@ function validateScolarite(values, errors, { mode = 'standard' } = {}) {
     }
     if (!String(values.mobilite?.specialite ?? '').trim()) {
       errors['mobilite.specialite'] = reqMsg('La spécialité de mobilité');
-    }
-    if (!String(values.mobilite?.raison ?? '').trim()) {
-      errors['mobilite.raison'] = reqMsg('La raison de la mobilité');
     }
   }
 }
