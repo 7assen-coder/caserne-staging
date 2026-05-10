@@ -174,7 +174,7 @@ class DossierAcademique(models.Model):
         ('SID', 'Statistique et Ingénierie des Données'),
         ('GE', 'Génie Électrique'),
         ('GM', 'Génie Mécanique'),
-        ('GH-GC', 'Génie Civil'),
+        ('GC-HE', 'Génie Civil'),
         ('MPG', 'Mines, Pétrole et Gaz'),
     ]
 
@@ -243,6 +243,7 @@ class Hebergement(models.Model):
     responsable_etage = models.BooleanField(default=False)
 
 
+# flaged to be changed in the near future
 class DocumentEleve(models.Model):
     eleve = models.OneToOneField(Eleve, on_delete=models.CASCADE, related_name='documents')
     cin = models.FileField(upload_to='documents/cin/', blank=True, null=True)
