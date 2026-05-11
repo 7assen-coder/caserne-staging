@@ -83,7 +83,7 @@ class DossierAcademique(models.Model):
     eleve = models.OneToOneField(Eleve, on_delete=models.CASCADE, related_name='dossier_academique')
     departement = models.CharField(max_length=100)
     niveau_actuel = models.CharField(max_length=50) # 1ère année, 2e année, 3eme année
-    semestre_actuel = models.CharField(max_length=50)
+    semestre_actuel = models.CharField(max_length=50, blank=True, null=True)
     
     # S1 à S6 info (simplifié via JSONField pour stocker toutes les années/validations)
     donnees_semestres = models.JSONField(default=dict, blank=True, null=True)
