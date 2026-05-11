@@ -22,7 +22,7 @@ class Eleve(models.Model):
     
     annee_premiere_inscription = models.CharField(max_length=9) # ex: 2023-2024
     date_premiere_inscription = models.DateField()
-    voie_acces = models.CharField(max_length=100)
+    voie_acces = models.CharField(max_length=100, blank=True, null=True)
     diplome_acces = models.CharField(max_length=100)
     etablissement_diplome = models.CharField(max_length=150, blank=True, null=True)
     
