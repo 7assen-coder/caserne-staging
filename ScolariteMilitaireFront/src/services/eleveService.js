@@ -1,16 +1,47 @@
 import { api } from './api';
+import { WILAYAS_MR } from '../data/wilayasMauritanie';
+import { todayIso, getCurrentAcademicYear } from '../utils/anneeUniversitaire';
+
+function splitLieuNaissance(lieu) {
+  if (!lieu) return { wilaya: '', commune: '' };
+  const parts = String(lieu).split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return { wilaya: '', commune: '' };
+  const last = parts[parts.length - 1];
+  const wilaya = WILAYAS_MR.find((w) => w.nom.toLowerCase() === last.toLowerCase())?.nom || '';
+  if (wilaya) {
+    return { wilaya, commune: parts.slice(0, -1).join(', ') };
+  }
+  return { wilaya: '', commune: '' };
+}
+
+function parcoursToStatut(parcours) {
+  const v = String(parcours || '').toLowerCase();
+  if (v.includes('redoubl')) return 'redoublant';
+  if (v.includes('suspend')) return 'suspendu';
+  return 'actif';
+}
 
 function adaptEleveFromApi(item) {
+  const lieuParts = splitLieuNaissance(item.lieu_naissance);
   return {
     id: item.id,
+    dossierAcademiqueId: item.dossier_academique?.id ?? null,
+    dossierSanteId: item.dossier_sante?.id ?? null,
+    dossierMilitaireId: item.dossier_militaire?.id ?? null,
+    contactsParentsId: item.contacts_parents?.id ?? null,
+    hebergementId: item.hebergement?.id ?? null,
+    documentsId: item.documents?.id ?? null,
     matricule: item.matricule ?? '',
     nom: item.nom_famille ?? '',
     prenom: item.prenom ?? '',
     nni: item.nni ?? '',
     numeroBac: item.num_bac ?? '',
     sexe: item.sexe ?? 'H',
+    statut: parcoursToStatut(item.dossier_academique?.parcours),
     dateNaissance: item.date_naissance ?? '',
     lieuNaissance: item.lieu_naissance ?? '',
+    wilayaNaissance: lieuParts.wilaya,
+    communeNaissance: lieuParts.commune,
     nationalite: item.nationalite ?? '',
     categorieBac: item.categorie_bac ?? '',
     serieBac: item.serie_bac ?? '',
@@ -37,16 +68,26 @@ function adaptEleveFromApi(item) {
       departement: item.dossier_academique?.departement ?? '',
       filiere: item.dossier_academique?.departement ?? '',
       niveau: item.dossier_academique?.niveau_actuel ?? '',
-      semestreActuel: item.dossier_academique?.semestre_actuel ?? '',
-      donneesSemestres: item.dossier_academique?.donnees_semestres ?? '',
-      diplome: item.dossier_academique?.diplome ?? '',
-      etablissementEchange: item.dossier_academique?.etablissement_echange ?? '',
-      etablissementDoubleDiplome: item.dossier_academique?.etablissement_double_diplome ?? '',
-      specialiteMobilite: item.dossier_academique?.specialite_mobilite ?? '',
+      anneeUni1ere: item.annee_premiere_inscription ?? '',
       parcours: item.dossier_academique?.parcours ?? '',
       voieAcces: item.voie_acces ?? '',
       diplomeAcces: item.diplome_acces ?? '',
       etablissementPremierCycle: item.etablissement_diplome ?? '',
+    },
+    mobilite: {
+      type: item.dossier_academique?.etablissement_double_diplome
+        ? 'Double diplôme'
+        : item.dossier_academique?.etablissement_echange
+          ? 'Semestre d’échange'
+          : '',
+      etablissement:
+        item.dossier_academique?.etablissement_double_diplome
+        || item.dossier_academique?.etablissement_echange
+        || '',
+      specialite: item.dossier_academique?.specialite_mobilite ?? '',
+      raison: '',
+      anneeDebut: '',
+      anneeFin: '',
     },
     sante: {
       groupeSanguin: item.dossier_sante?.groupe_sanguin ?? '',
@@ -113,36 +154,82 @@ function adaptEleveFromApi(item) {
   };
 }
 
+function composeLieuNaissance(values) {
+  if (values.lieuNaissance && String(values.lieuNaissance).trim()) {
+    return String(values.lieuNaissance).trim();
+  }
+  const parts = [values.communeNaissance, values.wilayaNaissance].filter(
+    (x) => x && String(x).trim(),
+  );
+  return parts.join(', ');
+}
+
+function statutToParcours(statut) {
+  switch (statut) {
+    case 'redoublant':
+      return 'Redoublant';
+    case 'suspendu':
+      return 'Suspendu';
+    case 'actif':
+    default:
+      return 'En cours normal';
+  }
+}
+
 function toElevePayload(values) {
   return {
     matricule: values.matricule || '',
-    num_bac: values.numeroBac || '',
+    num_bac: String(values.numeroBac ?? '').trim() || '—',
     nni: values.nni || '',
     sexe: values.sexe === 'F' ? 'F' : 'H',
     prenom: values.prenom || '',
     nom_famille: values.nom || '',
     date_naissance: values.dateNaissance || null,
-    lieu_naissance: values.lieuNaissance || '',
-    nationalite: values.nationalite || '',
-    categorie_bac: values.categorieBac || 'National',
-    serie_bac: values.serieBac || '',
+    lieu_naissance: composeLieuNaissance(values) || '—',
+    nationalite: (values.nationalite ?? '').toString().trim() || '—',
+    categorie_bac:
+      values.categorieBac === 'Étranger' || values.categorieBac === 'Etranger'
+        ? 'Etranger'
+        : values.categorieBac || 'National',
+    serie_bac: (values.serieBac ?? '').trim() || '—',
     moyenne_bac: values.moyenneBac || '0',
-    ecole_bac: values.ecoleBac || '',
-    annee_premiere_inscription: values.anneePremiereInscription || '',
-    date_premiere_inscription: values.datePremiereInscription || null,
-    voie_acces: values.voieAcces || '',
-    diplome_acces: values.diplomeAcces || '',
-    etablissement_diplome: values.etablissementDiplome || '',
-    adresse_primaire: values.adressePrimaire || values.contact?.adresse || '',
+    ecole_bac: (values.ecoleBac ?? '').trim() || '—',
+    annee_premiere_inscription:
+      (values.anneePremiereInscription || values.scolarite?.anneeUni1ere || '').trim()
+      || getCurrentAcademicYear(),
+    date_premiere_inscription:
+      String(values.datePremiereInscription ?? '').trim() || todayIso(),
+    voie_acces: values.scolarite?.voieAcces || values.voieAcces || '—',
+    diplome_acces: values.scolarite?.diplomeAcces || values.diplomeAcces || 'N/A',
+    etablissement_diplome: values.scolarite?.etablissementPremierCycle || values.etablissementDiplome || '',
+    adresse_primaire: values.contact?.adresse || values.adressePrimaire || 'N/A',
     adresse_secondaire: values.contact?.adresseSecondaire || values.adresseSecondaire || '',
     resident_avec_parents: values.residentAvecParents === 'Oui' || values.residentAvecParents === true,
     compte_bankily: values.compteBankily || '',
-    email_pro: values.emailPro || values.contact?.emailPro || '',
-    email_perso: values.emailPerso || values.contact?.emailPerso || '',
-    tel1: values.tel1 || values.contact?.telephone || '',
+    email_pro: values.contact?.emailPro || values.emailPro || values.contact?.emailPerso || 'user@example.com',
+    email_perso: values.contact?.emailPerso || values.emailPerso || 'user@example.com',
+    tel1: values.contact?.telephone || values.tel1 || 'N/A',
     tel2_whatsapp: values.contact?.tel2 || values.tel2Whatsapp || '',
-    facebook: values.facebook || '',
-    linkedin: values.linkedin || '',
+    facebook: '',
+    linkedin: '',
+  };
+}
+
+function dossierAcademiquePayload(values, eleveId) {
+  const mobilite = values.mobilite || {};
+  return {
+    departement: values.scolarite?.departement || values.scolarite?.filiere || '',
+    niveau_actuel: values.scolarite?.niveau || '',
+    semestre_actuel: '',
+    donnees_semestres: {},
+    diplome: mobilite.specialite || values.scolarite?.diplomeAcces || '',
+    etablissement_echange:
+      mobilite.type === 'Semestre d’échange' ? mobilite.etablissement || '' : '',
+    etablissement_double_diplome:
+      mobilite.type === 'Double diplôme' ? mobilite.etablissement || '' : '',
+    specialite_mobilite: mobilite.specialite || '',
+    parcours: statutToParcours(values.statut) || values.scolarite?.parcours || 'En cours normal',
+    eleve: eleveId,
   };
 }
 
@@ -245,32 +332,10 @@ export const eleveService = {
   },
 
   createDossierAcademique(eleveId, values) {
-    return api.post('/dossiers-academiques/', {
-      departement: values.scolarite?.departement || values.scolarite?.filiere || '',
-      niveau_actuel: values.scolarite?.niveau || '',
-      semestre_actuel: values.scolarite?.semestreActuel || '',
-      donnees_semestres: values.scolarite?.donneesSemestres || '',
-      diplome: values.scolarite?.diplome || '',
-      etablissement_echange: values.scolarite?.etablissementEchange || '',
-      etablissement_double_diplome: values.scolarite?.etablissementDoubleDiplome || '',
-      specialite_mobilite: values.scolarite?.specialiteMobilite || '',
-      parcours: values.scolarite?.parcours || '',
-      eleve: eleveId,
-    });
+    return api.post('/dossiers-academiques/', dossierAcademiquePayload(values, eleveId));
   },
   updateDossierAcademique(id, eleveId, values) {
-    return api.put(`/dossiers-academiques/${id}/`, {
-      departement: values.scolarite?.departement || values.scolarite?.filiere || '',
-      niveau_actuel: values.scolarite?.niveau || '',
-      semestre_actuel: values.scolarite?.semestreActuel || '',
-      donnees_semestres: values.scolarite?.donneesSemestres || '',
-      diplome: values.scolarite?.diplome || '',
-      etablissement_echange: values.scolarite?.etablissementEchange || '',
-      etablissement_double_diplome: values.scolarite?.etablissementDoubleDiplome || '',
-      specialite_mobilite: values.scolarite?.specialiteMobilite || '',
-      parcours: values.scolarite?.parcours || '',
-      eleve: eleveId,
-    });
+    return api.put(`/dossiers-academiques/${id}/`, dossierAcademiquePayload(values, eleveId));
   },
 
   createDocuments(eleveId, values) {

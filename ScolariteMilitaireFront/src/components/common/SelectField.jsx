@@ -1,9 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 
-/**
- * Liste déroulante alignée sur les champs `.input` du formulaire élève (chevron, appearance-none).
- */
-export default function SelectField({ label, value, onChange, options, required, id }) {
+export default function SelectField({ label, value, onChange, options, required, id, error }) {
   const selectId = id ?? (label ? `select-${String(label).replace(/\s+/g, '-').slice(0, 24)}` : undefined);
   return (
     <label className="block" htmlFor={selectId}>
@@ -16,7 +13,7 @@ export default function SelectField({ label, value, onChange, options, required,
       <div className="relative">
         <select
           id={selectId}
-          className="input w-full cursor-pointer appearance-none pr-11"
+          className={`input w-full cursor-pointer appearance-none pr-11 ${error ? 'ring-2 ring-brand-red/40' : ''}`}
           value={value ?? ''}
           required={required}
           onChange={(e) => onChange(e.target.value)}
@@ -33,6 +30,7 @@ export default function SelectField({ label, value, onChange, options, required,
           aria-hidden
         />
       </div>
+      {error ? <p className="mt-1.5 text-sm font-medium text-brand-red">{error}</p> : null}
     </label>
   );
 }

@@ -22,7 +22,7 @@ class Eleve(models.Model):
     
     annee_premiere_inscription = models.CharField(max_length=9) # ex: 2023-2024
     date_premiere_inscription = models.DateField()
-    voie_acces = models.CharField(max_length=100)
+    voie_acces = models.CharField(max_length=100, blank=True, null=True)
     diplome_acces = models.CharField(max_length=100)
     etablissement_diplome = models.CharField(max_length=150, blank=True, null=True)
     
@@ -46,13 +46,13 @@ class Eleve(models.Model):
 class ContactParent(models.Model):
     eleve = models.OneToOneField(Eleve, on_delete=models.CASCADE, related_name='contacts_parents')
     
-    prenom_pere = models.CharField(max_length=100)
+    prenom_pere = models.CharField(max_length=100, blank=True, null=True)
     fonction_pere = models.CharField(max_length=100, blank=True, null=True)
     tel_pere = models.CharField(max_length=20, blank=True, null=True)
     tel_pere_whatsapp = models.CharField(max_length=20, blank=True, null=True)
     
-    prenom_mere = models.CharField(max_length=100)
-    nom_famille_mere = models.CharField(max_length=100)
+    prenom_mere = models.CharField(max_length=100, blank=True, null=True)
+    nom_famille_mere = models.CharField(max_length=100, blank=True, null=True)
     fonction_mere = models.CharField(max_length=100, blank=True, null=True)
     tel_mere = models.CharField(max_length=20, blank=True, null=True)
     tel_mere_whatsapp = models.CharField(max_length=20, blank=True, null=True)
@@ -83,7 +83,7 @@ class DossierAcademique(models.Model):
     eleve = models.OneToOneField(Eleve, on_delete=models.CASCADE, related_name='dossier_academique')
     departement = models.CharField(max_length=100)
     niveau_actuel = models.CharField(max_length=50) # 1ère année, 2e année, 3eme année
-    semestre_actuel = models.CharField(max_length=50)
+    semestre_actuel = models.CharField(max_length=50, blank=True, null=True)
     
     # S1 à S6 info (simplifié via JSONField pour stocker toutes les années/validations)
     donnees_semestres = models.JSONField(default=dict, blank=True, null=True)

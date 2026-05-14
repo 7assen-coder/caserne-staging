@@ -1,8 +1,19 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Pencil, Filter, Eye, Trash2, FileSpreadsheet } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Pencil,
+  Filter,
+  Eye,
+  Trash2,
+  Upload,
+  FileDown,
+  Globe,
+  UserPlus,
+  ShieldAlert,
+} from 'lucide-react';
 import Card from '../common/Card';
-import Button from '../common/Button';
 import DataTable from '../common/DataTable';
 import FullScreenLayer from '../common/FullScreenLayer';
 import SelectField from '../common/SelectField';
@@ -11,12 +22,24 @@ import EleveFicheView from './EleveFicheView';
 import { useFetch } from '../../hooks/useFetch';
 import { eleveService } from '../../services/eleveService';
 import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import {
+  COMPAGNIES_OPTIONS,
+  SECTIONS_OPTIONS,
+} from '../../data/etudiantOptions';
+import { useAuth } from '../../hooks/useAuth';
+import { ROLE_LABEL, getCanonicalRole, getPermissions } from '../../utils/userRole';
 
 export default function ListeEleves() {
+  const { fonction } = useAuth();
+  const role = getCanonicalRole(fonction);
+  const perms = getPermissions(role);
+
   const [filters, setFilters] = useState({
     q: '',
     departement: '',
     annee: '',
+    compagnie: '',
+    section: '',
   });
   const [key, setKey] = useState(0);
   const { data, loading } = useFetch(() => eleveService.list(filters), [filters, key]);
@@ -25,26 +48,23 @@ export default function ListeEleves() {
   const [ficheLoading, setFicheLoading] = useState(false);
   const [selectedEleveId, setSelectedEleveId] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [creating, setCreating] = useState(false);
-  const [createContext, setCreateContext] = useState({ eleveId: null });
-  const createEleveIdRef = useRef(null);
-  const createFlowRef = useRef({
-    eleveId: null,
-    dossierAcademiqueId: null,
-    documentsId: null,
-    contactsParentsId: null,
-    dossierSanteId: null,
-    dossierMilitaireId: null,
-    hebergementId: null,
-  });
 
   const ficheResolu = useMemo(() => ficheEleveData, [ficheEleveData]);
   const selectedEleve = useMemo(
     () => (selectedEleveId ? (data ?? []).find((e) => e.id === selectedEleveId) ?? null : null),
     [selectedEleveId, data],
   );
-  const rows = data ?? [];
 
+<<<<<<< HEAD
+  const filteredRows = useMemo(() => {
+    const list = data ?? [];
+    return list.filter((e) => {
+      if (filters.compagnie && e.dossierMilitaire?.compagnie !== filters.compagnie) return false;
+      if (filters.section && e.dossierMilitaire?.section !== filters.section) return false;
+      return true;
+    });
+  }, [data, filters.compagnie, filters.section]);
+=======
   const n = rows.length;
 
   const handleExportXlsx = async () => {
@@ -86,6 +106,7 @@ export default function ListeEleves() {
     XLSX.utils.book_append_sheet(wb, ws, 'Etudiants');
     XLSX.writeFile(wb, `etudiants-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+>>>>>>> main
 
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
@@ -95,6 +116,16 @@ export default function ListeEleves() {
   const anneeOptions = [
     { value: '', label: 'Toutes les années' },
     ...NIVEAUX_SCOLARITE.map((x) => ({ value: x, label: x })),
+  ];
+
+  const compagnieFilterOptions = [
+    { value: '', label: 'Toutes les compagnies' },
+    ...COMPAGNIES_OPTIONS.filter((o) => o.value),
+  ];
+
+  const sectionFilterOptions = [
+    { value: '', label: 'Toutes les sections' },
+    ...SECTIONS_OPTIONS.filter((o) => o.value),
   ];
 
   const columns = [
@@ -120,6 +151,20 @@ export default function ListeEleves() {
       accessor: (r) => r.scolarite?.niveau ?? '',
       render: (r) => <span className="text-slate-900">{r.scolarite?.niveau ?? '—'}</span>,
     },
+    {
+      key: 'compagnie',
+      label: 'Compagnie',
+      sortable: true,
+      accessor: (r) => r.dossierMilitaire?.compagnie ?? '',
+      render: (r) => <span className="text-slate-900">{r.dossierMilitaire?.compagnie || '—'}</span>,
+    },
+    {
+      key: 'section',
+      label: 'Section',
+      sortable: true,
+      accessor: (r) => r.dossierMilitaire?.section ?? '',
+      render: (r) => <span className="text-slate-900">{r.dossierMilitaire?.section || '—'}</span>,
+    },
   ];
 
   if (ficheEleve?.id) {
@@ -133,19 +178,20 @@ export default function ListeEleves() {
             setFicheEleveData(null);
             setEditing(null);
           }}
-          onEditDossier={() => setEditing(ficheResolu)}
+          onEditDossier={() => perms.canEditStudent && setEditing(ficheResolu)}
         />
-        {editing && (
+        {editing && perms.canEditStudent && (
           <FullScreenLayer
             open
             onClose={() => setEditing(null)}
             title="Modifier le dossier"
             subtitle="Mise à jour des informations — formulaire multi-étapes"
             chrome
-            contentClassName="p-5 sm:p-6"
+            contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
           >
             <FormulaireEleve
               eleve={editing}
+              role={role}
               onSubmit={async (values) => {
                 await eleveService.update(editing.id, values);
                 setEditing(null);
@@ -174,6 +220,60 @@ export default function ListeEleves() {
       <div className="page-header xl:col-span-12">
         <div className="min-w-0 flex-1">
           <h1 className="page-title">Gestion des étudiants</h1>
+<<<<<<< HEAD
+          <p className="mt-1 text-sm text-text-light md:text-base">
+            Connecté en tant que <strong className="text-navy">{ROLE_LABEL[role]}</strong>
+            {!perms.canCreateStudent ? (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
+                <ShieldAlert size={12} aria-hidden />
+                Lecture seule
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-center">
+          {perms.canCreateMobilite ? (
+            <Link
+              to="/eleves/mobilite"
+              className="btn btn-secondary btn-lg w-full justify-center inline-flex items-center gap-2 sm:w-auto"
+              title="Liste des étudiants en mobilité et ajout de mobilité"
+            >
+              <Globe size={18} aria-hidden />
+              <span>Mobilité (DD / Échange)</span>
+            </Link>
+          ) : null}
+
+          {perms.canCreateUserRoles.length > 0 ? (
+            <Link
+              to="/utilisateurs/nouveau"
+              className="btn btn-secondary btn-lg w-full justify-center inline-flex items-center gap-2 sm:w-auto"
+              title="Créer un nouvel utilisateur (rôle)"
+            >
+              <UserPlus size={18} aria-hidden />
+              <span>Nouvel utilisateur</span>
+            </Link>
+          ) : null}
+
+          {perms.canCreateStudent ? (
+            <Link
+              to="/eleves/nouveau"
+              className="btn btn-primary btn-lg w-full justify-center inline-flex items-center gap-2 sm:w-auto"
+            >
+              <Plus size={18} aria-hidden />
+              <span>Nouvel étudiant</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="btn btn-primary btn-lg w-full justify-center inline-flex cursor-not-allowed items-center gap-2 opacity-60 sm:w-auto"
+              title="Votre rôle ne permet pas la création"
+            >
+              <Plus size={18} aria-hidden />
+              <span>Nouvel étudiant</span>
+            </button>
+          )}
+=======
           <p className="mt-2 text-base text-text-light">
             Suivi des dossiers, recherche rapide et actions administratives.
           </p>
@@ -188,34 +288,13 @@ export default function ListeEleves() {
               Niveau: {filters.annee || 'Tous'}
             </span>
           </div>
+>>>>>>> main
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          icon={Plus}
-          onClick={() => {
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-            setCreating(true);
-          }}
-          className="shrink-0"
-        >
-          Nouvel étudiant
-        </Button>
       </div>
 
       <Card
         title="Filtres"
-        subtitle="Département, année (niveau), recherche nominative"
+        subtitle="Recherche, département, année, compagnie et section"
         className="xl:col-span-12"
         accent="navy"
         bodyClassName="!pt-4"
@@ -225,9 +304,14 @@ export default function ListeEleves() {
           </span>
         }
       >
+<<<<<<< HEAD
+        <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+          <div className="relative min-w-0 flex-1 lg:min-w-[220px]">
+=======
         <div className="rounded-2xl border border-light-gray bg-slate-50/70 p-4 md:p-5">
           <div className="flex flex-col gap-5 lg:flex-row lg:flex-wrap lg:items-end">
           <div className="relative min-w-0 flex-1 lg:min-w-[240px]">
+>>>>>>> main
             <span className="label">Recherche</span>
             <div className="relative">
               <Search
@@ -244,7 +328,7 @@ export default function ListeEleves() {
               />
             </div>
           </div>
-          <div className="w-full min-w-0 sm:min-w-[260px] sm:max-w-md lg:w-[min(100%,320px)]">
+          <div className="w-full min-w-0 sm:min-w-[220px] sm:max-w-md lg:w-[min(100%,260px)]">
             <SelectField
               label="Département"
               value={filters.departement}
@@ -253,7 +337,7 @@ export default function ListeEleves() {
               id="filter-departement"
             />
           </div>
-          <div className="w-full min-w-0 sm:min-w-[220px] sm:max-w-md lg:w-[min(100%,280px)]">
+          <div className="w-full min-w-0 sm:min-w-[180px] sm:max-w-sm lg:w-[min(100%,200px)]">
             <SelectField
               label="Année (niveau)"
               value={filters.annee}
@@ -262,12 +346,41 @@ export default function ListeEleves() {
               id="filter-annee"
             />
           </div>
+          <div className="w-full min-w-0 sm:min-w-[200px] sm:max-w-sm lg:w-[min(100%,220px)]">
+            <SelectField
+              label="Compagnie"
+              value={filters.compagnie}
+              onChange={(v) => setFilters({ ...filters, compagnie: v })}
+              options={compagnieFilterOptions}
+              id="filter-compagnie"
+            />
+          </div>
+          <div className="w-full min-w-0 sm:min-w-[180px] sm:max-w-sm lg:w-[min(100%,200px)]">
+            <SelectField
+              label="Section"
+              value={filters.section}
+              onChange={(v) => setFilters({ ...filters, section: v })}
+              options={sectionFilterOptions}
+              id="filter-section"
+            />
+          </div>
         </div>
         </div>
       </Card>
 
       <Card className="xl:col-span-12" accent="gold">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-light-gray pb-3">
+<<<<<<< HEAD
+          <div className="text-sm text-slate-500">
+            {selectedEleve
+              ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné`
+              : 'Sélectionnez un étudiant dans le tableau'}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/eleves/import"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-white px-3 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-slate-50"
+=======
           <div className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-sm text-slate-600">
             {selectedEleve ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné` : 'Sélectionnez un étudiant'}
           </div>
@@ -278,10 +391,18 @@ export default function ListeEleves() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
               title="Exporter Excel"
               aria-label="Exporter Excel"
+>>>>>>> main
             >
-              <FileSpreadsheet size={18} />
-              Export Excel (.xlsx)
-            </button>
+              <Upload size={18} aria-hidden />
+              Importer
+            </Link>
+            <Link
+              to="/eleves/export"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy/90"
+            >
+              <FileDown size={18} aria-hidden />
+              Exporter
+            </Link>
             {selectedEleve && (
               <>
                 <button
@@ -303,6 +424,38 @@ export default function ListeEleves() {
                   <Eye size={18} />
                   Détail
                 </button>
+<<<<<<< HEAD
+                {perms.canEditStudent ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(selectedEleve)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+                    title="Modifier"
+                    aria-label="Modifier"
+                  >
+                    <Pencil size={18} />
+                    Modifier
+                  </button>
+                ) : null}
+                {perms.canDeleteStudent ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = window.confirm(`Supprimer ${selectedEleve.prenom} ${selectedEleve.nom} ?`);
+                      if (!ok) return;
+                      await eleveService.delete(selectedEleve.id);
+                      setSelectedEleveId(null);
+                      setKey((k) => k + 1);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                    title="Supprimer"
+                    aria-label="Supprimer"
+                  >
+                    <Trash2 size={18} />
+                    Supprimer
+                  </button>
+                ) : null}
+=======
                 <button
                   type="button"
                   onClick={() => setEditing(selectedEleve)}
@@ -329,10 +482,19 @@ export default function ListeEleves() {
                   <Trash2 size={18} />
                   Supprimer
                 </button>
+>>>>>>> main
               </>
             )}
           </div>
         </div>
+<<<<<<< HEAD
+        <DataTable
+          columns={columns}
+          rows={filteredRows}
+          pageSize={12}
+          onRowClick={(row) => setSelectedEleveId(row.id)}
+        />
+=======
         <div className="overflow-hidden rounded-2xl border border-light-gray bg-white">
           <DataTable
             columns={columns}
@@ -341,19 +503,21 @@ export default function ListeEleves() {
             onRowClick={(row) => setSelectedEleveId(row.id)}
           />
         </div>
+>>>>>>> main
       </Card>
 
-      {editing && (
+      {editing && perms.canEditStudent && (
         <FullScreenLayer
           open
           onClose={() => setEditing(null)}
           title="Modifier le dossier"
           subtitle="Mise à jour des informations — formulaire multi-étapes"
           chrome
-          contentClassName="p-5 sm:p-6"
+          contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
         >
           <FormulaireEleve
             eleve={editing}
+            role={role}
             onSubmit={async (values) => {
               await eleveService.update(editing.id, values);
               setEditing(null);
@@ -363,6 +527,8 @@ export default function ListeEleves() {
           />
         </FullScreenLayer>
       )}
+<<<<<<< HEAD
+=======
 
       <FullScreenLayer
         open={creating}
@@ -474,6 +640,7 @@ export default function ListeEleves() {
           }}
         />
       </FullScreenLayer>
+>>>>>>> main
     </div>
   );
 }

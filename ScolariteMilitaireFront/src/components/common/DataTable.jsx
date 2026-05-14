@@ -9,6 +9,7 @@ export default function DataTable({
   empty = 'Aucune donnée',
   onRowClick,
   mobileCardRender,
+  selection,
 }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
   const [page, setPage] = useState(0);
@@ -35,6 +36,12 @@ export default function DataTable({
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize);
 
+  const pageIds = pageRows.map((r) => r[rowKey]).filter((id) => id != null);
+  const sel = selection?.selectedIds ?? [];
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => sel.includes(id));
+
+  const colCount = columns.length + (selection ? 1 : 0);
+
   const toggleSort = (key, sortable) => {
     if (!sortable) return;
     setSort((s) =>
@@ -49,6 +56,18 @@ export default function DataTable({
         <table className="table-base">
           <thead>
             <tr>
+              {selection && (
+                <th className="w-11 align-middle">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-light-gray text-navy focus:ring-gold"
+                    checked={allPageSelected}
+                    onChange={() => selection.onTogglePage(pageIds, !allPageSelected)}
+                    title="Sélectionner la page"
+                    aria-label="Sélectionner tous les étudiants de cette page"
+                  />
+                </th>
+              )}
               {columns.map((c) => (
                 <th
                   key={c.key}
@@ -76,24 +95,42 @@ export default function DataTable({
           <tbody>
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="py-10 text-center text-text-light">
+                <td colSpan={colCount} className="py-10 text-center text-text-light">
                   {empty}
                 </td>
               </tr>
             )}
-            {pageRows.map((row) => (
+            {pageRows.map((row) => {
+              const id = row[rowKey];
+              const checked = sel.includes(id);
+              return (
               <tr
-                key={row[rowKey]}
+                key={id}
                 onClick={() => onRowClick?.(row)}
                 className={onRowClick ? 'cursor-pointer' : ''}
               >
+                {selection && (
+                  <td
+                    className="w-11 align-middle"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-light-gray text-navy focus:ring-gold"
+                      checked={checked}
+                      onChange={() => selection.onToggleRow(id)}
+                      aria-label="Sélectionner la ligne"
+                    />
+                  </td>
+                )}
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === 'right' ? 'text-right' : ''}>
                     {c.render ? c.render(row) : c.accessor ? c.accessor(row) : row[c.key]}
                   </td>
                 ))}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -103,10 +140,12 @@ export default function DataTable({
         {pageRows.length === 0 && (
           <div className="py-8 text-center text-text-light">{empty}</div>
         )}
-        {pageRows.map((row) =>
-          mobileCardRender ? (
+        {pageRows.map((row) => {
+          const id = row[rowKey];
+          const checked = sel.includes(id);
+          return mobileCardRender ? (
             <div
-              key={row[rowKey]}
+              key={id}
               onClick={() => onRowClick?.(row)}
               className={`data-card ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''}`}
             >
@@ -114,10 +153,21 @@ export default function DataTable({
             </div>
           ) : (
             <div
-              key={row[rowKey]}
+              key={id}
+              className={`data-card relative ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''}`}
               onClick={() => onRowClick?.(row)}
-              className={`data-card ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''}`}
             >
+              {selection && (
+                <div className="absolute right-3 top-3 z-10" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-light-gray text-navy"
+                    checked={checked}
+                    onChange={() => selection.onToggleRow(id)}
+                    aria-label="Sélectionner"
+                  />
+                </div>
+              )}
               <dl className="space-y-2">
                 {columns
                   .filter((c) => c.key !== 'actions')
@@ -133,8 +183,8 @@ export default function DataTable({
                   ))}
               </dl>
             </div>
-          ),
-        )}
+          );
+        })}
       </div>
 
       {pageCount > 1 && (

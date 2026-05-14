@@ -1,17 +1,13 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-/**
- * طبقة كاملة فوق الصفحة (full-screen layer).
- * - chrome=true: Header بسيط مع عنوان وزر إغلاق + محتوى قابل للتمرير.
- * - chrome=false: فقط overlay + container (بدون header) لاستضافة صفحات كاملة (مثل DemandeReviewView).
- */
 export default function FullScreenLayer({
   open,
   onClose,
   title,
   subtitle,
   chrome = true,
+  chromeScrollBody = true,
   children,
   className = '',
   contentClassName = '',
@@ -60,10 +56,18 @@ export default function FullScreenLayer({
                 <X size={20} />
               </button>
             </header>
-            <div className={`h-[calc(100%-4.25rem)] overflow-auto ${contentClassName}`}>{children}</div>
+            <div
+              className={
+                chromeScrollBody
+                  ? `h-[calc(100%-4.25rem)] min-h-0 overflow-y-auto ${contentClassName}`
+                  : `flex h-[calc(100%-4.25rem)] min-h-0 flex-col overflow-hidden ${contentClassName}`
+              }
+            >
+              {children}
+            </div>
           </>
         ) : (
-          <div className={`h-full overflow-auto ${contentClassName}`}>{children}</div>
+          <div className={`h-full overflow-y-auto ${contentClassName}`}>{children}</div>
         )}
       </div>
     </div>

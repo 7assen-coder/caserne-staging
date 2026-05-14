@@ -35,7 +35,6 @@ class DocumentEleveSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class EleveSerializer(serializers.ModelSerializer):
-    # Options pour afficher les données liées directement lors d'une requête GET
     contacts_parents = ContactParentSerializer(read_only=True)
     dossier_sante = DossierSanteSerializer(read_only=True)
     dossier_academique = DossierAcademiqueSerializer(read_only=True)
