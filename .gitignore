@@ -1,1 +1,34 @@
 venv
+.venv/
+.venv*/
+
+# Backend local Python environments
+backend/.venv*/
+backend/.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python / Django
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.local
+
+# Django media (uploaded files)
+backend/media/
+
+# Node / Vite
+node_modules/
+dist/
+.cache/
+.npm/
+.eslintcache
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo

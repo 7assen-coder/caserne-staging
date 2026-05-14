@@ -7,6 +7,8 @@ services:
       - POSTGRES_PASSWORD=esp
     volumes:
       - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
 
   backend:
     build: 

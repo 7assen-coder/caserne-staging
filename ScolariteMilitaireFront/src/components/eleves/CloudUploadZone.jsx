@@ -1,9 +1,6 @@
 import { useRef, useState } from 'react';
-import { CloudUpload, FileCheck, Sparkles, X } from 'lucide-react';
+import { CloudUpload, FileCheck, Upload, X } from 'lucide-react';
 
-/**
- * Zone de dépôt « cloud » — verre, lueur or, hover fort (sans changer la hauteur globale du modal).
- */
 export default function CloudUploadZone({
   label,
   hint,
@@ -97,7 +94,7 @@ export default function CloudUploadZone({
             </div>
             <span className="relative z-10 text-sm font-semibold text-slate-50">{label}</span>
             <span className="relative z-10 flex max-w-[16rem] items-center justify-center gap-1.5 text-[11px] leading-snug text-slate-400">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-gold/75" aria-hidden />
+              <Upload className="h-3.5 w-3.5 shrink-0 text-gold/75" aria-hidden />
               {hint ?? 'Glisser-déposer ou cliquer · PDF, JPG, PNG'}
             </span>
           </>

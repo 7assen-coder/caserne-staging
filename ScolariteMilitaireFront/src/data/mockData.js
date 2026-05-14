@@ -67,7 +67,6 @@ export const eleves = Array.from({ length: 64 }).map((_, i) => {
     cycle: i % 4 === 0 ? 'Cycle préparatoire' : `${(i % 3) + 1}e année`,
     absencesNonJustif,
     sport: ['Foot', 'Course', 'Natation', 'Volley', 'Marche'][i % 5],
-    /** actif | suspendu — suspendu = sanction / mesure avec période (voir `suspension`) */
     statut: suspendu ? 'suspendu' : 'actif',
     suspension: suspendu
       ? {
@@ -76,7 +75,6 @@ export const eleves = Array.from({ length: 64 }).map((_, i) => {
           dateFin: '2026-04-20',
         }
       : null,
-    /** Photo d’identité (démo) */
     photoUrl: `https://i.pravatar.cc/800?img=${(i % 60) + 1}`,
     scolarite: {
       departement: filiere,
@@ -176,12 +174,10 @@ export const eleves = Array.from({ length: 64 }).map((_, i) => {
   };
 });
 
-/** Indicateurs synthétiques (maquette PDF + cohérence effectif mock) */
 export const kpiScolarite = {
   etudiantsActifs: 1248,
   inscriptionsEnAttente: 37,
   nouvellesInscriptionsSemaine: 12,
-  /** Dossiers en attente de validation administrative */
   dossiersAValider: 6,
   moyennePromo: '13,82',
 };

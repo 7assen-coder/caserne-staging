@@ -68,9 +68,6 @@ function cTab(text, size = 18) {
   return new Paragraph({ children: [new TextRun({ text, size })] });
 }
 
-/**
- * Lignes du tableau « offre de formation » (mêmes champs que la page Formation ESP : code, UE, pôle, volume…).
- */
 function attestationTableRowsFromOffre(modules) {
   return (modules || []).map(
     (mod) =>
@@ -107,9 +104,6 @@ function headerRowAttestation() {
   });
 }
 
-/**
- * Attestation d’inscription / scolarité (document institutionnel, Word).
- */
 export async function downloadAttestationScolarite(eleve) {
   const s = eleve.scolarite || {};
   const d = new Date();
@@ -173,10 +167,6 @@ export async function downloadAttestationScolarite(eleve) {
   saveAs(blob, `Attestation_scolarite_${(eleve.matricule || 'etudiant').replace(/\//g, '-')}.docx`);
 }
 
-/**
- * Attestation de parcours : contenu des modules = même structure que l’e-catalogue (page Formation) du département.
- * ex. IRT : https://www.esp.mr/formation/irt — pour GC, GM, etc. : /formation/gc, /formation/gm …
- */
 export async function downloadAttestationParcoursIrt(eleve) {
   const annee = anneeDepuisCycle(eleve.cycle);
   const s = eleve.scolarite || {};
@@ -258,10 +248,6 @@ export async function downloadAttestationParcoursIrt(eleve) {
   saveAs(blob, `Attestation_parcours_${dept}_${(eleve.matricule || 'etudiant').replace(/\//g, '-')}.docx`);
 }
 
-/**
- * Relevé de notes (relevé en ligne) : aligné sur l’e-catalogue Formation (code, UE, pôle, volume, CM/TD/TP) — pas de colonne mention.
- * Les lignes de notes sont enrichies par `enrichirModuleAvecReferenceEsp` (réf. IRT).
- */
 export async function downloadReleveSemestre(eleve, semestreIndex = 0) {
   const releves = eleve.relevesSemestres;
   if (!releves?.length) {

@@ -114,8 +114,8 @@ class ContactParent(models.Model):
     tel_pere = models.CharField(max_length=8, blank=True, null=True)
     tel_pere_whatsapp = models.CharField(max_length=8, blank=True, null=True)
     
-    prenom_mere = models.CharField(max_length=100)
-    nom_famille_mere = models.CharField(max_length=100)
+    prenom_mere = models.CharField(max_length=100, blank=True, null=True)
+    nom_famille_mere = models.CharField(max_length=100, blank=True, null=True)
     fonction_mere = models.CharField(max_length=100, blank=True, null=True)
     tel_mere = models.CharField(max_length=8, blank=True, null=True)
     tel_mere_whatsapp = models.CharField(max_length=8, blank=True, null=True)
