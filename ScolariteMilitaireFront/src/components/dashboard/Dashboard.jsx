@@ -53,28 +53,25 @@ function QuickAction({ icon: Icon, title, subtitle, to, primary = false, disable
   return (
     <Link
       to={to}
-      className={`group relative flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-200 ${
-        primary
+      className={`group relative flex flex-col gap-4 rounded-2xl border p-5 transition-all duration-200 ${primary
           ? 'border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 text-white shadow-[0_12px_40px_-24px_rgba(15,23,42,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_48px_-20px_rgba(15,23,42,0.75)]'
           : 'border-slate-200/90 bg-white text-slate-800 shadow-[0_2px_8px_-4px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_32px_-16px_rgba(15,23,42,0.12)]'
-      }`}
+        }`}
     >
       <div className="flex items-start justify-between gap-3">
         <span
-          className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-            primary
+          className={`flex h-12 w-12 items-center justify-center rounded-xl ${primary
               ? 'bg-white/[0.12] text-amber-200/95 ring-1 ring-white/10'
               : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200/70 group-hover:bg-slate-900 group-hover:text-amber-200 group-hover:ring-slate-800'
-          }`}
+            }`}
         >
           <Icon size={22} aria-hidden strokeWidth={1.75} />
         </span>
         <ChevronRight
           size={18}
           strokeWidth={1.75}
-          className={`shrink-0 transition group-hover:translate-x-0.5 ${
-            primary ? 'text-white/50 group-hover:text-amber-200/90' : 'text-slate-300 group-hover:text-slate-600'
-          }`}
+          className={`shrink-0 transition group-hover:translate-x-0.5 ${primary ? 'text-white/50 group-hover:text-amber-200/90' : 'text-slate-300 group-hover:text-slate-600'
+            }`}
           aria-hidden
         />
       </div>
@@ -481,11 +478,10 @@ export default function Dashboard() {
                   return (
                     <li key={e.id} className="flex items-center gap-3 px-5 py-3 transition hover:bg-slate-50">
                       <span
-                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ring-1 ${
-                          isDD
+                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ring-1 ${isDD
                             ? 'bg-amber-50 text-amber-700 ring-amber-200'
                             : 'bg-sky-50 text-sky-700 ring-sky-200'
-                        }`}
+                          }`}
                       >
                         <Globe size={16} aria-hidden />
                       </span>
@@ -498,11 +494,10 @@ export default function Dashboard() {
                         </p>
                       </div>
                       <span
-                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ring-1 ${
-                          isDD
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ring-1 ${isDD
                             ? 'bg-amber-50 text-amber-800 ring-amber-200'
                             : 'bg-sky-50 text-sky-800 ring-sky-200'
-                        }`}
+                          }`}
                       >
                         {isDD ? 'DD' : t === 'Semestre d’échange' ? 'SE' : '—'}
                       </span>

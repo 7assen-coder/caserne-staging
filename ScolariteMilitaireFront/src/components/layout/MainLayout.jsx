@@ -2,17 +2,15 @@ import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import AppNavbar from './AppNavbar';
 import Header from './Header';
-import AppTopBar from './AppTopBar';
 
 export default function MainLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-slate-50">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-navy-50/40">
       <AppNavbar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <AppTopBar />
         <Header onMobileNavOpen={() => setMobileNavOpen(true)} />
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div
