@@ -49,13 +49,25 @@ export default function ListeEleves() {
   const [selectedEleveId, setSelectedEleveId] = useState(null);
   const [editing, setEditing] = useState(null);
 
-  const ficheResolu = useMemo(() => ficheEleveData, [ficheEleveData]);
   const selectedEleve = useMemo(
     () => (selectedEleveId ? (data ?? []).find((e) => e.id === selectedEleveId) ?? null : null),
     [selectedEleveId, data],
   );
 
-<<<<<<< HEAD
+  const handleUpdate = async (values) => {
+    try {
+      const updated = await eleveService.update(editing.id, values);
+      setEditing(null);
+      setKey((k) => k + 1);
+      // Synchroniser la fiche si on est en train de la consulter
+      if (ficheEleveData && ficheEleveData.id === editing.id) {
+        setFicheEleveData(updated || { ...ficheEleveData, ...values });
+      }
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error);
+    }
+  };
+
   const filteredRows = useMemo(() => {
     const list = data ?? [];
     return list.filter((e) => {
@@ -64,49 +76,6 @@ export default function ListeEleves() {
       return true;
     });
   }, [data, filters.compagnie, filters.section]);
-=======
-  const n = rows.length;
-
-  const handleExportXlsx = async () => {
-    if (!rows.length) return;
-    const XLSX = await import('xlsx');
-    const exportRows = rows.map((e) => ({
-      id: e.id,
-      matricule: e.matricule ?? '',
-      prenom: e.prenom ?? '',
-      nom_famille: e.nom ?? '',
-      sexe: e.sexe ?? '',
-      nni: e.nni ?? '',
-      num_bac: e.numeroBac ?? '',
-      date_naissance: e.dateNaissance ?? '',
-      lieu_naissance: e.lieuNaissance ?? '',
-      nationalite: e.nationalite ?? '',
-      categorie_bac: e.categorieBac ?? '',
-      serie_bac: e.serieBac ?? '',
-      moyenne_bac: e.moyenneBac ?? '',
-      ecole_bac: e.ecoleBac ?? '',
-      annee_premiere_inscription: e.anneePremiereInscription ?? '',
-      date_premiere_inscription: e.datePremiereInscription ?? '',
-      voie_acces: e.voieAcces ?? '',
-      diplome_acces: e.diplomeAcces ?? '',
-      etablissement_diplome: e.etablissementDiplome ?? '',
-      adresse_primaire: e.adressePrimaire ?? '',
-      adresse_secondaire: e.adresseSecondaire ?? '',
-      resident_avec_parents: e.residentAvecParents ?? '',
-      compte_bankily: e.compteBankily ?? '',
-      email_pro: e.emailPro ?? '',
-      email_perso: e.emailPerso ?? '',
-      tel1: e.tel1 ?? '',
-      tel2_whatsapp: e.tel2Whatsapp ?? '',
-      facebook: e.facebook ?? '',
-      linkedin: e.linkedin ?? '',
-    }));
-    const ws = XLSX.utils.json_to_sheet(exportRows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Etudiants');
-    XLSX.writeFile(wb, `etudiants-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
->>>>>>> main
 
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
@@ -171,14 +140,14 @@ export default function ListeEleves() {
     return (
       <div className="flex min-h-[min(100vh,900px)] w-[calc(100%+2rem)] max-w-none -mx-4 flex-col md:-mx-8 md:w-[calc(100%+4rem)] lg:-mx-10 lg:w-[calc(100%+5rem)]">
         <EleveFicheView
-          eleve={ficheResolu ?? selectedEleve ?? ficheEleve}
+          eleve={ficheEleveData ?? selectedEleve ?? ficheEleve}
           loading={ficheLoading}
           onBack={() => {
             setFicheEleve(null);
             setFicheEleveData(null);
             setEditing(null);
           }}
-          onEditDossier={() => perms.canEditStudent && setEditing(ficheResolu)}
+          onEditDossier={() => perms.canEditStudent && setEditing(ficheEleveData)}
         />
         {editing && perms.canEditStudent && (
           <FullScreenLayer
@@ -192,11 +161,7 @@ export default function ListeEleves() {
             <FormulaireEleve
               eleve={editing}
               role={role}
-              onSubmit={async (values) => {
-                await eleveService.update(editing.id, values);
-                setEditing(null);
-                setKey((k) => k + 1);
-              }}
+              onSubmit={handleUpdate}
               onCancel={() => setEditing(null)}
             />
           </FullScreenLayer>
@@ -220,7 +185,6 @@ export default function ListeEleves() {
       <div className="page-header xl:col-span-12">
         <div className="min-w-0 flex-1">
           <h1 className="page-title">Gestion des étudiants</h1>
-<<<<<<< HEAD
           <p className="mt-1 text-sm text-text-light md:text-base">
             Connecté en tant que <strong className="text-navy">{ROLE_LABEL[role]}</strong>
             {!perms.canCreateStudent ? (
@@ -273,22 +237,6 @@ export default function ListeEleves() {
               <span>Nouvel étudiant</span>
             </button>
           )}
-=======
-          <p className="mt-2 text-base text-text-light">
-            Suivi des dossiers, recherche rapide et actions administratives.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-navy-100 bg-navy-50 px-3 py-1 text-xs font-semibold text-navy">
-              Total: {n} étudiant{n > 1 ? 's' : ''}
-            </span>
-            <span className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-              Département: {filters.departement || 'Tous'}
-            </span>
-            <span className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-              Niveau: {filters.annee || 'Tous'}
-            </span>
-          </div>
->>>>>>> main
         </div>
       </div>
 
@@ -304,14 +252,8 @@ export default function ListeEleves() {
           </span>
         }
       >
-<<<<<<< HEAD
         <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
           <div className="relative min-w-0 flex-1 lg:min-w-[220px]">
-=======
-        <div className="rounded-2xl border border-light-gray bg-slate-50/70 p-4 md:p-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:flex-wrap lg:items-end">
-          <div className="relative min-w-0 flex-1 lg:min-w-[240px]">
->>>>>>> main
             <span className="label">Recherche</span>
             <div className="relative">
               <Search
@@ -365,107 +307,64 @@ export default function ListeEleves() {
             />
           </div>
         </div>
-        </div>
       </Card>
 
-      <Card className="xl:col-span-12" accent="gold">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-light-gray pb-3">
-<<<<<<< HEAD
-          <div className="text-sm text-slate-500">
-            {selectedEleve
-              ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné`
-              : 'Sélectionnez un étudiant dans le tableau'}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to="/eleves/import"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-white px-3 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-slate-50"
-=======
-          <div className="inline-flex items-center rounded-full border border-light-gray bg-white px-3 py-1 text-sm text-slate-600">
-            {selectedEleve ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné` : 'Sélectionnez un étudiant'}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportXlsx}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-              title="Exporter Excel"
-              aria-label="Exporter Excel"
->>>>>>> main
-            >
-              <Upload size={18} aria-hidden />
-              Importer
-            </Link>
-            <Link
-              to="/eleves/export"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy/90"
-            >
-              <FileDown size={18} aria-hidden />
-              Exporter
-            </Link>
-            {selectedEleve && (
-              <>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setFicheEleve({ id: selectedEleve.id });
-                    setFicheLoading(true);
-                    try {
-                      const fullEleve = await eleveService.get(selectedEleve.id);
-                      setFicheEleveData(fullEleve);
-                    } finally {
-                      setFicheLoading(false);
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
-                  title="Voir le détail"
-                  aria-label="Voir le détail"
-                >
-                  <Eye size={18} />
-                  Détail
-                </button>
-<<<<<<< HEAD
-                {perms.canEditStudent ? (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(selectedEleve)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
-                    title="Modifier"
-                    aria-label="Modifier"
-                  >
-                    <Pencil size={18} />
-                    Modifier
-                  </button>
-                ) : null}
-                {perms.canDeleteStudent ? (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = window.confirm(`Supprimer ${selectedEleve.prenom} ${selectedEleve.nom} ?`);
-                      if (!ok) return;
-                      await eleveService.delete(selectedEleve.id);
-                      setSelectedEleveId(null);
-                      setKey((k) => k + 1);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                    title="Supprimer"
-                    aria-label="Supprimer"
-                  >
-                    <Trash2 size={18} />
-                    Supprimer
-                  </button>
-                ) : null}
-=======
+    <Card className="xl:col-span-12" accent="gold">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-light-gray pb-3">
+        <div className="text-sm text-slate-500">
+          {selectedEleve
+            ? `${selectedEleve.prenom} ${selectedEleve.nom} sélectionné`
+            : 'Sélectionnez un étudiant dans le tableau'}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/eleves/import"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-white px-3 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-slate-50"
+          >
+            <Upload size={18} aria-hidden />
+            Importer
+          </Link>
+          <Link
+            to="/eleves/export"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-navy/90"
+          >
+            <FileDown size={18} aria-hidden />
+            Exporter
+          </Link>
+          {selectedEleve && (
+            <>
+              <button
+                type="button"
+                onClick={async () => {
+                  setFicheEleve({ id: selectedEleve.id });
+                  setFicheLoading(true);
+                  try {
+                    const fullEleve = await eleveService.get(selectedEleve.id);
+                    setFicheEleveData(fullEleve);
+                  } finally {
+                    setFicheLoading(false);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100"
+                title="Voir le détail"
+                aria-label="Voir le détail"
+              >
+                <Eye size={18} />
+                Détail
+              </button>
+              {perms.canEditStudent ? (
                 <button
                   type="button"
                   onClick={() => setEditing(selectedEleve)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
                   title="Modifier"
                   aria-label="Modifier"
                 >
                   <Pencil size={18} />
                   Modifier
                 </button>
+              ) : null}
+              {perms.canDeleteStudent ? (
                 <button
                   type="button"
                   onClick={async () => {
@@ -475,172 +374,45 @@ export default function ListeEleves() {
                     setSelectedEleveId(null);
                     setKey((k) => k + 1);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
                   title="Supprimer"
                   aria-label="Supprimer"
                 >
                   <Trash2 size={18} />
                   Supprimer
                 </button>
->>>>>>> main
-              </>
-            )}
-          </div>
+              ) : null}
+            </>
+          )}
         </div>
-<<<<<<< HEAD
-        <DataTable
-          columns={columns}
-          rows={filteredRows}
-          pageSize={12}
-          onRowClick={(row) => setSelectedEleveId(row.id)}
-        />
-=======
-        <div className="overflow-hidden rounded-2xl border border-light-gray bg-white">
-          <DataTable
-            columns={columns}
-            rows={rows}
-            pageSize={12}
-            onRowClick={(row) => setSelectedEleveId(row.id)}
-          />
-        </div>
->>>>>>> main
-      </Card>
+      </div>
+      <DataTable
+        columns={columns}
+        rows={filteredRows}
+        pageSize={12}
+        onRowClick={(row) => setSelectedEleveId(row.id)}
+      />
+    </Card>
 
-      {editing && perms.canEditStudent && (
-        <FullScreenLayer
-          open
-          onClose={() => setEditing(null)}
-          title="Modifier le dossier"
-          subtitle="Mise à jour des informations — formulaire multi-étapes"
-          chrome
-          contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
-        >
-          <FormulaireEleve
-            eleve={editing}
-            role={role}
-            onSubmit={async (values) => {
-              await eleveService.update(editing.id, values);
-              setEditing(null);
-              setKey((k) => k + 1);
-            }}
-            onCancel={() => setEditing(null)}
-          />
-        </FullScreenLayer>
-      )}
-<<<<<<< HEAD
-=======
-
+  {
+    editing && perms.canEditStudent && (
       <FullScreenLayer
-        open={creating}
-        onClose={() => {
-          setCreating(false);
-          createEleveIdRef.current = null;
-          setCreateContext({ eleveId: null });
-          createFlowRef.current = {
-            eleveId: null,
-            dossierAcademiqueId: null,
-            documentsId: null,
-            contactsParentsId: null,
-            dossierSanteId: null,
-            dossierMilitaireId: null,
-            hebergementId: null,
-          };
-        }}
-        title="Nouvel étudiant"
-        subtitle="Création d’un dossier — formulaire multi-étapes"
+        open
+        onClose={() => setEditing(null)}
+        title="Modifier le dossier"
+        subtitle="Mise à jour des informations — formulaire multi-étapes"
         chrome
-        contentClassName="p-5 sm:p-6"
+        contentClassName="px-5 pb-8 pt-2 sm:px-8 sm:pb-10"
       >
         <FormulaireEleve
-          onStepSubmit={async (step, values) => {
-            const flow = createFlowRef.current;
-            if (step === 0) {
-              if (flow.eleveId) {
-                await eleveService.update(flow.eleveId, values);
-              } else {
-                const created = await eleveService.createEleve(values);
-                flow.eleveId = created.id;
-                createEleveIdRef.current = created.id;
-                setCreateContext({ eleveId: created.id });
-              }
-              return;
-            }
-            const eleveId = flow.eleveId || createEleveIdRef.current || createContext.eleveId;
-            if (!eleveId) throw new Error('Création élève non effectuée.');
-            if (step === 1) {
-              const res = flow.dossierAcademiqueId
-                ? await eleveService.updateDossierAcademique(flow.dossierAcademiqueId, eleveId, values)
-                : await eleveService.createDossierAcademique(eleveId, values);
-              flow.dossierAcademiqueId = res?.data?.id ?? flow.dossierAcademiqueId;
-            }
-            if (step === 2) {
-              const res = flow.documentsId
-                ? await eleveService.updateDocuments(flow.documentsId, eleveId, values)
-                : await eleveService.createDocuments(eleveId, values);
-              flow.documentsId = res?.data?.id ?? flow.documentsId;
-            }
-            if (step === 3) {
-              const res = flow.contactsParentsId
-                ? await eleveService.updateContactsParents(flow.contactsParentsId, eleveId, values)
-                : await eleveService.createContactsParents(eleveId, values);
-              flow.contactsParentsId = res?.data?.id ?? flow.contactsParentsId;
-            }
-            if (step === 4) {
-              const res = flow.dossierSanteId
-                ? await eleveService.updateDossierSante(flow.dossierSanteId, eleveId, values)
-                : await eleveService.createDossierSante(eleveId, values);
-              flow.dossierSanteId = res?.data?.id ?? flow.dossierSanteId;
-            }
-            if (step === 5) {
-              const res = flow.dossierMilitaireId
-                ? await eleveService.updateDossierMilitaire(flow.dossierMilitaireId, eleveId, values)
-                : await eleveService.createDossierMilitaire(eleveId, values);
-              flow.dossierMilitaireId = res?.data?.id ?? flow.dossierMilitaireId;
-            }
-            if (step === 6) {
-              const res = flow.hebergementId
-                ? await eleveService.updateHebergement(flow.hebergementId, eleveId, values)
-                : await eleveService.createHebergement(eleveId, values);
-              flow.hebergementId = res?.data?.id ?? flow.hebergementId;
-            }
-          }}
-          onSubmit={async () => {
-            const flow = createFlowRef.current;
-            const eleveId = flow.eleveId || createEleveIdRef.current || createContext.eleveId;
-            if (!eleveId) {
-              throw new Error('L\'étudiant doit être créé à l\'étape 1');
-            }
-            setCreating(false);
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-            setKey((k) => k + 1);
-          }}
-          onCancel={() => {
-            setCreating(false);
-            createEleveIdRef.current = null;
-            setCreateContext({ eleveId: null });
-            createFlowRef.current = {
-              eleveId: null,
-              dossierAcademiqueId: null,
-              documentsId: null,
-              contactsParentsId: null,
-              dossierSanteId: null,
-              dossierMilitaireId: null,
-              hebergementId: null,
-            };
-          }}
+          eleve={editing}
+          role={role}
+          onSubmit={handleUpdate}
+          onCancel={() => setEditing(null)}
         />
       </FullScreenLayer>
->>>>>>> main
+    )
+  }
     </div>
   );
 }
