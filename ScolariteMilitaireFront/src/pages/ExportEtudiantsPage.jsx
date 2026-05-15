@@ -52,7 +52,7 @@ export default function ExportEtudiantsPage() {
 
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
-    ...FILIERES.map((f) => ({ value: f, label: f })),
+    ...DEPARTEMENTS,
   ];
 
   const anneeOptions = [

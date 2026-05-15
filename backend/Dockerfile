@@ -10,10 +10,11 @@ ENV PYTHONUNBUFFERED=1
 # 3. Set the working directory inside the container
 WORKDIR /code
 
-# 4. Install system dependencies for PostgreSQL (psycopg2)
+# 4. Install system dependencies
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # 5. Install Python dependencies
@@ -22,3 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 6. Copy the rest of your Django project code
 COPY . /code/
+
+# 7. Set the entrypoint
+COPY entrypoint.sh /code/
+RUN chmod +x /code/entrypoint.sh
+ENTRYPOINT ["/code/entrypoint.sh"]

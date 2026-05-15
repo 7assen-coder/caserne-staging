@@ -70,12 +70,12 @@ export const SECTIONS = ['Section 1', 'Section 2', 'Section 3', 'Section 4'];
 export const PROMOTIONS = ['Promotion 2022', 'Promotion 2023', 'Promotion 2024', 'Promotion 2025'];
 
 export const DEPARTEMENTS = [
-  { code: 'GM', label: 'GM — Génie mécanique' },
-  { code: 'IRT', label: 'IRT — Informatique, réseaux et télécommunications' },
-  { code: 'GC', label: 'GC — Génie civil' },
-  { code: 'GE', label: 'GE — Génie électrique' },
-  { code: 'SID', label: 'SID — Statistique ingénierie des données' },
-  { code: 'MPG', label: 'MPG — Mine, pétrole et gaz' },
+  { value: 'GM', label: 'GM — Génie mécanique' },
+  { value: 'IRT', label: 'IRT — Informatique, réseaux et télécommunications' },
+  { value: 'GC', label: 'GC — Génie civil' },
+  { value: 'GE', label: 'GE — Génie électrique' },
+  { value: 'SID', label: 'SID — Statistique ingénierie des données' },
+  { value: 'MPG', label: 'MPG — Mine, pétrole et gaz' },
 ];
 
 export const FILIERES = DEPARTEMENTS.map((d) => d.label);
@@ -83,8 +83,8 @@ export const FILIERES = DEPARTEMENTS.map((d) => d.label);
 export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD'];
 
 export const VOIES_ACCES_ETUDIANT = [
-  { value: 'Voie 1 — Interne', label: 'Voie 1 — Interne' },
-  { value: 'Voie 1 — Externe', label: 'Voie 1 — Externe' },
-  { value: 'Voie 2 — Interne', label: 'Voie 2 — Interne' },
-  { value: 'Voie 2 — Externe', label: 'Voie 2 — Externe' },
+  { value: '1', label: 'Voie 1 — Interne' },
+  { value: '1', label: 'Voie 1 — Externe' },
+  { value: '2', label: 'Voie 2 — Interne' },
+  { value: '2', label: 'Voie 2 — Externe' },
 ];

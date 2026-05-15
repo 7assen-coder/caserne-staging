@@ -3,7 +3,7 @@ import { Check, FileText, Upload as UploadIcon } from 'lucide-react';
 import Button from '../common/Button';
 import SelectField from '../common/SelectField';
 import CloudUploadZone from './CloudUploadZone';
-import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import { DEPARTEMENTS, FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
 import { formatApiError } from '../../utils/apiErrors';
 import {
   SERIE_BAC_OPTIONS,
@@ -52,7 +52,7 @@ function buildSteps({ role, mode }) {
   });
 }
 
-const DEFAULT_FILIERE = FILIERES[0];
+const DEFAULT_FILIERE = DEPARTEMENTS[0].value;
 
 function buildDefaults() {
   return {
@@ -358,7 +358,7 @@ export default function FormulaireEleve({
     if (step < lastStep) setStep(nextStep);
   };
 
-  const filiereOptions = FILIERES.map((x) => ({ value: x, label: x }));
+  const filiereOptions = DEPARTEMENTS;
   const niveauOptions = NIVEAUX_SCOLARITE.map((x) => ({ value: x, label: x }));
   const anneeUniOptions = getAcademicYearOptions();
   const anneeMobiliteOptions = [{ value: '', label: '— Sélectionner —' }, ...anneeUniOptions];
