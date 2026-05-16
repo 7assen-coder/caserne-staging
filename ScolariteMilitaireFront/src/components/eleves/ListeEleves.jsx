@@ -21,7 +21,7 @@ import FormulaireEleve from './FormulaireEleve';
 import EleveFicheView from './EleveFicheView';
 import { useFetch } from '../../hooks/useFetch';
 import { eleveService } from '../../services/eleveService';
-import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import { DEPARTEMENTS, NIVEAUX_SCOLARITE } from '../../utils/constants';
 import {
   COMPAGNIES_OPTIONS,
   SECTIONS_OPTIONS,
@@ -55,16 +55,20 @@ export default function ListeEleves() {
   );
 
   const handleUpdate = async (values) => {
+    const studentId = editing?.id ?? values?.id;
+    if (!studentId) {
+      throw new Error('Impossible d’enregistrer : dossier étudiant sans identifiant.');
+    }
     try {
-      const updated = await eleveService.update(editing.id, values);
+      const updated = await eleveService.update(studentId, values);
       setEditing(null);
       setKey((k) => k + 1);
-      // Synchroniser la fiche si on est en train de la consulter
-      if (ficheEleveData && ficheEleveData.id === editing.id) {
-        setFicheEleveData(updated || { ...ficheEleveData, ...values });
+      if (ficheEleveData && ficheEleveData.id === studentId) {
+        setFicheEleveData(updated);
       }
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
+      throw error;
     }
   };
 

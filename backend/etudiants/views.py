@@ -10,7 +10,14 @@ from .serializers import (
 )
 
 class EleveViewSet(viewsets.ModelViewSet):
-    queryset = Eleve.objects.all()
+    queryset = Eleve.objects.select_related(
+        'dossier_academique',
+        'dossier_sante',
+        'dossier_militaire',
+        'contacts_parents',
+        'hebergement',
+        'documents',
+    ).all()
     serializer_class = EleveSerializer
 
 class ContactParentViewSet(viewsets.ModelViewSet):

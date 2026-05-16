@@ -7,7 +7,7 @@ import DataTable from '../components/common/DataTable';
 import SelectField from '../components/common/SelectField';
 import { useFetch } from '../hooks/useFetch';
 import { eleveService } from '../services/eleveService';
-import { FILIERES, NIVEAUX_SCOLARITE } from '../utils/constants';
+import { DEPARTEMENTS, FILIERES, NIVEAUX_SCOLARITE } from '../utils/constants';
 import {
   exportEtudiantsExcel,
   exportEtudiantsPdf,

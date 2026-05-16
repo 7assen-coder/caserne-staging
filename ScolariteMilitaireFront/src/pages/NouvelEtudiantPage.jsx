@@ -78,12 +78,12 @@ export default function NouvelEtudiantPage() {
 
       if (apiKey === 'documents') {
         const p = values.pieces || {};
+        /** Clés alignées sur `FormulaireEleve` (étape Pièces) et `eleveService.createDocuments`. */
         const requiredFiles = [
           { key: 'photoIdentite', label: 'Photo d’identité', value: p.photoIdentite },
-          { key: 'carteIdentite', label: 'Carte d’identité', value: p.carteIdentite },
-          { key: 'releveNotesSemestres', label: 'Acte de naissance (fichier lié)', value: p.releveNotesSemestres },
-          { key: 'releveBac', label: 'Diplôme d’accès (fichier lié)', value: p.releveBac },
-          { key: 'diplomeBac', label: 'Diplôme Bac', value: p.diplomeBac },
+          { key: 'acteNaissance', label: 'Acte de naissance', value: p.acteNaissance },
+          { key: 'diplomeAcces', label: 'Diplôme d’accès', value: p.diplomeAcces },
+          { key: 'diplomeBac', label: 'Diplôme du Bac', value: p.diplomeBac },
         ];
         const missing = requiredFiles.filter((f) => !(f.value instanceof File)).map((f) => f.label);
         if (missing.length > 0) {

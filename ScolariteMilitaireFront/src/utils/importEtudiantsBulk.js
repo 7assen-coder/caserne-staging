@@ -1,4 +1,9 @@
-import { FILIERES, NIVEAUX_SCOLARITE, VOIES_ACCES_ETUDIANT } from './constants';
+import {
+  FILIERES,
+  NIVEAUX_SCOLARITE,
+  VOIES_ACCES_ETUDIANT,
+  normalizeDepartementForApi,
+} from './constants';
 
 function stripAcc(s) {
   return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -37,6 +42,8 @@ export function rowToImportPayload(raw) {
   const emailPerso = String(pick(raw, 'email_perso', 'email', 'Email')).trim() || `${matricule || 'import'}@esp.mr`;
   const tel = String(pick(raw, 'telephone', 'tel', 'tel1', 'Téléphone')).trim() || '00000000';
 
+  const deptApi = normalizeDepartementForApi(departement);
+
   const payload = {
     matricule,
     nom,
@@ -56,11 +63,11 @@ export function rowToImportPayload(raw) {
     residentAvecParents: 'Oui',
     compteBankily: '',
     scolarite: {
-      departement: departement || FILIERES[0],
-      filiere: departement || FILIERES[0],
+      departement: deptApi,
+      filiere: deptApi,
       niveau: niveau || NIVEAUX_SCOLARITE[0],
       semestreActuel: String(pick(raw, 'semestre')).trim() || 'S1',
-      voieAcces: VOIES_ACCES_ETUDIANT[0]?.value ?? 'Voix 1',
+      voieAcces: VOIES_ACCES_ETUDIANT[0]?.value ?? '1',
       diplomeAcces: String(pick(raw, 'diplome_acces')).trim() || '—',
       etablissementPremierCycle: String(pick(raw, 'etablissement')).trim() || '—',
       anneeUni1ere: String(pick(raw, 'annee_uni')).trim() || '2024-2025',
@@ -90,7 +97,7 @@ export function rowToImportPayload(raw) {
 
   return {
     payload,
-    departement: departement || FILIERES[0],
+    departement: deptApi,
     niveau: niveau || NIVEAUX_SCOLARITE[0],
   };
 }

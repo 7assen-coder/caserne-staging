@@ -33,7 +33,7 @@ export const eleves = Array.from({ length: 64 }).map((_, i) => {
   const suspendu = i % 11 === 0;
   const poids = 65 + (i % 25);
   const tailleCm = 165 + (i % 20);
-  const deptCodes = ['IRT', 'GM', 'GC', 'GE', 'SID', 'MPG'];
+  const deptCodes = ['IRT', 'GM', 'GC-HE', 'GE', 'SID', 'MPG'];
   return {
     id: `e${1000 + i}`,
     matricule: `ESP/${22 + (i % 4)}/${deptCodes[i % 6]}/${String(31 + (i % 70)).padStart(3, '0')}`,

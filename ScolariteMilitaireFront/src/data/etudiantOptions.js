@@ -11,10 +11,10 @@ export const SERIE_BAC_OPTIONS = [
 
 export const VOIES_ACCES_OPTIONS = [
   { value: '', label: '— Sélectionner —' },
-  { value: 'Voie 1 — Interne', label: 'Voie 1 — Interne' },
-  { value: 'Voie 1 — Externe', label: 'Voie 1 — Externe' },
-  { value: 'Voie 2 — Interne', label: 'Voie 2 — Interne' },
-  { value: 'Voie 2 — Externe', label: 'Voie 2 — Externe' },
+  { value: '1', label: 'Voie 1 — Interne' },
+  { value: '2', label: 'Voie 1 — Externe' },
+  { value: '3', label: 'Voie 2 — Interne' },
+  { value: '4', label: 'Voie 2 — Externe' },
 ];
 
 export const DIPLOMES_ACCES_OPTIONS = [

@@ -77,7 +77,7 @@ export function createDemandesInscriptionMobile() {
       statutPieces: piecesComplet ? 'complet' : 'incomplet',
       dateSoumission: `2026-04-${String(24 - (i % 8)).padStart(2, '0')}T${10 + (i % 8)}:30:00.000Z`,
       dateTraitement: decision !== 'en_attente' ? `2026-04-${String(25 - (i % 4)).padStart(2, '0')}T14:00:00.000Z` : null,
-      departementCode: dept.code,
+      departementCode: dept.value,
       appMobile: { plateforme: i % 2 === 0 ? 'Android' : 'iOS', version: `2.${(i % 5) + 1}.${i % 10}` },
       emailNotif,
       whatsappNotif: whatsapp,

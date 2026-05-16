@@ -3,7 +3,7 @@ import { Check, FileText, Upload as UploadIcon } from 'lucide-react';
 import Button from '../common/Button';
 import SelectField from '../common/SelectField';
 import CloudUploadZone from './CloudUploadZone';
-import { DEPARTEMENTS, FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import { DEPARTEMENTS, NIVEAUX_SCOLARITE } from '../../utils/constants';
 import { formatApiError } from '../../utils/apiErrors';
 import {
   SERIE_BAC_OPTIONS,
@@ -96,13 +96,16 @@ function buildDefaults() {
     },
     pieces: {
       photoIdentite: null,
-      carteIdentite: null,
-      releveBac: null,
-      releveNotesSemestres: null,
+      acteNaissance: null,
+      diplomeAcces: null,
       diplomeBac: null,
+      photoIdentiteMilitaire: null,
+      photoIdentiteCivile: null,
+      photoMilitaireIntegrale: null,
     },
     parents: {
       prenomPere: '',
+      nomFamillePere: '',
       fonctionPere: '',
       prenomMere: '',
       nomMere: '',
@@ -145,7 +148,6 @@ function buildDefaults() {
       telPereWhatsapp: '',
       telMere: '',
       telMereWhatsapp: '',
-      contactUrgence: '',
       nomUrgence: '',
       telUrgence: '',
       telUrgenceWhatsapp: '',
@@ -186,26 +188,23 @@ function setPath(obj, pathParts, value) {
   };
 }
 
-function serializePieces(pieces) {
-  if (!pieces || typeof pieces !== 'object') return {};
-  const out = {};
-  for (const [k, v] of Object.entries(pieces)) {
-    out[k] = v instanceof File ? v.name : v ?? null;
-  }
-  return out;
-}
-
 function normalizePieces(pieces) {
   const p = pieces && typeof pieces === 'object' ? { ...pieces } : {};
   return {
-    cin: p.cin ?? null,
+    photoIdentite: p.photoIdentite ?? null,
     acteNaissance: p.acteNaissance ?? null,
     diplomeAcces: p.diplomeAcces ?? null,
     diplomeBac: p.diplomeBac ?? null,
     photoIdentiteMilitaire: p.photoIdentiteMilitaire ?? null,
     photoIdentiteCivile: p.photoIdentiteCivile ?? null,
     photoMilitaireIntegrale: p.photoMilitaireIntegrale ?? null,
+    cin: p.cin ?? null,
   };
+}
+
+function formatEmailInstitutionnel(matricule) {
+  const d = String(matricule ?? '').replace(/\D/g, '');
+  return d ? `${d}@esp.mr` : '';
 }
 
 function FormPanel({ children, className = '' }) {
@@ -314,7 +313,7 @@ export default function FormulaireEleve({
       await onSubmit?.({
         ...finalValues,
         contact: { ...finalValues.contact, email: emailSync },
-        pieces: serializePieces(finalValues.pieces),
+        pieces: finalValues.pieces,
       });
     } catch (err) {
       setSubmitErr(formatApiError(err));
@@ -355,7 +354,7 @@ export default function FormulaireEleve({
       }
       return;
     }
-    if (step < lastStep) setStep(nextStep);
+    setStep(nextStep);
   };
 
   const filiereOptions = DEPARTEMENTS;
@@ -575,15 +574,6 @@ export default function FormulaireEleve({
                   placeholder="1 à 5 chiffres"
                 />
                 <SelectField
-                  label="Sexe"
-                  value={values.sexe}
-                  onChange={(v) => update('sexe', v)}
-                  options={[
-                    { value: 'H', label: 'H' },
-                    { value: 'F', label: 'F' },
-                  ]}
-                />
-                <SelectField
                   label="Catégorie Bac"
                   value={values.categorieBac}
                   onChange={(v) => update('categorieBac', v)}
@@ -615,7 +605,7 @@ export default function FormulaireEleve({
 
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Inscription & adresse principale
+                Inscription & coordonnées principales
               </h4>
               <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
                 <SelectField
@@ -637,16 +627,6 @@ export default function FormulaireEleve({
                   required
                   error={fieldErrors.datePremiereInscription}
                 />
-                <SelectField
-                  label="Statut"
-                  value={values.statut}
-                  onChange={(v) => update('statut', v)}
-                  options={STATUT_ETUDIANT_OPTIONS}
-                  required
-                  error={fieldErrors.statut}
-                />
-                <Field label="Voie d'accès" value={values.voieAcces} onChange={(v) => update('voieAcces', v)} />
-                <Field label="Diplôme d'accès" value={values.diplomeAcces} onChange={(v) => update('diplomeAcces', v)} />
                 <Field
                   label="Adresse primaire"
                   value={values.contact.adresse}
@@ -698,19 +678,6 @@ export default function FormulaireEleve({
                 />
               </div>
             </FormPanel>
-
-            <FormPanel>
-              <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Parents (réf. dossier)
-              </h4>
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-                <Field label="Prénom père" value={values.parents.prenomPere} onChange={(v) => update('parents.prenomPere', v)} />
-                <Field label="Fonction père" value={values.parents.fonctionPere} onChange={(v) => update('parents.fonctionPere', v)} />
-                <Field label="Prénom mère" value={values.parents.prenomMere} onChange={(v) => update('parents.prenomMere', v)} />
-                <Field label="Nom mère" value={values.parents.nomMere} onChange={(v) => update('parents.nomMere', v)} />
-                <Field label="Fonction mère" value={values.parents.fonctionMere} onChange={(v) => update('parents.fonctionMere', v)} />
-              </div>
-            </FormPanel>
           </>
         )}
 
@@ -746,15 +713,12 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.niveau']}
               />
               <SelectField
-                label="Année universitaire"
-                value={values.scolarite.anneeUni1ere}
-                onChange={(v) => updateMany([
-                  ['scolarite.anneeUni1ere', v],
-                  ['anneePremiereInscription', v],
-                ])}
-                options={anneeUniOptions}
+                label="Statut académique"
+                value={values.statut}
+                onChange={(v) => update('statut', v)}
+                options={STATUT_ETUDIANT_OPTIONS}
                 required
-                error={fieldErrors['scolarite.anneeUni1ere']}
+                error={fieldErrors.statut}
               />
               <SelectField
                 label="Voie d’accès"
@@ -893,9 +857,52 @@ export default function FormulaireEleve({
         {stepKey === 'contacts' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Contacts parents
+              Contacts parents & coordonnées
             </h4>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+
+            <h5 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">Parents</h5>
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+              <Field
+                label="Prénom du père"
+                value={values.parents.prenomPere}
+                onChange={(v) => update('parents.prenomPere', v)}
+                required
+                error={fieldErrors['parents.prenomPere']}
+              />
+              <Field
+                label="Nom de famille du père"
+                value={values.parents.nomFamillePere}
+                onChange={(v) => update('parents.nomFamillePere', v)}
+                required
+                error={fieldErrors['parents.nomFamillePere']}
+              />
+              <Field
+                label="Fonction / profession (père)"
+                value={values.parents.fonctionPere}
+                onChange={(v) => update('parents.fonctionPere', v)}
+              />
+              <Field
+                label="Prénom de la mère"
+                value={values.parents.prenomMere}
+                onChange={(v) => update('parents.prenomMere', v)}
+              />
+              <Field
+                label="Nom de famille de la mère"
+                value={values.parents.nomMere}
+                onChange={(v) => update('parents.nomMere', v)}
+                error={fieldErrors['parents.nomMere']}
+              />
+              <Field
+                label="Fonction / profession (mère)"
+                value={values.parents.fonctionMere}
+                onChange={(v) => update('parents.fonctionMere', v)}
+              />
+            </div>
+
+            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Étudiant — téléphones & e-mail institutionnel
+            </h5>
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
               <Field
                 label="N° tél. 1 (appels)"
                 value={values.contact.telephone}
@@ -915,29 +922,37 @@ export default function FormulaireEleve({
                 maxLength={8}
                 onKeyDown={blockNonDigitKey}
               />
+              <label className="block min-w-0 md:col-span-1">
+                <span className="label">E-mail institutionnel (@esp.mr)</span>
+                <div className="input flex min-h-[44px] cursor-not-allowed items-center bg-slate-100 text-slate-700 sm:min-h-[2.5rem]">
+                  {formatEmailInstitutionnel(values.matricule) || '— (renseignez le matricule à l’étape 1)'}
+                </div>
+                <span className="mt-1 block text-[11px] leading-snug text-text-light">
+                  Généré automatiquement à partir du matricule ; non modifiable.
+                </span>
+              </label>
+            </div>
+
+            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Adresses</h5>
+            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
               <Field
-                label="E-mail professionnel"
-                value={values.contact.emailPro}
-                onChange={(v) => update('contact.emailPro', v)}
-                error={fieldErrors['contact.emailPro']}
-                inputMode="email"
-                autoComplete="email"
+                label="Adresse (résidence principale)"
+                value={values.contact.adresse}
+                onChange={(v) => update('contact.adresse', v)}
               />
-              <Field
-                label="E-mail personnel"
-                value={values.contact.emailPerso}
-                onChange={(v) => update('contact.emailPerso', v)}
-                required
-                error={fieldErrors['contact.emailPerso']}
-                inputMode="email"
-                autoComplete="email"
-              />
-              <Field label="Adresse (résidence principale)" value={values.contact.adresse} onChange={(v) => update('contact.adresse', v)} />
-              <Field
-                label="Adresse secondaire"
-                value={values.contact.adresseSecondaire}
-                onChange={(v) => update('contact.adresseSecondaire', v)}
-              />
+              <div className="md:col-span-2">
+                <Field
+                  label="Adresse secondaire"
+                  value={values.contact.adresseSecondaire}
+                  onChange={(v) => update('contact.adresseSecondaire', v)}
+                />
+              </div>
+            </div>
+
+            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Téléphones parents & personne à prévenir
+            </h5>
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
               <Field
                 label="Tél. père"
                 value={values.contact.telPere}
@@ -974,12 +989,12 @@ export default function FormulaireEleve({
                 maxLength={8}
                 onKeyDown={blockNonDigitKey}
               />
-              <Field label="Contact urgence (lien)" value={values.contact.contactUrgence} onChange={(v) => update('contact.contactUrgence', v)} />
               <Field label="Nom urgence" value={values.contact.nomUrgence} onChange={(v) => update('contact.nomUrgence', v)} />
               <Field
                 label="Tél. urgence"
                 value={values.contact.telUrgence}
                 onChange={(v) => update('contact.telUrgence', sanitizeMrPhoneDigits(v))}
+                required
                 error={fieldErrors['contact.telUrgence']}
                 inputMode="numeric"
                 maxLength={8}
@@ -1152,6 +1167,13 @@ export default function FormulaireEleve({
           </FormPanel>
         )}
       </div>
+
+      {eleve && !onStepSubmit ? (
+        <p className="mx-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-snug text-slate-600 sm:mx-0">
+          Modification : « Suivant » fait défiler les étapes sans appeler le serveur. Les données restent dans le formulaire jusqu&apos;à
+          « Enregistrer » sur la dernière étape. La création depuis « Nouvel étudiant » enregistre à chaque étape automatiquement.
+        </p>
+      ) : null}
 
       <div className="sticky bottom-0 z-[5] mt-auto flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-light-gray bg-off-white/95 px-1 py-3 backdrop-blur-sm supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:bg-transparent sm:px-0 sm:py-4 sm:backdrop-blur-none">
         <Button type="button" variant="secondary" onClick={onCancel}>

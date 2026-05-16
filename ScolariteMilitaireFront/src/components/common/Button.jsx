@@ -5,6 +5,7 @@ export default function Button({
   iconPosition = 'left',
   children,
   className = '',
+  type = 'button',
   ...rest
 }) {
   const variants = {
@@ -21,8 +22,8 @@ export default function Button({
   };
   return (
     <button
+      type={type}
       className={`btn ${variants[variant] ?? ''} ${sizes[size] ?? ''} ${className}`}
-      type="button"
       {...rest}
     >
       {Icon && iconPosition === 'left' ? <Icon size={size === 'sm' ? 14 : 16} /> : null}
