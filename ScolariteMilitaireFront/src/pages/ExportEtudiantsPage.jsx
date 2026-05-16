@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, FileDown, FileSpreadsheet, Search } from 'lucide-react';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import DataTable from '../components/common/DataTable';
 import SelectField from '../components/common/SelectField';
+import ColonnesEtudiantsPicker from '../components/eleves/ColonnesEtudiantsPicker';
 import { useFetch } from '../hooks/useFetch';
+import { useEtudiantColonnes } from '../hooks/useEtudiantColonnes';
 import { eleveService } from '../services/eleveService';
-import { DEPARTEMENTS, FILIERES, NIVEAUX_SCOLARITE } from '../utils/constants';
-import {
-  exportEtudiantsExcel,
-  exportEtudiantsPdf,
-  exportEtudiantsDocx,
-} from '../utils/etudiantsListExport';
+import { DEPARTEMENTS, NIVEAUX_SCOLARITE } from '../utils/constants';
+import { buildDataTableColumns } from '../utils/etudiantColonnesTable';
+import { exportEtudiantsExcel, exportEtudiantsPdf } from '../utils/etudiantsListExport';
+import { APP_NAME } from '../data/institution';
 
 export default function ExportEtudiantsPage() {
   const [filters, setFilters] = useState({
@@ -22,6 +22,7 @@ export default function ExportEtudiantsPage() {
   });
   const [selectedIds, setSelectedIds] = useState([]);
   const [busy, setBusy] = useState(null);
+  const { visibleIds, toggle, reset, selectAll } = useEtudiantColonnes();
 
   const { data, loading } = useFetch(() => eleveService.list(filters), [filters]);
   const rows = data ?? [];
@@ -50,6 +51,8 @@ export default function ExportEtudiantsPage() {
     [rows, selectedIds],
   );
 
+  const tableColumns = useMemo(() => buildDataTableColumns(visibleIds), [visibleIds]);
+
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
     ...DEPARTEMENTS,
@@ -60,45 +63,26 @@ export default function ExportEtudiantsPage() {
     ...NIVEAUX_SCOLARITE.map((x) => ({ value: x, label: x })),
   ];
 
-  const columns = [
-    { key: 'matricule', label: 'Matricule', sortable: true },
-    {
-      key: 'nom',
-      label: 'Nom & prénom',
-      sortable: true,
-      render: (r) => (
-        <div>
-          <p className="font-medium text-text">
-            {r.nom} {r.prenom}
-          </p>
-          <p className="text-sm text-text-light">{r.sexe === 'F' ? 'Féminin' : 'Masculin'}</p>
-        </div>
-      ),
-    },
-    { key: 'filiere', label: 'Département', sortable: true, accessor: (r) => r.scolarite?.filiere ?? '' },
-    {
-      key: 'niveau',
-      label: 'Année (niveau)',
-      sortable: true,
-      accessor: (r) => r.scolarite?.niveau ?? '',
-      render: (r) => <span className="text-slate-900">{r.scolarite?.niveau ?? '—'}</span>,
-    },
-  ];
-
-  async function runExport(kind) {
+  async function runExport(format) {
     if (!selectedRows.length) {
       window.alert('Sélectionnez au moins un étudiant (cases à cocher), ou utilisez « Tout sélectionner ».');
       return;
     }
+    if (!visibleIds.length) {
+      window.alert('Sélectionnez au moins une colonne via le bouton « Colonnes ».');
+      return;
+    }
     const meta = {
       filenameBase: 'liste-etudiants-esp',
-      title: 'Liste des étudiants — Direction de la scolarité',
+      title: `Liste des étudiants — ${APP_NAME}`,
     };
     try {
-      setBusy(kind);
-      if (kind === 'xlsx') await exportEtudiantsExcel(selectedRows, meta.filenameBase);
-      else if (kind === 'pdf') await exportEtudiantsPdf(selectedRows, meta);
-      else if (kind === 'docx') await exportEtudiantsDocx(selectedRows, meta);
+      setBusy(format);
+      if (format === 'xlsx') {
+        await exportEtudiantsExcel(selectedRows, visibleIds, meta.filenameBase);
+      } else {
+        await exportEtudiantsPdf(selectedRows, visibleIds, meta);
+      }
     } catch (e) {
       console.error(e);
       window.alert(e?.message ?? 'Erreur lors de l’export.');
@@ -106,6 +90,8 @@ export default function ExportEtudiantsPage() {
       setBusy(null);
     }
   }
+
+  const exportDisabled = !!busy || !selectedRows.length;
 
   return (
     <div className="grid grid-cols-1 gap-6 md:gap-8 xl:grid-cols-12 xl:gap-x-8">
@@ -131,7 +117,8 @@ export default function ExportEtudiantsPage() {
         </Link>
         <h1 className="page-title">Exporter les étudiants</h1>
         <p className="page-subtitle mt-2 max-w-3xl">
-          Filtrez la liste, sélectionnez les lignes à exporter, puis choisissez PDF, Word ou Excel.
+          Choisissez les colonnes, sélectionnez les étudiants, puis exportez en Excel ou PDF via{' '}
+          <strong>{APP_NAME}</strong>.
         </p>
       </div>
 
@@ -180,14 +167,23 @@ export default function ExportEtudiantsPage() {
         </div>
       </Card>
 
-      <Card className="xl:col-span-12">
+      <Card className="xl:col-span-12 !overflow-visible">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-light-gray pb-3">
           <p className="text-sm text-slate-600">
-            <span className="font-semibold text-navy">{selectedIds.length}</span> étudiant(s) sélectionné(s)
+            <span className="font-semibold text-navy">{selectedIds.length}</span> étudiant(s)
+            sélectionné(s)
             {' · '}
-            <span>{rows.length}</span> dans les filtres actuels
+            <span className="font-semibold text-navy">{visibleIds.length}</span> colonne(s)
+            {' · '}
+            <span>{rows.length}</span> dans les filtres
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ColonnesEtudiantsPicker
+              visibleIds={visibleIds}
+              onToggle={toggle}
+              onReset={reset}
+              onSelectAll={selectAll}
+            />
             <Button
               type="button"
               variant="secondary"
@@ -203,8 +199,35 @@ export default function ExportEtudiantsPage() {
           </div>
         </div>
 
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-navy/15 bg-navy-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-700">
+            Export des <strong>{visibleIds.length} colonnes</strong> affichées pour{' '}
+            <strong>{selectedIds.length || '…'}</strong> étudiant(s) sélectionné(s).
+          </p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              disabled={exportDisabled}
+              onClick={() => runExport('xlsx')}
+            >
+              <FileSpreadsheet size={18} className="mr-1.5" aria-hidden />
+              {busy === 'xlsx' ? 'Export…' : 'Exporter Excel'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={exportDisabled}
+              onClick={() => runExport('pdf')}
+            >
+              <FileDown size={18} className="mr-1.5" aria-hidden />
+              {busy === 'pdf' ? 'Export…' : 'Exporter PDF'}
+            </Button>
+          </div>
+        </div>
+
         <DataTable
-          columns={columns}
+          columns={tableColumns}
           rows={rows}
           pageSize={12}
           selection={{
@@ -213,34 +236,6 @@ export default function ExportEtudiantsPage() {
             onTogglePage: togglePageSelect,
           }}
         />
-
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-light-gray pt-6">
-          <span className="mr-2 text-sm font-semibold text-slate-800">Exporter la sélection :</span>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!!busy || !selectedRows.length}
-            onClick={() => runExport('xlsx')}
-          >
-            {busy === 'xlsx' ? '…' : 'Excel (.xlsx)'}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!!busy || !selectedRows.length}
-            onClick={() => runExport('pdf')}
-          >
-            {busy === 'pdf' ? '…' : 'PDF'}
-          </Button>
-          <Button
-            type="button"
-            variant="gold"
-            disabled={!!busy || !selectedRows.length}
-            onClick={() => runExport('docx')}
-          >
-            {busy === 'docx' ? '…' : 'Word (.docx)'}
-          </Button>
-        </div>
       </Card>
     </div>
   );

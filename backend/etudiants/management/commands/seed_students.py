@@ -71,13 +71,26 @@ class Command(BaseCommand):
                 taille_cm=round(random.uniform(150.0, 195.0), 2),
             )
 
-            # Create DossierAcademique
+            # Create DossierAcademique (certains profils mobilité DD / SE)
+            niveau = random.choice(['3', '4', '4-DD', '4-E', '5-DD'])
+            etab_echange = ''
+            etab_dd = ''
+            spec_mobilite = ''
+            if niveau in ('4-DD', '5-DD'):
+                etab_dd = fake.company() + ' University'
+                spec_mobilite = random.choice(['Informatique', 'Génie civil', 'Électrotechnique'])
+            elif niveau == '4-E':
+                etab_echange = fake.company() + ' University'
+                spec_mobilite = random.choice(['Data Science', 'Mécanique', 'Réseaux'])
             DossierAcademique.objects.create(
                 eleve=eleve,
                 departement=random.choice(['IRT', 'SID', 'GE', 'GM', 'GC-HE', 'MPG']),
-                niveau_actuel=random.choice(['3', '4', '4-DD', '4-E', '5-DD']),
+                niveau_actuel=niveau,
                 semestre_actuel=random.choice(['S1', 'S2', 'S3', 'S4']),
                 parcours='En cours normal',
+                etablissement_echange=etab_echange or None,
+                etablissement_double_diplome=etab_dd or None,
+                specialite_mobilite=spec_mobilite or None,
             )
 
             # Create DossierMilitaire (libellés alignés avec COMPAGNIES_OPTIONS côté front)

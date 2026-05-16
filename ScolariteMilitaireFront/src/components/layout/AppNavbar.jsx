@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import EspLogo from '../common/EspLogo';
 import { getAppNavFlatItems } from './appNavConfig';
+import { APP_NAME } from '../../data/institution';
 
 export default function AppNavbar({ mobileOpen, onMobileClose }) {
   const { fonction, logout } = useAuth();
@@ -56,8 +57,7 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
           <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
             <EspLogo className="h-10 w-10 shrink-0" />
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-white/80">Scolarité</p>
-              <p className="truncate text-base font-semibold text-white">ESP Militaire</p>
+              <p className="truncate text-base font-semibold text-white">{APP_NAME}</p>
             </div>
           </Link>
         </div>
@@ -85,7 +85,7 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
             <div className="flex items-center justify-between gap-2 border-b border-light-gray px-4 py-3.5">
               <Link to="/dashboard" className="flex min-w-0 items-center gap-2" onClick={onMobileClose}>
                 <EspLogo className="h-9 w-9 shrink-0" />
-                <span className="truncate text-sm font-bold tracking-tight text-slate-900">ESP · Scolarité</span>
+                <span className="truncate text-sm font-bold tracking-tight text-slate-900">{APP_NAME}</span>
               </Link>
               <button
                 type="button"
