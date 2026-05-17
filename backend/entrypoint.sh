@@ -9,8 +9,9 @@ echo "Database started"
 
 # Run migrations
 echo "Running makemigrations..."
-rm */migrations/*
-python manage.py makemigrations
+rm -rf */migrations/*
+python manage.py makemigrations etudiants
+python manage.py makemigrations accounts
 echo "Running migrate..."
 python manage.py migrate
 
