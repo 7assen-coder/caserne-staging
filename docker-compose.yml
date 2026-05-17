@@ -14,12 +14,15 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile
-    command: "python manage.py runserver 0.0.0.0:8080"
-    volumes:
-      - ./backend:/code
+    # Use Gunicorn WSGI server for production instead of Django's runserver
+    command: "gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3"
     ports:
       - "8000:8080"
     environment:
+      - DEBUG=False
+      # Optional: set a strong secret key for production here
+      # - SECRET_KEY=your-production-secret-key-here
+      - ALLOWED_HOSTS=187.124.219.82,localhost,127.0.0.1,backend
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=esp
