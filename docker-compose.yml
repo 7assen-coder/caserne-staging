@@ -11,7 +11,7 @@ services:
       - "5433:5432"
 
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     # Use Gunicorn WSGI server for production instead of Django's runserver
@@ -22,7 +22,7 @@ services:
       - DEBUG=False
       # Optional: set a strong secret key for production here
       # - SECRET_KEY=your-production-secret-key-here
-      - ALLOWED_HOSTS=187.124.219.82,localhost,127.0.0.1,backend
+      - ALLOWED_HOSTS=187.127.228.192,localhost,127.0.0.1,backend
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=esp
