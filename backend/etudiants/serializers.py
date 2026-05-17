@@ -46,3 +46,4 @@ class EleveSerializer(serializers.ModelSerializer):
     class Meta:
         model = Eleve
         fields = '__all__'
+        read_only_fields = ('annee_premiere_inscription', 'email_pro')

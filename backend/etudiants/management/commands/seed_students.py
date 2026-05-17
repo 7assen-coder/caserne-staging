@@ -1,6 +1,5 @@
 import random
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from faker import Faker
 from etudiants.models import (
     Eleve, ContactParent, DossierSante, DossierAcademique, 
@@ -61,7 +60,6 @@ class Command(BaseCommand):
                 tel_pere="44444444",
                 prenom_mere=fake.first_name_female(),
                 nom_famille_mere=fake.last_name(),
-                contact_urgence="Oncle",
                 tel_urgence="33333333"
             )
 
@@ -73,21 +71,34 @@ class Command(BaseCommand):
                 taille_cm=round(random.uniform(150.0, 195.0), 2),
             )
 
-            # Create DossierAcademique
+            # Create DossierAcademique (certains profils mobilité DD / SE)
+            niveau = random.choice(['3', '4', '4-DD', '4-E', '5-DD'])
+            etab_echange = ''
+            etab_dd = ''
+            spec_mobilite = ''
+            if niveau in ('4-DD', '5-DD'):
+                etab_dd = fake.company() + ' University'
+                spec_mobilite = random.choice(['Informatique', 'Génie civil', 'Électrotechnique'])
+            elif niveau == '4-E':
+                etab_echange = fake.company() + ' University'
+                spec_mobilite = random.choice(['Data Science', 'Mécanique', 'Réseaux'])
             DossierAcademique.objects.create(
                 eleve=eleve,
-                departement=random.choice(['IRT', 'SID', 'GE', 'GM', 'GH-GC', 'MPG']),
-                niveau_actuel=random.choice(['3', '4', '5-DD']),
+                departement=random.choice(['IRT', 'SID', 'GE', 'GM', 'GC-HE', 'MPG']),
+                niveau_actuel=niveau,
                 semestre_actuel=random.choice(['S1', 'S2', 'S3', 'S4']),
-                parcours="normal"
+                parcours='En cours normal',
+                etablissement_echange=etab_echange or None,
+                etablissement_double_diplome=etab_dd or None,
+                specialite_mobilite=spec_mobilite or None,
             )
 
-            # Create DossierMilitaire
+            # Create DossierMilitaire (libellés alignés avec COMPAGNIES_OPTIONS côté front)
             DossierMilitaire.objects.create(
                 eleve=eleve,
-                compagnie=f"Compagnie {random.choice(['A', 'B', 'C'])}",
-                section=f"Section {random.randint(1, 4)}",
-                sport_pratique=random.choice(["Football", "Basketball", "Athlétisme"])
+                compagnie=random.choice(['1ʳᵉ Compagnie', '2ᵉ Compagnie']),
+                section=f'Section {random.randint(1, 4)}',
+                sport_pratique=random.choice(['Football', 'Basketball', 'Athlétisme']),
             )
 
             # Create Hebergement

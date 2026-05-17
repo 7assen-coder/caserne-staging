@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import ColonnesEtudiantsPicker from './ColonnesEtudiantsPicker';
+import { useEtudiantColonnes } from '../../hooks/useEtudiantColonnes';
+import { buildDataTableColumns } from '../../utils/etudiantColonnesTable';
 import { Link } from 'react-router-dom';
 import {
   Search,
@@ -21,7 +24,7 @@ import FormulaireEleve from './FormulaireEleve';
 import EleveFicheView from './EleveFicheView';
 import { useFetch } from '../../hooks/useFetch';
 import { eleveService } from '../../services/eleveService';
-import { FILIERES, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import { DEPARTEMENTS, NIVEAUX_SCOLARITE } from '../../utils/constants';
 import {
   COMPAGNIES_OPTIONS,
   SECTIONS_OPTIONS,
@@ -48,6 +51,7 @@ export default function ListeEleves() {
   const [ficheLoading, setFicheLoading] = useState(false);
   const [selectedEleveId, setSelectedEleveId] = useState(null);
   const [editing, setEditing] = useState(null);
+  const { visibleIds, toggle, reset, selectAll } = useEtudiantColonnes();
 
   const selectedEleve = useMemo(
     () => (selectedEleveId ? (data ?? []).find((e) => e.id === selectedEleveId) ?? null : null),
@@ -55,16 +59,20 @@ export default function ListeEleves() {
   );
 
   const handleUpdate = async (values) => {
+    const studentId = editing?.id ?? values?.id;
+    if (!studentId) {
+      throw new Error('Impossible d’enregistrer : dossier étudiant sans identifiant.');
+    }
     try {
-      const updated = await eleveService.update(editing.id, values);
+      const updated = await eleveService.update(studentId, values);
       setEditing(null);
       setKey((k) => k + 1);
-      // Synchroniser la fiche si on est en train de la consulter
-      if (ficheEleveData && ficheEleveData.id === editing.id) {
-        setFicheEleveData(updated || { ...ficheEleveData, ...values });
+      if (ficheEleveData && ficheEleveData.id === studentId) {
+        setFicheEleveData(updated);
       }
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
+      throw error;
     }
   };
 
@@ -79,7 +87,7 @@ export default function ListeEleves() {
 
   const departementOptions = [
     { value: '', label: 'Tous les départements' },
-    ...FILIERES.map((f) => ({ value: f, label: f })),
+    ...DEPARTEMENTS,
   ];
 
   const anneeOptions = [
@@ -97,44 +105,7 @@ export default function ListeEleves() {
     ...SECTIONS_OPTIONS.filter((o) => o.value),
   ];
 
-  const columns = [
-    { key: 'matricule', label: 'Matricule', sortable: true },
-    {
-      key: 'nom',
-      label: 'Nom & prénom',
-      sortable: true,
-      render: (r) => (
-        <div>
-          <p className="font-medium text-text">
-            {r.nom} {r.prenom}
-          </p>
-          <p className="text-sm text-text-light">{r.sexe === 'F' ? 'Féminin' : 'Masculin'}</p>
-        </div>
-      ),
-    },
-    { key: 'filiere', label: 'Département', sortable: true, accessor: (r) => r.scolarite?.filiere ?? '' },
-    {
-      key: 'niveau',
-      label: 'Année (niveau)',
-      sortable: true,
-      accessor: (r) => r.scolarite?.niveau ?? '',
-      render: (r) => <span className="text-slate-900">{r.scolarite?.niveau ?? '—'}</span>,
-    },
-    {
-      key: 'compagnie',
-      label: 'Compagnie',
-      sortable: true,
-      accessor: (r) => r.dossierMilitaire?.compagnie ?? '',
-      render: (r) => <span className="text-slate-900">{r.dossierMilitaire?.compagnie || '—'}</span>,
-    },
-    {
-      key: 'section',
-      label: 'Section',
-      sortable: true,
-      accessor: (r) => r.dossierMilitaire?.section ?? '',
-      render: (r) => <span className="text-slate-900">{r.dossierMilitaire?.section || '—'}</span>,
-    },
-  ];
+  const columns = useMemo(() => buildDataTableColumns(visibleIds), [visibleIds]);
 
   if (ficheEleve?.id) {
     return (
@@ -317,6 +288,12 @@ export default function ListeEleves() {
             : 'Sélectionnez un étudiant dans le tableau'}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ColonnesEtudiantsPicker
+            visibleIds={visibleIds}
+            onToggle={toggle}
+            onReset={reset}
+            onSelectAll={selectAll}
+          />
           <Link
             to="/eleves/import"
             className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-white px-3 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-slate-50"

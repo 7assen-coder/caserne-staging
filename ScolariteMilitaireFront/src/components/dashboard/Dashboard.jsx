@@ -219,8 +219,7 @@ export default function Dashboard() {
             >
               <EspLogo className="h-10 w-10 shrink-0 rounded-full ring-2 ring-white shadow-sm" />
               <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Scolarité</p>
-                <p className="truncate text-base font-semibold text-slate-900">ESP Militaire</p>
+                <p className="truncate text-base font-semibold text-slate-900">Gestion ESP</p>
               </div>
             </Link>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">

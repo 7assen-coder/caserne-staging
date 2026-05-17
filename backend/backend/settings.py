@@ -17,7 +17,7 @@ SECRET_KEY = 'django-insecure-b1yk9ocnx-heapopytef8a_6zb-fo6jwyoccg&m032e4q_xia%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["187.124.219.82", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["187.124.219.82", "localhost", "127.0.0.1", "backend"]
 
 
 # Application definition
@@ -133,6 +133,8 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:9081',
+    'http://127.0.0.1:9081',
 ]
 
 JWT_COOKIE_ACCESS_NAME = 'esp_access'

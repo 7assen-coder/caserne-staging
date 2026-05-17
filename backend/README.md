@@ -22,7 +22,6 @@ And this is the output
     "fonction_mere": null,
     "tel_mere": null,
     "tel_mere_whatsapp": null,
-    "contact_urgence": "Oncle",
     "nom_urgence": null,
     "tel_urgence": "33333333",
     "tel_urgence_whatsapp": null,
@@ -43,7 +42,7 @@ And this is the output
   },
   "dossier_academique": {
     "id": 1,
-    "departement": "GH-GC",
+    "departement": "GC-HE",
     "niveau_actuel": "5-DD",
     "semestre_actuel": "S3",
     "donnees_semestres": {},

@@ -155,9 +155,9 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
     errors.residentAvecParents = reqMsg('La résidence avec les parents');
   }
 
-  const statut = String(values.statut ?? '').trim();
-  if (!statut) errors.statut = reqMsg('Le statut');
-  else if (!STATUT_ETUDIANT_VALUES.includes(statut)) errors.statut = 'Statut invalide.';
+  const ep = String(values.contact?.emailPerso ?? '').trim();
+  if (!ep) errors['contact.emailPerso'] = reqMsg("L'e-mail personnel");
+  else if (!simpleEmailOk(ep)) errors['contact.emailPerso'] = 'Format e-mail invalide.';
 
   if (mode === 'standard' || mode === 'mobilite') {
     return errors;
@@ -168,6 +168,11 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
 function validateScolarite(values, errors, { mode = 'standard' } = {}) {
   if (!String(values.scolarite?.filiere ?? '').trim()) errors['scolarite.filiere'] = reqMsg('La filière');
   if (!String(values.scolarite?.niveau ?? '').trim()) errors['scolarite.niveau'] = reqMsg('Le niveau');
+
+  const statut = String(values.statut ?? '').trim();
+  if (!statut) errors.statut = reqMsg('Le statut');
+  else if (!STATUT_ETUDIANT_VALUES.includes(statut)) errors.statut = 'Statut invalide.';
+
   if (!String(values.scolarite?.voieAcces ?? '').trim()) errors['scolarite.voieAcces'] = reqMsg("La voie d'accès");
   if (!String(values.scolarite?.diplomeAcces ?? '').trim()) {
     errors['scolarite.diplomeAcces'] = reqMsg('Le diplôme d’accès');
@@ -184,6 +189,17 @@ function validateScolarite(values, errors, { mode = 'standard' } = {}) {
 }
 
 function validateContacts(values, errors) {
+  const pp = String(values.parents?.prenomPere ?? '').trim();
+  if (!pp) errors['parents.prenomPere'] = reqMsg('Le prénom du père');
+  const np = String(values.parents?.nomFamillePere ?? '').trim();
+  if (!np) errors['parents.nomFamillePere'] = reqMsg('Le nom de famille du père');
+
+  const telUr = sanitizeMrPhoneDigits(values.contact?.telUrgence ?? '');
+  if (!telUr) errors['contact.telUrgence'] = reqMsg('Le téléphone d’urgence');
+  else if (!isValidMrPhone8(telUr)) {
+    errors['contact.telUrgence'] = 'Le téléphone doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
+  }
+
   const telMain = sanitizeMrPhoneDigits(values.contact?.telephone ?? '');
   if (telMain && !isValidMrPhone8(telMain)) {
     errors['contact.telephone'] = 'Le téléphone doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
@@ -194,7 +210,6 @@ function validateContacts(values, errors) {
     ['contact.telPereWhatsapp', values.contact?.telPereWhatsapp],
     ['contact.telMere', values.contact?.telMere],
     ['contact.telMereWhatsapp', values.contact?.telMereWhatsapp],
-    ['contact.telUrgence', values.contact?.telUrgence],
     ['contact.telUrgenceWhatsapp', values.contact?.telUrgenceWhatsapp],
   ];
   for (const [path, raw] of pairs) {
@@ -203,11 +218,6 @@ function validateContacts(values, errors) {
       errors[path] = '8 chiffres, commence par 2, 3 ou 4.';
     }
   }
-  const ep = String(values.contact?.emailPerso ?? '').trim();
-  if (!ep) errors['contact.emailPerso'] = reqMsg("L'e-mail personnel");
-  else if (!simpleEmailOk(ep)) errors['contact.emailPerso'] = 'Format e-mail invalide.';
-  const epro = String(values.contact?.emailPro ?? '').trim();
-  if (epro && !simpleEmailOk(epro)) errors['contact.emailPro'] = 'Format e-mail invalide.';
 }
 
 function validateSante(values, errors) {

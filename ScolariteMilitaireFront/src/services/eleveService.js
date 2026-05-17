@@ -1,6 +1,48 @@
 import { api } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
-import { todayIso, getCurrentAcademicYear } from '../utils/anneeUniversitaire';
+import { todayIso } from '../utils/anneeUniversitaire';
+import { normalizeDepartementForApi } from '../utils/constants';
+import { formatApiError } from '../utils/apiErrors';
+
+/** Codes API `DossierAcademique.CHOIX_ANNEE` ↔ libellés UI `NIVEAUX_SCOLARITE`. */
+const NIVEAU_API_TO_UI = {
+  '3': '3e année',
+  '4': '4e année',
+  '4-DD': '5e DD',
+  '4-E': '5e E',
+  '5-DD': '5e DD',
+};
+const NIVEAU_UI_TO_API = Object.fromEntries(
+  Object.entries(NIVEAU_API_TO_UI).map(([api, ui]) => [ui, api]),
+);
+
+const VOIE_LABEL_TO_CODE = {
+  'Voie 1 — Interne': '1',
+  'Voie 1 — Externe': '2',
+  'Voie 2 — Interne': '3',
+  'Voie 2 — Externe': '4',
+};
+
+function niveauActuelFromApi(code) {
+  return NIVEAU_API_TO_UI[code] || code || '';
+}
+
+function niveauActuelToApi(uiLabel) {
+  const s = String(uiLabel ?? '').trim();
+  if (NIVEAU_UI_TO_API[s]) return NIVEAU_UI_TO_API[s];
+  if (['3', '4', '4-DD', '4-E', '5-DD'].includes(s)) return s;
+  return '3';
+}
+
+function normalizeVoieAcces(raw) {
+  const s = String(raw ?? '').trim();
+  if (/^[1-4]$/.test(s)) return s;
+  return VOIE_LABEL_TO_CODE[s] || '1';
+}
+
+function departementDisplayFromApi(code) {
+  return normalizeDepartementForApi(code);
+}
 
 function splitLieuNaissance(lieu) {
   if (!lieu) return { wilaya: '', commune: '' };
@@ -36,7 +78,7 @@ function adaptEleveFromApi(item) {
     prenom: item.prenom ?? '',
     nni: item.nni ?? '',
     numeroBac: item.num_bac ?? '',
-    sexe: item.sexe ?? 'H',
+    sexe: item.sexe === 'F' ? 'F' : 'M',
     statut: parcoursToStatut(item.dossier_academique?.parcours),
     dateNaissance: item.date_naissance ?? '',
     lieuNaissance: item.lieu_naissance ?? '',
@@ -49,7 +91,7 @@ function adaptEleveFromApi(item) {
     ecoleBac: item.ecole_bac ?? '',
     anneePremiereInscription: item.annee_premiere_inscription ?? '',
     datePremiereInscription: item.date_premiere_inscription ?? '',
-    voieAcces: item.voie_acces ?? '',
+    voieAcces: normalizeVoieAcces(item.voie_acces ?? ''),
     diplomeAcces: item.diplome_acces ?? '',
     etablissementDiplome: item.etablissement_diplome ?? '',
     adressePrimaire: item.adresse_primaire ?? '',
@@ -62,15 +104,16 @@ function adaptEleveFromApi(item) {
     tel2Whatsapp: item.tel2_whatsapp ?? '',
     facebook: item.facebook ?? '',
     linkedin: item.linkedin ?? '',
-    filiere: item.dossier_academique?.departement ?? '',
+    filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
     photoUrl: item.documents?.photo_identite_militaire ?? '',
     scolarite: {
-      departement: item.dossier_academique?.departement ?? '',
-      filiere: item.dossier_academique?.departement ?? '',
-      niveau: item.dossier_academique?.niveau_actuel ?? '',
+      departement: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
+      filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
+      niveau: niveauActuelFromApi(item.dossier_academique?.niveau_actuel ?? ''),
+      semestreActuel: item.dossier_academique?.semestre_actuel ?? '',
       anneeUni1ere: item.annee_premiere_inscription ?? '',
       parcours: item.dossier_academique?.parcours ?? '',
-      voieAcces: item.voie_acces ?? '',
+      voieAcces: normalizeVoieAcces(item.voie_acces ?? ''),
       diplomeAcces: item.diplome_acces ?? '',
       etablissementPremierCycle: item.etablissement_diplome ?? '',
     },
@@ -138,13 +181,13 @@ function adaptEleveFromApi(item) {
       telPereWhatsapp: item.contacts_parents?.tel_pere_whatsapp ?? '',
       telMere: item.contacts_parents?.tel_mere ?? '',
       telMereWhatsapp: item.contacts_parents?.tel_mere_whatsapp ?? '',
-      contactUrgence: item.contacts_parents?.contact_urgence ?? '',
       nomUrgence: item.contacts_parents?.nom_urgence ?? '',
       telUrgence: item.contacts_parents?.tel_urgence ?? '',
       telUrgenceWhatsapp: item.contacts_parents?.tel_urgence_whatsapp ?? '',
     },
     parents: {
       prenomPere: item.contacts_parents?.prenom_pere ?? '',
+      nomFamillePere: item.contacts_parents?.nom_famille_pere ?? '',
       fonctionPere: item.contacts_parents?.fonction_pere ?? '',
       prenomMere: item.contacts_parents?.prenom_mere ?? '',
       nomMere: item.contacts_parents?.nom_famille_mere ?? '',
@@ -176,9 +219,36 @@ function statutToParcours(statut) {
   }
 }
 
-function toElevePayload(values) {
+/** Positive integer PK or null (never NaN / 0). */
+function coercePk(raw) {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Resolve OneToOne child PKs from GET /eleves/:id/ first — form state often lacks them or has stale ids.
+ */
+function mergeRelatedIdsFromApiPayload(values, apiEleve) {
+  if (!apiEleve || typeof apiEleve !== 'object') return { ...values };
+  const pick = (nestedBlock, formFallback) =>
+    coercePk(nestedBlock?.id) ?? coercePk(formFallback);
   return {
-    matricule: values.matricule || '',
+    ...values,
+    dossierAcademiqueId: pick(apiEleve.dossier_academique, values.dossierAcademiqueId),
+    dossierSanteId: pick(apiEleve.dossier_sante, values.dossierSanteId),
+    dossierMilitaireId: pick(apiEleve.dossier_militaire, values.dossierMilitaireId),
+    contactsParentsId: pick(apiEleve.contacts_parents, values.contactsParentsId),
+    hebergementId: pick(apiEleve.hebergement, values.hebergementId),
+    documentsId: pick(apiEleve.documents, values.documentsId),
+  };
+}
+
+function toElevePayload(values) {
+  const matParsed = Number.parseInt(String(values.matricule ?? '').replace(/\D/g, ''), 10);
+  const matricule = Number.isFinite(matParsed) ? matParsed : 0;
+  return {
+    matricule,
     num_bac: String(values.numeroBac ?? '').trim() || '—',
     nni: values.nni || '',
     sexe: values.sexe === 'F' ? 'F' : 'H',
@@ -191,24 +261,20 @@ function toElevePayload(values) {
       values.categorieBac === 'Étranger' || values.categorieBac === 'Etranger'
         ? 'Etranger'
         : values.categorieBac || 'National',
-    serie_bac: (values.serieBac ?? '').trim() || '—',
+    serie_bac: (values.serieBac ?? '').trim() || 'C',
     moyenne_bac: values.moyenneBac || '0',
     ecole_bac: (values.ecoleBac ?? '').trim() || '—',
-    annee_premiere_inscription:
-      (values.anneePremiereInscription || values.scolarite?.anneeUni1ere || '').trim()
-      || getCurrentAcademicYear(),
     date_premiere_inscription:
       String(values.datePremiereInscription ?? '').trim() || todayIso(),
-    voie_acces: values.scolarite?.voieAcces || values.voieAcces || '—',
+    voie_acces: normalizeVoieAcces(values.scolarite?.voieAcces || values.voieAcces),
     diplome_acces: values.scolarite?.diplomeAcces || values.diplomeAcces || 'N/A',
     etablissement_diplome: values.scolarite?.etablissementPremierCycle || values.etablissementDiplome || '',
     adresse_primaire: values.contact?.adresse || values.adressePrimaire || 'N/A',
     adresse_secondaire: values.contact?.adresseSecondaire || values.adresseSecondaire || '',
     resident_avec_parents: values.residentAvecParents === 'Oui' || values.residentAvecParents === true,
     compte_bankily: values.compteBankily || '',
-    email_pro: values.contact?.emailPro || values.emailPro || values.contact?.emailPerso || 'user@example.com',
     email_perso: values.contact?.emailPerso || values.emailPerso || 'user@example.com',
-    tel1: values.contact?.telephone || values.tel1 || 'N/A',
+    tel1: values.contact?.telephone || values.tel1 || '00000000',
     tel2_whatsapp: values.contact?.tel2 || values.tel2Whatsapp || '',
     facebook: '',
     linkedin: '',
@@ -217,10 +283,11 @@ function toElevePayload(values) {
 
 function dossierAcademiquePayload(values, eleveId) {
   const mobilite = values.mobilite || {};
+  const deptRaw = values.scolarite?.departement || values.scolarite?.filiere || '';
   return {
-    departement: values.scolarite?.departement || values.scolarite?.filiere || '',
-    niveau_actuel: values.scolarite?.niveau || '',
-    semestre_actuel: '',
+    departement: normalizeDepartementForApi(deptRaw),
+    niveau_actuel: niveauActuelToApi(values.scolarite?.niveau),
+    semestre_actuel: String(values.scolarite?.semestreActuel || '').trim() || 'S1',
     donnees_semestres: {},
     diplome: mobilite.specialite || values.scolarite?.diplomeAcces || '',
     etablissement_echange:
@@ -243,7 +310,7 @@ export const eleveService = {
         (e) =>
           e.nom.toLowerCase().includes(q) ||
           e.prenom.toLowerCase().includes(q) ||
-          e.matricule.toLowerCase().includes(q),
+          String(e.matricule ?? '').toLowerCase().includes(q),
       );
     }
     if (filters.departement) {
@@ -275,7 +342,6 @@ export const eleveService = {
       medicaments_a_vie: values.sante?.medicaments || '',
       poids_kg: values.sante?.poids || '',
       taille_cm: values.sante?.tailleCm || '',
-      imc: values.sante?.imc || '',
       eleve: eleveId,
     });
   },
@@ -289,7 +355,6 @@ export const eleveService = {
       medicaments_a_vie: values.sante?.medicaments || '',
       poids_kg: values.sante?.poids || '',
       taille_cm: values.sante?.tailleCm || '',
-      imc: values.sante?.imc || '',
       eleve: eleveId,
     });
   },
@@ -345,8 +410,10 @@ export const eleveService = {
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
+    const civilePhoto =
+      docs.photoIdentiteCivile instanceof File ? docs.photoIdentiteCivile : docs.photoIdentite;
+    if (civilePhoto instanceof File) fd.append('photo_identite_civile', civilePhoto);
     if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
-    if (docs.photoIdentiteCivile instanceof File) fd.append('photo_identite_civile', docs.photoIdentiteCivile);
     if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
     return api.post('/documents/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -358,8 +425,10 @@ export const eleveService = {
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
+    const civilePhoto =
+      docs.photoIdentiteCivile instanceof File ? docs.photoIdentiteCivile : docs.photoIdentite;
+    if (civilePhoto instanceof File) fd.append('photo_identite_civile', civilePhoto);
     if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
-    if (docs.photoIdentiteCivile instanceof File) fd.append('photo_identite_civile', docs.photoIdentiteCivile);
     if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
     return api.put(`/documents/${id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -368,6 +437,7 @@ export const eleveService = {
   createContactsParents(eleveId, values) {
     return api.post('/contacts-parents/', {
       prenom_pere: values.parents?.prenomPere || '',
+      nom_famille_pere: values.parents?.nomFamillePere || values.nom || '',
       fonction_pere: values.parents?.fonctionPere || '',
       tel_pere: values.contact?.telPere || '',
       tel_pere_whatsapp: values.contact?.telPereWhatsapp || '',
@@ -376,7 +446,6 @@ export const eleveService = {
       fonction_mere: values.parents?.fonctionMere || '',
       tel_mere: values.contact?.telMere || '',
       tel_mere_whatsapp: values.contact?.telMereWhatsapp || '',
-      contact_urgence: values.contact?.contactUrgence || '',
       nom_urgence: values.contact?.nomUrgence || '',
       tel_urgence: values.contact?.telUrgence || '',
       tel_urgence_whatsapp: values.contact?.telUrgenceWhatsapp || '',
@@ -386,6 +455,7 @@ export const eleveService = {
   updateContactsParents(id, eleveId, values) {
     return api.put(`/contacts-parents/${id}/`, {
       prenom_pere: values.parents?.prenomPere || '',
+      nom_famille_pere: values.parents?.nomFamillePere || values.nom || '',
       fonction_pere: values.parents?.fonctionPere || '',
       tel_pere: values.contact?.telPere || '',
       tel_pere_whatsapp: values.contact?.telPereWhatsapp || '',
@@ -394,7 +464,6 @@ export const eleveService = {
       fonction_mere: values.parents?.fonctionMere || '',
       tel_mere: values.contact?.telMere || '',
       tel_mere_whatsapp: values.contact?.telMereWhatsapp || '',
-      contact_urgence: values.contact?.contactUrgence || '',
       nom_urgence: values.contact?.nomUrgence || '',
       tel_urgence: values.contact?.telUrgence || '',
       tel_urgence_whatsapp: values.contact?.telUrgenceWhatsapp || '',
@@ -429,8 +498,50 @@ export const eleveService = {
     });
   },
 
-  update(id, values) {
-    return api.put(`/eleves/${id}/`, toElevePayload(values));
+  async update(id, values) {
+    const nid = Number(id);
+    if (!Number.isFinite(nid) || nid <= 0) {
+      throw new Error('Invalid student id.');
+    }
+    await api.put(`/eleves/${nid}/`, toElevePayload(values));
+
+    const { data: freshRaw } = await api.get(`/eleves/${nid}/`);
+    const merged = mergeRelatedIdsFromApiPayload(values, freshRaw);
+
+    const related = [];
+    if (merged.dossierAcademiqueId) {
+      related.push(eleveService.updateDossierAcademique(merged.dossierAcademiqueId, nid, merged));
+    }
+    if (merged.dossierSanteId) {
+      related.push(eleveService.updateDossierSante(merged.dossierSanteId, nid, merged));
+    }
+    if (merged.dossierMilitaireId) {
+      related.push(eleveService.updateDossierMilitaire(merged.dossierMilitaireId, nid, merged));
+    }
+    if (merged.contactsParentsId) {
+      related.push(eleveService.updateContactsParents(merged.contactsParentsId, nid, merged));
+    }
+    if (merged.hebergementId) {
+      related.push(eleveService.updateHebergement(merged.hebergementId, nid, merged));
+    }
+    const docs = merged.pieces || {};
+    if (merged.documentsId && Object.values(docs).some((v) => v instanceof File)) {
+      related.push(eleveService.updateDocuments(merged.documentsId, nid, merged));
+    }
+
+    const settled = await Promise.allSettled(related);
+    const failed = settled.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      const msgs = failed.map((r) => formatApiError(r.reason)).join(' · ');
+      throw new Error(
+        failed.length === related.length
+          ? `Saving related records failed: ${msgs}`
+          : `Some related records failed (${failed.length}/${related.length}): ${msgs}`,
+      );
+    }
+
+    const { data: outRaw } = await api.get(`/eleves/${nid}/`);
+    return adaptEleveFromApi(outRaw);
   },
 
   delete(id) {

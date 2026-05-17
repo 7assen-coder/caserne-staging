@@ -1,0 +1,22 @@
+services:
+  db_test:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=esp_test
+      - POSTGRES_USER=esp
+      - POSTGRES_PASSWORD=esp
+    # No volume needed for testing, we want a clean slate or transient data
+
+  backend_test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: "python manage.py test"
+    environment:
+      - DB_HOST=db_test
+      - DB_PORT=5432
+      - DB_NAME=esp_test
+      - DB_USER=esp
+      - DB_PASSWORD=esp
+    depends_on:
+      - db_test
