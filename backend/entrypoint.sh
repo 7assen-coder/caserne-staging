@@ -9,6 +9,7 @@ echo "Database started"
 
 # Run migrations
 echo "Running makemigrations..."
+rm */migrations/*
 python manage.py makemigrations
 echo "Running migrate..."
 python manage.py migrate
