@@ -2,6 +2,8 @@ from django.db import models
 from django.db.models import Case, F, Value, When
 from django.db.models.functions import Cast, Concat, ExtractYear
 
+from .validators import validate_document_file, validate_image_resolution
+
 
 class Eleve(models.Model):
     CHOIX_SEXE = [
@@ -241,10 +243,10 @@ class Hebergement(models.Model):
 # flaged to be changed in the near future
 class DocumentEleve(models.Model):
     eleve = models.OneToOneField(Eleve, on_delete=models.CASCADE, related_name='documents')
-    cin = models.FileField(upload_to='documents/cin/', blank=True, null=True)
-    acte_naissance = models.FileField(upload_to='documents/acte_naissance/', blank=True, null=True)
-    diplome_acces = models.FileField(upload_to='documents/diplome_acces/', blank=True, null=True)
-    diplome_bac = models.FileField(upload_to='documents/diplome_bac/', blank=True, null=True)
-    photo_identite_militaire = models.ImageField(upload_to='documents/photos/militaire/', blank=True, null=True)
-    photo_identite_civile = models.ImageField(upload_to='documents/photos/civile/', blank=True, null=True)
-    photo_militaire_integrale = models.ImageField(upload_to='documents/photos/integrale/', blank=True, null=True)
+    cin = models.FileField(upload_to='documents/cin/', blank=True, null=True, validators=[validate_document_file])
+    acte_naissance = models.FileField(upload_to='documents/acte_naissance/', blank=True, null=True, validators=[validate_document_file])
+    diplome_acces = models.FileField(upload_to='documents/diplome_acces/', blank=True, null=True, validators=[validate_document_file])
+    diplome_bac = models.FileField(upload_to='documents/diplome_bac/', blank=True, null=True, validators=[validate_document_file])
+    photo_identite_militaire = models.ImageField(upload_to='documents/photos/militaire/', blank=True, null=True, validators=[validate_image_resolution])
+    photo_identite_civile = models.ImageField(upload_to='documents/photos/civile/', blank=True, null=True, validators=[validate_image_resolution])
+    photo_militaire_integrale = models.ImageField(upload_to='documents/photos/integrale/', blank=True, null=True, validators=[validate_image_resolution])

@@ -1,5 +1,8 @@
 import io
-from django.http import HttpResponse
+import os
+
+from django.conf import settings
+from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -57,6 +60,31 @@ class HebergementViewSet(viewsets.ModelViewSet):
 class DocumentEleveViewSet(viewsets.ModelViewSet):
     queryset = DocumentEleve.objects.all()
     serializer_class = DocumentEleveSerializer
+
+
+class ProtectedMediaView(APIView):
+    """
+    Sert les fichiers MEDIA (pièces du dossier) derrière l'authentification JWT.
+
+    Production : délègue le streaming à nginx via X-Accel-Redirect.
+    Dev (DEBUG) : sert le fichier directement, runserver n'ayant pas de nginx.
+    """
+
+    def get(self, request, media_path):
+        media_root = os.path.abspath(settings.MEDIA_ROOT)
+        full_path = os.path.normpath(os.path.join(media_root, media_path))
+        if not full_path.startswith(media_root + os.sep):
+            raise Http404
+        if not os.path.isfile(full_path):
+            raise Http404
+
+        if settings.DEBUG:
+            return FileResponse(open(full_path, 'rb'))
+
+        response = HttpResponse()
+        response['X-Accel-Redirect'] = f'/protected-media/{media_path}'
+        del response['Content-Type']  # laisser nginx déterminer le type
+        return response
 
 
 # ─── Import endpoints ──────────────────────────────────────────────────────────
