@@ -1,6 +1,8 @@
+from urllib.parse import urlparse
+
 from rest_framework import serializers
 from .models import (
-    Eleve, ContactParent, DossierSante, DossierAcademique, 
+    Eleve, ContactParent, DossierSante, DossierAcademique,
     DossierMilitaire, Hebergement, DocumentEleve
 )
 
@@ -34,6 +36,18 @@ class DocumentEleveSerializer(serializers.ModelSerializer):
     class Meta:
         model = DocumentEleve
         fields = '__all__'
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        file_fields = [
+            'cin', 'acte_naissance', 'diplome_acces', 'diplome_bac',
+            'photo_identite_militaire', 'photo_identite_civile', 'photo_militaire_integrale',
+        ]
+        for field in file_fields:
+            url = ret.get(field)
+            if url:
+                ret[field] = urlparse(url).path
+        return ret
 
 class EleveSerializer(serializers.ModelSerializer):
     contacts_parents = ContactParentSerializer(read_only=True)

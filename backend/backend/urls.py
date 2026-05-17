@@ -1,10 +1,10 @@
 """Routage HTTP du projet backend."""
 from django.contrib import admin
 from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
+
+from etudiants.views import ProtectedMediaView
 
 
 class PublicSpectacularAPIView(SpectacularAPIView):
@@ -23,7 +23,5 @@ urlpatterns = [
     path('api/', include('etudiants.urls')),
     path('api/schema/', PublicSpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', PublicSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('media/<path:media_path>', ProtectedMediaView.as_view(), name='protected-media'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

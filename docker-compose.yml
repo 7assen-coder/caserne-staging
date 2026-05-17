@@ -16,6 +16,8 @@ services:
       dockerfile: Dockerfile
     # Use Gunicorn WSGI server for production instead of Django's runserver
     command: "gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3"
+    volumes:
+      - media_data:/code/media
     ports:
       - "8000:8080"
     environment:
@@ -35,6 +37,8 @@ services:
     build:
       context: ./ScolariteMilitaireFront
       dockerfile: Dockerfile
+    volumes:
+      - media_data:/usr/share/nginx/media:ro
     ports:
       - "9081:80"
     depends_on:
@@ -42,4 +46,5 @@ services:
 
 volumes:
   pg_data:
+  media_data:
 

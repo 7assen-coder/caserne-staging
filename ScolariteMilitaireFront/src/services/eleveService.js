@@ -406,7 +406,6 @@ export const eleveService = {
   createDocuments(eleveId, values) {
     const fd = new FormData();
     const docs = values.pieces || {};
-    if (docs.cin instanceof File) fd.append('cin', docs.cin);
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
@@ -421,7 +420,6 @@ export const eleveService = {
   updateDocuments(id, eleveId, values) {
     const fd = new FormData();
     const docs = values.pieces || {};
-    if (docs.cin instanceof File) fd.append('cin', docs.cin);
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
