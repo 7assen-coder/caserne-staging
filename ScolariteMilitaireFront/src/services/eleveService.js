@@ -509,22 +509,37 @@ export const eleveService = {
     const related = [];
     if (merged.dossierAcademiqueId) {
       related.push(eleveService.updateDossierAcademique(merged.dossierAcademiqueId, nid, merged));
+    } else {
+      related.push(eleveService.createDossierAcademique(nid, merged));
     }
     if (merged.dossierSanteId) {
       related.push(eleveService.updateDossierSante(merged.dossierSanteId, nid, merged));
+    } else {
+      related.push(eleveService.createDossierSante(nid, merged));
     }
     if (merged.dossierMilitaireId) {
       related.push(eleveService.updateDossierMilitaire(merged.dossierMilitaireId, nid, merged));
+    } else {
+      related.push(eleveService.createDossierMilitaire(nid, merged));
     }
     if (merged.contactsParentsId) {
       related.push(eleveService.updateContactsParents(merged.contactsParentsId, nid, merged));
+    } else {
+      related.push(eleveService.createContactsParents(nid, merged));
     }
     if (merged.hebergementId) {
       related.push(eleveService.updateHebergement(merged.hebergementId, nid, merged));
+    } else {
+      related.push(eleveService.createHebergement(nid, merged));
     }
     const docs = merged.pieces || {};
-    if (merged.documentsId && Object.values(docs).some((v) => v instanceof File)) {
-      related.push(eleveService.updateDocuments(merged.documentsId, nid, merged));
+    const hasNewFiles = Object.values(docs).some((v) => v instanceof File);
+    if (hasNewFiles) {
+      if (merged.documentsId) {
+        related.push(eleveService.updateDocuments(merged.documentsId, nid, merged));
+      } else {
+        related.push(eleveService.createDocuments(nid, merged));
+      }
     }
 
     const settled = await Promise.allSettled(related);

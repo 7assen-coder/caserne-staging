@@ -105,7 +105,70 @@ export default function ListeEleves() {
     ...SECTIONS_OPTIONS.filter((o) => o.value),
   ];
 
-  const columns = useMemo(() => buildDataTableColumns(visibleIds), [visibleIds]);
+  const baseColumns = useMemo(() => buildDataTableColumns(visibleIds), [visibleIds]);
+
+  const columns = useMemo(() => {
+    const actionsCol = {
+      key: '_actions',
+      label: '',
+      sortable: false,
+      width: '80px',
+      render: (row) => {
+        if (row.id !== selectedEleveId) return null;
+        return (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              title="Voir le détail"
+              aria-label="Voir le détail"
+              className="rounded-md p-1.5 text-sky-600 hover:bg-sky-100 transition"
+              onClick={async () => {
+                setFicheEleve({ id: row.id });
+                setFicheLoading(true);
+                try {
+                  const fullEleve = await eleveService.get(row.id);
+                  setFicheEleveData(fullEleve);
+                } finally {
+                  setFicheLoading(false);
+                }
+              }}
+            >
+              <Eye size={15} />
+            </button>
+            {perms.canEditStudent && (
+              <button
+                type="button"
+                title="Modifier"
+                aria-label="Modifier"
+                className="rounded-md p-1.5 text-amber-600 hover:bg-amber-100 transition"
+                onClick={() => setEditing(row)}
+              >
+                <Pencil size={15} />
+              </button>
+            )}
+            {perms.canDeleteStudent && (
+              <button
+                type="button"
+                title="Supprimer"
+                aria-label="Supprimer"
+                className="rounded-md p-1.5 text-red-600 hover:bg-red-100 transition"
+                onClick={async () => {
+                  const ok = window.confirm(`Supprimer ${row.prenom} ${row.nom} ?`);
+                  if (!ok) return;
+                  await eleveService.delete(row.id);
+                  setSelectedEleveId(null);
+                  setKey((k) => k + 1);
+                }}
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
+        );
+      },
+    };
+    return [...baseColumns, actionsCol];
+  }, [baseColumns, selectedEleveId, perms]);
 
   if (ficheEleve?.id) {
     return (
@@ -367,7 +430,8 @@ export default function ListeEleves() {
         columns={columns}
         rows={filteredRows}
         pageSize={12}
-        onRowClick={(row) => setSelectedEleveId(row.id)}
+        selectedId={selectedEleveId}
+        onRowClick={(row) => setSelectedEleveId((prev) => prev === row.id ? null : row.id)}
       />
     </Card>
 
