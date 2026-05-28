@@ -283,82 +283,28 @@ function toElevePayload(values) {
 
 function hasDossierAcademiqueData(v) {
   const s = v.scolarite || {};
-  return !!(
-    s.departement ||
-    s.filiere ||
-    s.niveau ||
-    s.semestreActuel ||
-    s.parcours ||
-    s.diplomeAcces ||
-    v.mobilite?.type ||
-    v.mobilite?.specialite ||
-    v.statut
-  );
+  return !!((s.departement || s.filiere) && s.niveau);
 }
 
 function hasDossierSanteData(v) {
   const s = v.sante || {};
-  return !!(
-    s.groupeSanguin ||
-    s.assureur ||
-    s.numeroAssure ||
-    s.antecedents ||
-    s.maladiesChroniques ||
-    s.medicaments ||
-    s.poids ||
-    s.tailleCm
-  );
+  return !!s.groupeSanguin;
 }
 
 function hasDossierMilitaireData(v) {
   const dm = v.dossierMilitaire || {};
-  return !!(
-    dm.compagnie ||
-    dm.section ||
-    dm.sportPratique ||
-    dm.tourPoitrine ||
-    dm.tourCeinture ||
-    dm.tourTaille ||
-    dm.tourBassin ||
-    dm.tourCou ||
-    dm.longueurManche ||
-    dm.longueurDos ||
-    dm.longueurCote ||
-    (dm.pointure != null && dm.pointure !== '')
-  );
+  return !!(dm.section && dm.sportPratique);
 }
 
 function hasContactsParentsData(v) {
   const p = v.parents || {};
   const c = v.contact || {};
-  return !!(
-    p.prenomPere ||
-    p.fonctionPere ||
-    p.prenomMere ||
-    p.nomMere ||
-    p.fonctionMere ||
-    c.telPere ||
-    c.telPereWhatsapp ||
-    c.telMere ||
-    c.telMereWhatsapp ||
-    c.nomUrgence ||
-    c.telUrgence ||
-    c.telUrgenceWhatsapp
-  );
+  return !!(p.prenomPere && c.telUrgence);
 }
 
 function hasHebergementData(v) {
   const h = v.hebergement || {};
-  return !!(
-    h.batiment ||
-    h.etage ||
-    h.aile ||
-    h.chambre ||
-    h.lit ||
-    h.responsableChambre ||
-    h.responsableAile ||
-    h.responsableEtage
-  );
+  return !!(h.etage && h.aile && h.chambre && h.lit);
 }
 
 function dossierAcademiquePayload(values, eleveId) {
