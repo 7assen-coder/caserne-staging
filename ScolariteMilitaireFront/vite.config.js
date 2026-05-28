@@ -13,11 +13,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.BACKEND_PROXY ?? 'http://localhost:8000',
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://localhost:8000',
+        target: process.env.BACKEND_PROXY ?? 'http://localhost:8000',
         changeOrigin: true,
       },
     },

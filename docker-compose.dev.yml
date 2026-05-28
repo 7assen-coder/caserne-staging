@@ -33,7 +33,9 @@ services:
       context: ./ScolariteMilitaireFront
       dockerfile: Dockerfile.dev
     ports:
-      - "5173:5173"
+      - "9081:9081"
+    environment:
+      - BACKEND_PROXY=http://backend:8080
     volumes:
       - ./ScolariteMilitaireFront:/app:z
       - /app/node_modules

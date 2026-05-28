@@ -10,6 +10,7 @@ export default function DataTable({
   onRowClick,
   mobileCardRender,
   selection,
+  selectedId,
 }) {
   const [sort, setSort] = useState({ key: null, dir: 'asc' });
   const [page, setPage] = useState(0);
@@ -103,11 +104,13 @@ export default function DataTable({
             {pageRows.map((row) => {
               const id = row[rowKey];
               const checked = sel.includes(id);
+              const isSelected = selectedId != null && id === selectedId;
               return (
               <tr
                 key={id}
                 onClick={() => onRowClick?.(row)}
-                className={onRowClick ? 'cursor-pointer' : ''}
+                aria-selected={isSelected || undefined}
+                className={`${onRowClick ? 'cursor-pointer' : ''} ${isSelected ? 'bg-emerald-50 ring-1 ring-inset ring-emerald-300' : ''}`}
               >
                 {selection && (
                   <td
@@ -143,18 +146,19 @@ export default function DataTable({
         {pageRows.map((row) => {
           const id = row[rowKey];
           const checked = sel.includes(id);
+          const isSelected = selectedId != null && id === selectedId;
           return mobileCardRender ? (
             <div
               key={id}
               onClick={() => onRowClick?.(row)}
-              className={`data-card ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''}`}
+              className={`data-card ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''} ${isSelected ? 'ring-2 ring-emerald-300 bg-emerald-50' : ''}`}
             >
               {mobileCardRender(row)}
             </div>
           ) : (
             <div
               key={id}
-              className={`data-card relative ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''}`}
+              className={`data-card relative ${onRowClick ? 'cursor-pointer active:bg-slate-100' : ''} ${isSelected ? 'ring-2 ring-emerald-300 bg-emerald-50' : ''}`}
               onClick={() => onRowClick?.(row)}
             >
               {selection && (
