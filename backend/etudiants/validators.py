@@ -2,7 +2,7 @@
 
 from django.core.exceptions import ValidationError
 
-MAX_PDF_SIZE = 5 * 1024 * 1024  # 5 Mo
+MAX_DOCUMENT_SIZE = 1 * 1024 * 1024  # 1 Mo
 MAX_IMAGE_DIMENSION = 500  # px
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'webp'}
 
@@ -13,7 +13,7 @@ def _extension(f):
 
 
 def validate_image_resolution(f):
-    """Refuse une image dont la largeur ou la hauteur dépasse 500 px."""
+    """Photo d'identité : image dont la largeur et la hauteur sont ≤ 500 px."""
     from PIL import Image
 
     try:
@@ -33,17 +33,14 @@ def validate_image_resolution(f):
 
 
 def validate_document_file(f):
-    """Pièce PDF ou image : PDF ≤ 5 Mo, image ≤ 500×500 px."""
+    """Pièce justificative PDF ou image : taille ≤ 1 Mo."""
     ext = _extension(f)
     if ext not in ALLOWED_EXTENSIONS:
         raise ValidationError(
             f"Extension non autorisée : .{ext or '?'} "
             f"(autorisées : {', '.join(sorted(ALLOWED_EXTENSIONS))})."
         )
-    if ext == 'pdf':
-        if f.size > MAX_PDF_SIZE:
-            raise ValidationError(
-                f"PDF trop volumineux : {f.size / 1024 / 1024:.1f} Mo (maximum 5 Mo)."
-            )
-    else:
-        validate_image_resolution(f)
+    if f.size > MAX_DOCUMENT_SIZE:
+        raise ValidationError(
+            f"Fichier trop volumineux : {f.size / 1024 / 1024:.1f} Mo (maximum 1 Mo)."
+        )

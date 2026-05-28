@@ -105,7 +105,10 @@ function adaptEleveFromApi(item) {
     facebook: item.facebook ?? '',
     linkedin: item.linkedin ?? '',
     filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
-    photoUrl: item.documents?.photo_identite_militaire ?? '',
+    photoUrl:
+      item.documents?.photo_identite_militaire ||
+      item.documents?.photo_identite_civile ||
+      '',
     scolarite: {
       departement: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
       filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),

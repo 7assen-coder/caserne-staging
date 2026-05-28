@@ -676,6 +676,41 @@ export default function FormulaireEleve({
                   inputMode="email"
                   autoComplete="email"
                 />
+                <Field
+                  label="N° tél. 2 WhatsApp"
+                  value={values.contact.tel2}
+                  onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
+                  error={fieldErrors['contact.tel2']}
+                  inputMode="numeric"
+                  maxLength={8}
+                  onKeyDown={blockNonDigitKey}
+                />
+                <Field
+                  label="Adresse secondaire"
+                  value={values.contact.adresseSecondaire}
+                  onChange={(v) => update('contact.adresseSecondaire', v)}
+                />
+                <SelectField
+                  label="Voie d’accès"
+                  value={values.scolarite.voieAcces}
+                  onChange={(v) => update('scolarite.voieAcces', v)}
+                  options={VOIES_ACCES_OPTIONS}
+                  required
+                  error={fieldErrors['scolarite.voieAcces']}
+                />
+                <SelectField
+                  label="Diplôme d’accès"
+                  value={values.scolarite.diplomeAcces}
+                  onChange={(v) => update('scolarite.diplomeAcces', v)}
+                  options={DIPLOMES_ACCES_OPTIONS}
+                  required
+                  error={fieldErrors['scolarite.diplomeAcces']}
+                />
+                <Field
+                  label="Établissement (diplôme d’accès)"
+                  value={values.scolarite.etablissementPremierCycle}
+                  onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
+                />
               </div>
             </FormPanel>
           </>
@@ -719,27 +754,6 @@ export default function FormulaireEleve({
                 options={STATUT_ETUDIANT_OPTIONS}
                 required
                 error={fieldErrors.statut}
-              />
-              <SelectField
-                label="Voie d’accès"
-                value={values.scolarite.voieAcces}
-                onChange={(v) => update('scolarite.voieAcces', v)}
-                options={VOIES_ACCES_OPTIONS}
-                required
-                error={fieldErrors['scolarite.voieAcces']}
-              />
-              <SelectField
-                label="Diplôme d’accès"
-                value={values.scolarite.diplomeAcces}
-                onChange={(v) => update('scolarite.diplomeAcces', v)}
-                options={DIPLOMES_ACCES_OPTIONS}
-                required
-                error={fieldErrors['scolarite.diplomeAcces']}
-              />
-              <Field
-                label="Établissement (diplôme d’accès)"
-                value={values.scolarite.etablissementPremierCycle}
-                onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
               />
             </div>
           </FormPanel>
@@ -805,50 +819,54 @@ export default function FormulaireEleve({
               <div className="sm:col-span-2">
                 <CloudUploadZone
                   label="Photo d’identité (portrait du candidat)"
-                  hint="Fond neutre, visage visible"
+                  hint="Image ≤ 500×500 px"
                   value={values.pieces.photoIdentite}
                   onChange={(f) => update('pieces.photoIdentite', f)}
                   accept="image/jpeg,image/png,image/webp,image/*"
+                  kind="photo"
                 />
               </div>
               <CloudUploadZone
                 label="Acte de naissance"
-                hint="Document officiel"
+                hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.acteNaissance}
                 onChange={(f) => update('pieces.acteNaissance', f)}
               />
               <CloudUploadZone
                 label="Diplôme d'accès"
-                hint="Fichier justificatif"
+                hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.diplomeAcces}
                 onChange={(f) => update('pieces.diplomeAcces', f)}
               />
               <CloudUploadZone
                 label="Diplôme du Bac"
-                hint="Copie du diplôme"
+                hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.diplomeBac}
                 onChange={(f) => update('pieces.diplomeBac', f)}
               />
               <CloudUploadZone
                 label="Photo d'identité militaire"
-                hint="Photo format identité"
+                hint="Image ≤ 500×500 px"
                 value={values.pieces.photoIdentiteMilitaire}
                 onChange={(f) => update('pieces.photoIdentiteMilitaire', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
+                kind="photo"
               />
               <CloudUploadZone
                 label="Photo d'identité civile"
-                hint="Photo format identité"
+                hint="Image ≤ 500×500 px"
                 value={values.pieces.photoIdentiteCivile}
                 onChange={(f) => update('pieces.photoIdentiteCivile', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
+                kind="photo"
               />
               <CloudUploadZone
                 label="Photo militaire intégrale"
-                hint="Photo complète"
+                hint="Image ≤ 500×500 px"
                 value={values.pieces.photoMilitaireIntegrale}
                 onChange={(f) => update('pieces.photoMilitaireIntegrale', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
+                kind="photo"
               />
             </div>
           </FormPanel>
@@ -897,56 +915,6 @@ export default function FormulaireEleve({
                 value={values.parents.fonctionMere}
                 onChange={(v) => update('parents.fonctionMere', v)}
               />
-            </div>
-
-            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Étudiant — téléphones & e-mail institutionnel
-            </h5>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field
-                label="N° tél. 1 (appels)"
-                value={values.contact.telephone}
-                onChange={(v) => update('contact.telephone', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telephone']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-                placeholder="31234567"
-              />
-              <Field
-                label="N° tél. 2 WhatsApp (étudiant)"
-                value={values.contact.tel2}
-                onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.tel2']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-              <label className="block min-w-0 md:col-span-1">
-                <span className="label">E-mail institutionnel (@esp.mr)</span>
-                <div className="input flex min-h-[44px] cursor-not-allowed items-center bg-slate-100 text-slate-700 sm:min-h-[2.5rem]">
-                  {formatEmailInstitutionnel(values.matricule) || '— (renseignez le matricule à l’étape 1)'}
-                </div>
-                <span className="mt-1 block text-[11px] leading-snug text-text-light">
-                  Généré automatiquement à partir du matricule ; non modifiable.
-                </span>
-              </label>
-            </div>
-
-            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Adresses</h5>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field
-                label="Adresse (résidence principale)"
-                value={values.contact.adresse}
-                onChange={(v) => update('contact.adresse', v)}
-              />
-              <div className="md:col-span-2">
-                <Field
-                  label="Adresse secondaire"
-                  value={values.contact.adresseSecondaire}
-                  onChange={(v) => update('contact.adresseSecondaire', v)}
-                />
-              </div>
             </div>
 
             <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">

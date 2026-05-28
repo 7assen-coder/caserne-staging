@@ -1,5 +1,5 @@
-export const MAX_PDF_SIZE = 5 * 1024 * 1024;
-export const MAX_IMAGE_DIMENSION = 500;
+export const MAX_PHOTO_DIMENSION = 500;
+export const MAX_DOCUMENT_SIZE = 1 * 1024 * 1024;
 
 async function readHeader(file, byteCount) {
   const slice = file.slice(0, byteCount);
@@ -46,36 +46,39 @@ function readImageDimensions(file) {
   });
 }
 
-export async function validateUploadFile(file) {
+export async function validateUploadFile(file, kind = 'document') {
   if (!(file instanceof File)) return { ok: false, message: 'Fichier invalide.' };
 
-  const kind = await detectFileType(file);
-  if (kind == null) {
+  const detected = await detectFileType(file);
+  if (detected == null) {
     return {
       ok: false,
       message: 'Format non autorisé. Seuls les fichiers PDF, JPG, PNG et WebP sont acceptés.',
     };
   }
 
-  if (kind === 'pdf') {
-    if (file.size > MAX_PDF_SIZE) {
-      const mb = (file.size / 1024 / 1024).toFixed(1);
-      return { ok: false, message: `PDF trop volumineux : ${mb} Mo (maximum 5 Mo).` };
+  if (kind === 'photo') {
+    if (detected === 'pdf') {
+      return { ok: false, message: 'Une photo d’identité doit être une image (JPG, PNG ou WebP).' };
     }
-    return { ok: true, kind };
+    try {
+      const { width, height } = await readImageDimensions(file);
+      if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
+        return {
+          ok: false,
+          message: `Résolution trop grande : ${width}×${height} px (maximum ${MAX_PHOTO_DIMENSION}×${MAX_PHOTO_DIMENSION} px).`,
+        };
+      }
+    } catch (err) {
+      return { ok: false, message: err.message || 'Image illisible.' };
+    }
+    return { ok: true, kind: detected };
   }
 
-  try {
-    const { width, height } = await readImageDimensions(file);
-    if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
-      return {
-        ok: false,
-        message: `Résolution trop grande : ${width}×${height} px (maximum ${MAX_IMAGE_DIMENSION}×${MAX_IMAGE_DIMENSION} px).`,
-      };
-    }
-  } catch (err) {
-    return { ok: false, message: err.message || 'Image illisible.' };
+  if (file.size > MAX_DOCUMENT_SIZE) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    return { ok: false, message: `Fichier trop volumineux : ${mb} Mo (maximum 1 Mo).` };
   }
 
-  return { ok: true, kind };
+  return { ok: true, kind: detected };
 }
