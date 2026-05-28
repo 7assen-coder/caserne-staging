@@ -281,6 +281,86 @@ function toElevePayload(values) {
   };
 }
 
+function hasDossierAcademiqueData(v) {
+  const s = v.scolarite || {};
+  return !!(
+    s.departement ||
+    s.filiere ||
+    s.niveau ||
+    s.semestreActuel ||
+    s.parcours ||
+    s.diplomeAcces ||
+    v.mobilite?.type ||
+    v.mobilite?.specialite ||
+    v.statut
+  );
+}
+
+function hasDossierSanteData(v) {
+  const s = v.sante || {};
+  return !!(
+    s.groupeSanguin ||
+    s.assureur ||
+    s.numeroAssure ||
+    s.antecedents ||
+    s.maladiesChroniques ||
+    s.medicaments ||
+    s.poids ||
+    s.tailleCm
+  );
+}
+
+function hasDossierMilitaireData(v) {
+  const dm = v.dossierMilitaire || {};
+  return !!(
+    dm.compagnie ||
+    dm.section ||
+    dm.sportPratique ||
+    dm.tourPoitrine ||
+    dm.tourCeinture ||
+    dm.tourTaille ||
+    dm.tourBassin ||
+    dm.tourCou ||
+    dm.longueurManche ||
+    dm.longueurDos ||
+    dm.longueurCote ||
+    (dm.pointure != null && dm.pointure !== '')
+  );
+}
+
+function hasContactsParentsData(v) {
+  const p = v.parents || {};
+  const c = v.contact || {};
+  return !!(
+    p.prenomPere ||
+    p.fonctionPere ||
+    p.prenomMere ||
+    p.nomMere ||
+    p.fonctionMere ||
+    c.telPere ||
+    c.telPereWhatsapp ||
+    c.telMere ||
+    c.telMereWhatsapp ||
+    c.nomUrgence ||
+    c.telUrgence ||
+    c.telUrgenceWhatsapp
+  );
+}
+
+function hasHebergementData(v) {
+  const h = v.hebergement || {};
+  return !!(
+    h.batiment ||
+    h.etage ||
+    h.aile ||
+    h.chambre ||
+    h.lit ||
+    h.responsableChambre ||
+    h.responsableAile ||
+    h.responsableEtage
+  );
+}
+
 function dossierAcademiquePayload(values, eleveId) {
   const mobilite = values.mobilite || {};
   const deptRaw = values.scolarite?.departement || values.scolarite?.filiere || '';
@@ -509,27 +589,27 @@ export const eleveService = {
     const related = [];
     if (merged.dossierAcademiqueId) {
       related.push(eleveService.updateDossierAcademique(merged.dossierAcademiqueId, nid, merged));
-    } else {
+    } else if (hasDossierAcademiqueData(merged)) {
       related.push(eleveService.createDossierAcademique(nid, merged));
     }
     if (merged.dossierSanteId) {
       related.push(eleveService.updateDossierSante(merged.dossierSanteId, nid, merged));
-    } else {
+    } else if (hasDossierSanteData(merged)) {
       related.push(eleveService.createDossierSante(nid, merged));
     }
     if (merged.dossierMilitaireId) {
       related.push(eleveService.updateDossierMilitaire(merged.dossierMilitaireId, nid, merged));
-    } else {
+    } else if (hasDossierMilitaireData(merged)) {
       related.push(eleveService.createDossierMilitaire(nid, merged));
     }
     if (merged.contactsParentsId) {
       related.push(eleveService.updateContactsParents(merged.contactsParentsId, nid, merged));
-    } else {
+    } else if (hasContactsParentsData(merged)) {
       related.push(eleveService.createContactsParents(nid, merged));
     }
     if (merged.hebergementId) {
       related.push(eleveService.updateHebergement(merged.hebergementId, nid, merged));
-    } else {
+    } else if (hasHebergementData(merged)) {
       related.push(eleveService.createHebergement(nid, merged));
     }
     const docs = merged.pieces || {};
