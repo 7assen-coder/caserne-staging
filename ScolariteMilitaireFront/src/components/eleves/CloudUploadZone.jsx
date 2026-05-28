@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { CloudUpload, FileCheck, Upload, X } from 'lucide-react';
+import { validateUploadFile } from '../../utils/fileValidation';
 
 export default function CloudUploadZone({
   label,
@@ -11,8 +12,22 @@ export default function CloudUploadZone({
 }) {
   const ref = useRef(null);
   const [drag, setDrag] = useState(false);
+  const [error, setError] = useState('');
 
-  const pick = (file) => onChange(file ?? null);
+  const pick = async (file) => {
+    setError('');
+    if (!file) {
+      onChange(null);
+      return;
+    }
+    const result = await validateUploadFile(file);
+    if (!result.ok) {
+      setError(result.message);
+      if (ref.current) ref.current.value = '';
+      return;
+    }
+    onChange(file);
+  };
 
   return (
     <div className={`relative ${className}`}>
@@ -100,6 +115,11 @@ export default function CloudUploadZone({
           </>
         )}
       </div>
+      {error ? (
+        <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
