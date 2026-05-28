@@ -9,6 +9,7 @@ export default function CloudUploadZone({
   onChange,
   accept = '.pdf,image/*,application/pdf',
   className = '',
+  kind = 'document',
 }) {
   const ref = useRef(null);
   const [drag, setDrag] = useState(false);
@@ -20,7 +21,7 @@ export default function CloudUploadZone({
       onChange(null);
       return;
     }
-    const result = await validateUploadFile(file);
+    const result = await validateUploadFile(file, kind);
     if (!result.ok) {
       setError(result.message);
       if (ref.current) ref.current.value = '';

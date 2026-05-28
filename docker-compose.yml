@@ -21,7 +21,7 @@ services:
     ports:
       - "8000:8080"
     environment:
-      - DEBUG=False
+      - DEBUG=True # for now until https and domain name
       # Optional: set a strong secret key for production here
       # - SECRET_KEY=your-production-secret-key-here
       - ALLOWED_HOSTS=187.127.228.192,localhost,127.0.0.1,backend

@@ -159,6 +159,18 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
   if (!ep) errors['contact.emailPerso'] = reqMsg("L'e-mail personnel");
   else if (!simpleEmailOk(ep)) errors['contact.emailPerso'] = 'Format e-mail invalide.';
 
+  if (!String(values.scolarite?.voieAcces ?? '').trim()) {
+    errors['scolarite.voieAcces'] = reqMsg("La voie d'accès");
+  }
+  if (!String(values.scolarite?.diplomeAcces ?? '').trim()) {
+    errors['scolarite.diplomeAcces'] = reqMsg('Le diplôme d’accès');
+  }
+
+  const t2 = String(values.contact?.tel2 ?? '').trim();
+  if (t2 && !optionalMrPhone(t2)) {
+    errors['contact.tel2'] = '8 chiffres, commence par 2, 3 ou 4.';
+  }
+
   if (mode === 'standard' || mode === 'mobilite') {
     return errors;
   }
@@ -173,10 +185,6 @@ function validateScolarite(values, errors, { mode = 'standard' } = {}) {
   if (!statut) errors.statut = reqMsg('Le statut');
   else if (!STATUT_ETUDIANT_VALUES.includes(statut)) errors.statut = 'Statut invalide.';
 
-  if (!String(values.scolarite?.voieAcces ?? '').trim()) errors['scolarite.voieAcces'] = reqMsg("La voie d'accès");
-  if (!String(values.scolarite?.diplomeAcces ?? '').trim()) {
-    errors['scolarite.diplomeAcces'] = reqMsg('Le diplôme d’accès');
-  }
   if (mode === 'mobilite') {
     if (!String(values.mobilite?.type ?? '').trim()) errors['mobilite.type'] = reqMsg('Le type de mobilité');
     if (!String(values.mobilite?.etablissement ?? '').trim()) {
