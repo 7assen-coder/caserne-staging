@@ -1,16 +1,85 @@
 import { api } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
+import { eleves as mockElevesRaw } from '../data/mockData';
 import { todayIso } from '../utils/anneeUniversitaire';
 import { normalizeDepartementForApi } from '../utils/constants';
 import { formatApiError } from '../utils/apiErrors';
+import {
+  findImportedById,
+  loadImportedEleves,
+  removeImportedById,
+} from '../utils/importedElevesStore';
+import {
+  parcoursToStatutAcademique,
+  statutAcademiqueToParcours,
+} from '../utils/eleveScolariteAuto';
+
+function normalizeMockEleve(e) {
+  return {
+    ...e,
+    dossierMilitaire: e.dossierMilitaire ?? {
+      compagnie: e.compagnie ?? '',
+      section: e.section ?? '',
+      sportPratique: e.sport ?? '',
+    },
+  };
+}
+
+function filterEleveRows(rows, filters = {}) {
+  let list = rows;
+  const q = (filters.q ?? '').toLowerCase().trim();
+  if (q) {
+    list = list.filter(
+      (e) =>
+        e.nom?.toLowerCase().includes(q) ||
+        e.prenom?.toLowerCase().includes(q) ||
+        String(e.matricule ?? '').toLowerCase().includes(q),
+    );
+  }
+  if (filters.departement) {
+    list = list.filter((e) => e.scolarite?.filiere === filters.departement);
+  }
+  if (filters.annee) {
+    list = list.filter((e) => e.scolarite?.niveau === filters.annee);
+  }
+  return list;
+}
+
+async function listFromApi(filters) {
+  const { data } = await api.get('/eleves/');
+  let rows = Array.isArray(data) ? data.map(adaptEleveFromApi) : [];
+  return filterEleveRows(rows, filters);
+}
+
+function listFromMock(filters) {
+  return filterEleveRows(mockElevesRaw.map(normalizeMockEleve), filters);
+}
+
+function listFromImported(filters) {
+  return filterEleveRows(loadImportedEleves().map(normalizeMockEleve), filters);
+}
+
+function mergeWithImported(rows, filters) {
+  const imported = listFromImported(filters);
+  const seen = new Set(imported.map((e) => String(e.matricule ?? '').trim().toLowerCase()));
+  const rest = rows.filter((e) => !seen.has(String(e.matricule ?? '').trim().toLowerCase()));
+  return [...imported, ...rest];
+}
+
+function shouldUseMockFallback(err) {
+  if (import.meta.env.VITE_USE_MOCK_ELEVES === 'true') return true;
+  if (!err?.response) return true;
+  return false;
+}
 
 /** Codes API `DossierAcademique.CHOIX_ANNEE` ↔ libellés UI `NIVEAUX_SCOLARITE`. */
 const NIVEAU_API_TO_UI = {
   '3': '3e année',
   '4': '4e année',
-  '4-DD': '5e DD',
+  '4-DD': '4e DD',
   '4-E': '5e E',
   '5-DD': '5e DD',
+  '5': '5e année',
 };
 const NIVEAU_UI_TO_API = Object.fromEntries(
   Object.entries(NIVEAU_API_TO_UI).map(([api, ui]) => [ui, api]),
@@ -30,6 +99,7 @@ function niveauActuelFromApi(code) {
 function niveauActuelToApi(uiLabel) {
   const s = String(uiLabel ?? '').trim();
   if (NIVEAU_UI_TO_API[s]) return NIVEAU_UI_TO_API[s];
+  if (s === '5e année') return '4-E';
   if (['3', '4', '4-DD', '4-E', '5-DD'].includes(s)) return s;
   return '3';
 }
@@ -56,13 +126,6 @@ function splitLieuNaissance(lieu) {
   return { wilaya: '', commune: '' };
 }
 
-function parcoursToStatut(parcours) {
-  const v = String(parcours || '').toLowerCase();
-  if (v.includes('redoubl')) return 'redoublant';
-  if (v.includes('suspend')) return 'suspendu';
-  return 'actif';
-}
-
 function adaptEleveFromApi(item) {
   const lieuParts = splitLieuNaissance(item.lieu_naissance);
   return {
@@ -79,7 +142,7 @@ function adaptEleveFromApi(item) {
     nni: item.nni ?? '',
     numeroBac: item.num_bac ?? '',
     sexe: item.sexe === 'F' ? 'F' : 'M',
-    statut: parcoursToStatut(item.dossier_academique?.parcours),
+    statut: parcoursToStatutAcademique(item.dossier_academique?.parcours),
     dateNaissance: item.date_naissance ?? '',
     lieuNaissance: item.lieu_naissance ?? '',
     wilayaNaissance: lieuParts.wilaya,
@@ -211,15 +274,7 @@ function composeLieuNaissance(values) {
 }
 
 function statutToParcours(statut) {
-  switch (statut) {
-    case 'redoublant':
-      return 'Redoublant';
-    case 'suspendu':
-      return 'Suspendu';
-    case 'actif':
-    default:
-      return 'En cours normal';
-  }
+  return statutAcademiqueToParcours(statut);
 }
 
 /** Positive integer PK or null (never NaN / 0). */
@@ -331,29 +386,32 @@ function dossierAcademiquePayload(values, eleveId) {
 
 export const eleveService = {
   async list(filters = {}) {
-    const { data } = await api.get('/eleves/');
-    let rows = Array.isArray(data) ? data.map(adaptEleveFromApi) : [];
-    const q = (filters.q ?? '').toLowerCase().trim();
-    if (q) {
-      rows = rows.filter(
-        (e) =>
-          e.nom.toLowerCase().includes(q) ||
-          e.prenom.toLowerCase().includes(q) ||
-          String(e.matricule ?? '').toLowerCase().includes(q),
-      );
+    try {
+      const rows = await listFromApi(filters);
+      return mergeWithImported(rows, filters);
+    } catch (err) {
+      if (shouldUseMockFallback(err)) {
+        console.warn('[eleveService] API indisponible — données de démonstration.', err?.message);
+        return mergeWithImported(listFromMock(filters), filters);
+      }
+      throw err;
     }
-    if (filters.departement) {
-      rows = rows.filter((e) => e.scolarite?.filiere === filters.departement);
-    }
-    if (filters.annee) {
-      rows = rows.filter((e) => e.scolarite?.niveau === filters.annee);
-    }
-    return rows;
   },
 
   async get(id) {
-    const { data } = await api.get(`/eleves/${id}/`);
-    return adaptEleveFromApi(data);
+    const imported = findImportedById(id);
+    if (imported) return normalizeMockEleve(imported);
+
+    try {
+      const { data } = await api.get(`/eleves/${id}/`);
+      return adaptEleveFromApi(data);
+    } catch (err) {
+      if (shouldUseMockFallback(err)) {
+        const found = mockElevesRaw.map(normalizeMockEleve).find((e) => String(e.id) === String(id));
+        if (found) return found;
+      }
+      throw err;
+    }
   },
 
   async createEleve(values) {
@@ -436,6 +494,7 @@ export const eleveService = {
     const fd = new FormData();
     const docs = values.pieces || {};
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
+    if (docs.cin instanceof File) fd.append('cin', docs.cin);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
     const civilePhoto =
@@ -450,6 +509,7 @@ export const eleveService = {
     const fd = new FormData();
     const docs = values.pieces || {};
     if (docs.acteNaissance instanceof File) fd.append('acte_naissance', docs.acteNaissance);
+    if (docs.cin instanceof File) fd.append('cin', docs.cin);
     if (docs.diplomeAcces instanceof File) fd.append('diplome_acces', docs.diplomeAcces);
     if (docs.diplomeBac instanceof File) fd.append('diplome_bac', docs.diplomeBac);
     const civilePhoto =
@@ -587,6 +647,10 @@ export const eleveService = {
   },
 
   delete(id) {
+    if (String(id).startsWith('import-') || findImportedById(id)) {
+      removeImportedById(id);
+      return Promise.resolve();
+    }
     return api.delete(`/eleves/${id}/`);
   },
 };

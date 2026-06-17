@@ -3,6 +3,7 @@ import { getAnneeEntiereIrt, anneeDepuisCycle } from '../data/espProgrammeIrt';
 import { getDecisionCode, DECISION_CODE_LABELS } from './gradeDecision';
 import { formatDate } from './formatters';
 import { enrichirModuleAvecReferenceEsp, formationUrl, departementCodeDepuisFiliere } from '../data/espFormationCatalog';
+import { globalToast } from '../context/ToastContext';
 
 const CSS_PRINT = `
   @page { margin: 14mm; }
@@ -139,7 +140,7 @@ export function printAttestationParcoursIrt(eleve) {
 export function printReleveSemestreHtml(eleve, semestreIndex = 0) {
   const releves = eleve.relevesSemestres;
   if (!releves?.length) {
-    window.alert('Aucun relevé de notes disponible pour la démonstration.');
+    globalToast.warning('Aucun relevé de notes disponible pour la démonstration.');
     return;
   }
   const block = releves[Math.min(semestreIndex, releves.length - 1)];

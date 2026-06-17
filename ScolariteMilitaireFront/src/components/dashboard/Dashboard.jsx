@@ -196,8 +196,9 @@ export default function Dashboard() {
   const hour = today.getHours();
   const greeting =
     hour < 5 ? 'Bonne nuit' : hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
-  const userPrenom = user?.prenom || user?.first_name || 'Officier';
+  const userPrenom = user?.prenom || user?.first_name || '';
   const userNom = user?.nom || user?.last_name || '';
+  const displayName = [userPrenom, userNom].filter(Boolean).join(' ');
   const anneeUni = getCurrentAcademicYear();
 
   return (
@@ -238,11 +239,15 @@ export default function Dashboard() {
           </div>
 
           <h1 className="mt-7 max-w-3xl font-sans text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-slate-900 sm:text-[2.125rem] md:text-[2.5rem]">
-            {greeting},{' '}
-            <span className="bg-gradient-to-r from-amber-700 to-amber-500 bg-clip-text font-semibold text-transparent">
-              {userPrenom}
-              {userNom ? ` ${userNom}` : ''}
-            </span>
+            {greeting}
+            {displayName ? (
+              <>
+                ,{' '}
+                <span className="bg-gradient-to-r from-amber-700 to-amber-500 bg-clip-text font-semibold text-transparent">
+                  {displayName}
+                </span>
+              </>
+            ) : null}
           </h1>
         </div>
       </header>
@@ -350,7 +355,7 @@ export default function Dashboard() {
                 <h3 className="font-sans text-base font-semibold text-slate-900">Répartition par filière</h3>
               </div>
               <Link
-                to="/eleves"
+                to="/gestion-eleves"
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 Liste <ChevronRight size={14} />
@@ -391,7 +396,7 @@ export default function Dashboard() {
                 <h3 className="font-sans text-base font-semibold text-slate-900">Dossiers à compléter</h3>
               </div>
               <Link
-                to="/eleves"
+                to="/gestion-eleves"
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
               >
                 Liste <ChevronRight size={14} />
@@ -514,7 +519,7 @@ export default function Dashboard() {
           <header className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
             <h2 className="font-sans text-base font-semibold text-slate-900">Répartition par compagnie</h2>
             <Link
-              to="/eleves"
+              to="/gestion-eleves"
               className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
             >
               Liste <ArrowRight size={14} aria-hidden />

@@ -8,6 +8,7 @@ export const COLONNE_GROUPES = {
   mobilite: 'Mobilité',
   sante: 'Santé',
   hebergement: 'Hébergement',
+  mensurations: 'Mensurations & habillement',
 };
 
 const fmtDate = (iso) => {
@@ -18,6 +19,18 @@ const fmtDate = (iso) => {
 };
 
 const fmtSexe = (s) => (s === 'F' ? 'F' : 'M');
+
+const fmtImc = (e) => {
+  const p = e.sante?.poids;
+  const t = e.sante?.tailleCm;
+  if (e.sante?.imc) return String(e.sante.imc);
+  if (!p || !t) return '';
+  const pv = Number(String(p).replace(',', '.'));
+  const tv = Number(String(t).replace(',', '.'));
+  if (!pv || !tv) return '';
+  const m = tv / 100;
+  return (pv / (m * m)).toFixed(1);
+};
 
 const VOIE_LABELS = {
   1: 'Voie 1 — Interne',
@@ -237,6 +250,104 @@ export const ETUDIANT_COLONNES = [
     },
     accessor: (e) => e.hebergement?.batiment ?? '',
   },
+  {
+    id: 'poids',
+    label: 'Poids (kg)',
+    group: 'mensurations',
+    getValue: (e) => e.sante?.poids ?? '',
+    accessor: (e) => e.sante?.poids ?? '',
+  },
+  {
+    id: 'tailleCm',
+    label: 'Taille (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.sante?.tailleCm ?? '',
+    accessor: (e) => e.sante?.tailleCm ?? '',
+  },
+  {
+    id: 'imc',
+    label: 'IMC',
+    group: 'mensurations',
+    getValue: (e) => fmtImc(e),
+    accessor: (e) => fmtImc(e),
+  },
+  {
+    id: 'tourPoitrine',
+    label: 'Tour poitrine (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.tourPoitrine ?? '',
+    accessor: (e) => e.dossierMilitaire?.tourPoitrine ?? '',
+  },
+  {
+    id: 'tourCeinture',
+    label: 'Tour ceinture (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.tourCeinture ?? '',
+    accessor: (e) => e.dossierMilitaire?.tourCeinture ?? '',
+  },
+  {
+    id: 'tourTaille',
+    label: 'Tour taille (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.tourTaille ?? '',
+    accessor: (e) => e.dossierMilitaire?.tourTaille ?? '',
+  },
+  {
+    id: 'tourBassin',
+    label: 'Tour bassin (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.tourBassin ?? '',
+    accessor: (e) => e.dossierMilitaire?.tourBassin ?? '',
+  },
+  {
+    id: 'tourCou',
+    label: 'Tour cou (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.tourCou ?? '',
+    accessor: (e) => e.dossierMilitaire?.tourCou ?? '',
+  },
+  {
+    id: 'longueurManche',
+    label: 'Longueur manche (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.longueurManche ?? '',
+    accessor: (e) => e.dossierMilitaire?.longueurManche ?? '',
+  },
+  {
+    id: 'longueurDos',
+    label: 'Longueur dos (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.longueurDos ?? '',
+    accessor: (e) => e.dossierMilitaire?.longueurDos ?? '',
+  },
+  {
+    id: 'longueurCote',
+    label: 'Longueur côté (cm)',
+    group: 'mensurations',
+    getValue: (e) => e.dossierMilitaire?.longueurCote ?? '',
+    accessor: (e) => e.dossierMilitaire?.longueurCote ?? '',
+  },
+  {
+    id: 'tailleChemise',
+    label: 'Taille chemise',
+    group: 'mensurations',
+    getValue: (e) => e.habillement?.tailleChemise ?? '',
+    accessor: (e) => e.habillement?.tailleChemise ?? '',
+  },
+  {
+    id: 'taillePantalon',
+    label: 'Taille pantalon',
+    group: 'mensurations',
+    getValue: (e) => e.habillement?.taillePantalon ?? '',
+    accessor: (e) => e.habillement?.taillePantalon ?? '',
+  },
+  {
+    id: 'pointure',
+    label: 'Pointure',
+    group: 'mensurations',
+    getValue: (e) => e.habillement?.pointure ?? e.habillement?.rangers ?? '',
+    accessor: (e) => e.habillement?.pointure ?? e.habillement?.rangers ?? '',
+  },
 ];
 
 export const COLONNES_BY_ID = Object.fromEntries(ETUDIANT_COLONNES.map((c) => [c.id, c]));
@@ -290,4 +401,38 @@ export function buildExportMatrix(eleves, colonneIds) {
     }),
   );
   return { headers, rows, cols };
+}
+
+const MENSURATION_GROUP = 'mensurations';
+
+/** Colonnes exportables hors mensurations (4.20). */
+export function resolveColonnesExportSansMensurations(colonneIds) {
+  return resolveColonnes(colonneIds).filter((c) => c.group !== MENSURATION_GROUP);
+}
+
+/**
+ * Export transposé : libellés en colonne A, un étudiant par colonne (B, C…).
+ * @returns {{ rowLabels: string[], studentHeaders: string[], grid: string[][] }}
+ */
+export function buildTransposedExportMatrix(eleves, colonneIds) {
+  const cols = resolveColonnesExportSansMensurations(colonneIds);
+  if (!cols.length) {
+    return { rowLabels: [], studentHeaders: [], grid: [] };
+  }
+
+  const studentHeaders = eleves.map((e) => {
+    const m = e.matricule ?? '';
+    const n = `${e.nom ?? ''} ${e.prenom ?? ''}`.trim();
+    return n ? `${n} (${m})` : String(m || 'Étudiant');
+  });
+
+  const rowLabels = cols.map((c) => c.label);
+  const grid = cols.map((col) =>
+    eleves.map((e) => {
+      const v = col.getValue(e);
+      return v == null || v === '' ? '' : String(v);
+    }),
+  );
+
+  return { rowLabels, studentHeaders, grid, cols };
 }

@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { Columns3, RotateCcw } from 'lucide-react';
 import { COLONNE_GROUPES, ETUDIANT_COLONNES } from '../../data/etudiantColonnes';
 
+const PANEL_MIN_H = 320;
+const PANEL_MAX_H = 560;
+const PANEL_WIDTH = 360;
+
 function usePanelPosition(open, anchorRef) {
   const [style, setStyle] = useState(null);
 
@@ -10,15 +14,34 @@ function usePanelPosition(open, anchorRef) {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const width = Math.min(352, window.innerWidth - 16);
-    let left = r.right - width;
+    const isNarrow = window.innerWidth < 640;
+    const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
+    let left = isNarrow ? 8 : r.right - width;
     left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+
+    const viewportH = window.innerHeight;
+    const panelCap = Math.min(PANEL_MAX_H, viewportH - 24);
+    const spaceBelow = viewportH - r.bottom - 16;
+    const spaceAbove = r.top - 16;
+
+    let height = Math.min(panelCap, Math.max(PANEL_MIN_H, isNarrow ? viewportH * 0.62 : spaceBelow - 8));
+    let top = r.bottom + 8;
+
+    if (height > spaceBelow - 8 && spaceAbove > spaceBelow) {
+      height = Math.min(panelCap, Math.max(PANEL_MIN_H, spaceAbove - 8));
+      top = Math.max(8, r.top - height - 8);
+    } else if (height > spaceBelow - 8) {
+      height = Math.min(panelCap, Math.max(PANEL_MIN_H, spaceBelow - 8));
+      top = r.bottom + 8;
+    }
+
     setStyle({
       position: 'fixed',
-      top: r.bottom + 8,
+      top,
       left,
       width,
-      maxHeight: Math.min(420, window.innerHeight - r.bottom - 16),
+      height,
+      maxHeight: panelCap,
       zIndex: 9999,
     });
   }, [anchorRef]);
@@ -85,7 +108,7 @@ export default function ColonnesEtudiantsPicker({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
           {grouped.map(({ key, label, cols }) =>
             cols.length > 0 ? (
               <div key={key} className="mb-3 last:mb-0">
@@ -110,7 +133,7 @@ export default function ColonnesEtudiantsPicker({
                             disabled={locked}
                             onChange={() => !locked && onToggle(col.id)}
                           />
-                          <span>{col.label}</span>
+                          <span className="min-w-0 leading-snug">{col.label}</span>
                         </label>
                       </li>
                     );

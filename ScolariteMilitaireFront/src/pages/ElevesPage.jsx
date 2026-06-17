@@ -1,4 +1,5 @@
-import ListeEleves from '../components/eleves/ListeEleves';
+import ModulePlaceholderPage from './ModulePlaceholderPage';
+
 export default function ElevesPage() {
-  return <ListeEleves />;
+  return <ModulePlaceholderPage />;
 }

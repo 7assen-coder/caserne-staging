@@ -162,8 +162,8 @@ export default function MobilitePage() {
           Accueil
         </Link>
         <span className="mx-2">/</span>
-        <Link to="/eleves" className="hover:text-navy">
-          Étudiants
+        <Link to="/gestion-eleves" className="hover:text-navy">
+          Gestion des élèves
         </Link>
         <span className="mx-2">/</span>
         <span className="text-navy font-semibold">Mobilité (DD / Échange)</span>
@@ -171,7 +171,7 @@ export default function MobilitePage() {
 
       <div className="xl:col-span-12">
         <Link
-          to="/eleves"
+          to="/gestion-eleves"
           className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-navy hover:text-navy/80"
         >
           <ArrowLeft size={18} aria-hidden />
@@ -190,7 +190,7 @@ export default function MobilitePage() {
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Link
-            to="/eleves"
+            to="/gestion-eleves"
             className="btn btn-secondary btn-lg w-full justify-center sm:w-auto"
           >
             Retour

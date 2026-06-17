@@ -1,61 +1,104 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AuthContext, DEMO_USERS } from './authStore';
-import { fetchCurrentUser, loginRequest, logoutRequest } from '../services/authService';
-import { api } from '../services/api';
+import {
+  fetchCurrentUser,
+  loginRequest,
+  logoutRequest,
+  refreshAccessToken,
+} from '../services/authService';
+import { updateLocalUserPassword } from '../utils/localUserStore';
+import { clearAccessToken, getAccessToken } from '../utils/authStorage';
+import { isLocalSessionToken } from '../utils/localUserStore';
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 6000;
+
+function withBootstrapTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error('AUTH_BOOTSTRAP_TIMEOUT')), AUTH_BOOTSTRAP_TIMEOUT_MS);
+    }),
+  ]);
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
-      const token =
-        typeof localStorage !== 'undefined' ? localStorage.getItem('esp_token') : null;
+      const token = getAccessToken();
 
       if (!token) {
         if (!cancelled) {
           setUser(null);
+          setMustChangePassword(false);
           setBootstrapped(true);
         }
         return;
       }
 
       try {
-        const me = await fetchCurrentUser();
-        if (!cancelled) setUser(me);
+        await withBootstrapTimeout((async () => {
+          try {
+            const me = await fetchCurrentUser();
+            if (!cancelled) {
+              setUser(me);
+              setMustChangePassword(!!me?.mustChangePassword);
+            }
+          } catch {
+            if (!isLocalSessionToken(token)) {
+              await refreshAccessToken();
+            }
+            const me = await fetchCurrentUser();
+            if (!cancelled) {
+              setUser(me);
+              setMustChangePassword(!!me?.mustChangePassword);
+            }
+          }
+        })());
       } catch {
-        try {
-          const { data } = await api.post('/auth/token/refresh/', {});
-          if (data?.access) localStorage.setItem('esp_token', data.access);
-          const me = await fetchCurrentUser();
-          if (!cancelled) setUser(me);
-        } catch {
-          localStorage.removeItem('esp_token');
-          if (!cancelled) setUser(null);
+        clearAccessToken();
+        if (!cancelled) {
+          setUser(null);
+          setMustChangePassword(false);
         }
       } finally {
         if (!cancelled) setBootstrapped(true);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const login = async ({ channel, email, phone, password, remember_me }) => {
-    const payload =
-      channel === 'email'
-        ? { email: email.trim().toLowerCase(), password, remember_me }
-        : { phone: phone.trim(), password, remember_me };
-    const nextUser = await loginRequest(payload);
+  const login = async ({ email, password, remember_me }) => {
+    const { user: nextUser, mustChangePassword: mustChange } = await loginRequest({
+      email,
+      password,
+      remember_me,
+    });
     setUser(nextUser);
+    setMustChangePassword(!!mustChange);
     return nextUser;
+  };
+
+  const completePasswordChange = async (newPassword) => {
+    if (!user?.email) throw new Error('Session invalide.');
+    const updated = updateLocalUserPassword(user.email, newPassword);
+    setUser(updated);
+    setMustChangePassword(false);
+    return updated;
   };
 
   const logout = async () => {
     await logoutRequest();
     setUser(null);
+    setMustChangePassword(false);
   };
 
   const value = useMemo(
@@ -63,12 +106,14 @@ export function AuthProvider({ children }) {
       user,
       bootstrapped,
       isAuthenticated: !!user,
+      mustChangePassword,
       fonction: user?.fonction,
       login,
       logout,
+      completePasswordChange,
       demoUsers: DEMO_USERS,
     }),
-    [user, bootstrapped],
+    [user, bootstrapped, mustChangePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

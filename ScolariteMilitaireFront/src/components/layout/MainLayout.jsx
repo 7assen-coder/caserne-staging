@@ -8,14 +8,14 @@ export default function MainLayout() {
   const location = useLocation();
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-navy-50/40">
+    <div className="app-shell flex h-screen min-h-0 overflow-hidden bg-navy-50/40">
       <AppNavbar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMobileNavOpen={() => setMobileNavOpen(true)} />
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="app-main-safe min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div
             key={location.pathname}
-            className="page-enter w-full px-4 py-8 md:px-8 lg:px-10 md:py-10 lg:py-12"
+            className="page-enter w-full min-w-0 max-w-full px-4 py-8 md:px-8 lg:px-10 md:py-10 lg:py-12"
           >
             <Outlet />
           </div>

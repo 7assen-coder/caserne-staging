@@ -9,7 +9,7 @@ export default function Header({ onMobileNavOpen }) {
     'relative isolate mx-auto flex w-full max-w-none min-w-0 flex-nowrap items-center gap-x-3 overflow-x-auto px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:thin] md:min-h-[3.5rem] md:gap-x-4 md:px-6 lg:gap-x-5 lg:px-8 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300';
 
   return (
-    <header className="relative w-full min-w-0 border-b border-navy-100 bg-white text-slate-900 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]">
+    <header className="app-header-safe relative w-full min-w-0 border-b border-navy-100 bg-white text-slate-900 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9)]">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 bg-gradient-to-r from-navy-200 via-navy-300 to-navy-500 opacity-95"
         aria-hidden

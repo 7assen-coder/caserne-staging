@@ -22,6 +22,13 @@ export const FONCTION_LABEL = {
   [FONCTIONS.COMMANDEMENT]: 'Superviseur Militaire — Commandement',
 };
 
+/** Options rôle à la création utilisateur (Terrain, Encadrement, Commandement). */
+export const FONCTION_ROLE_OPTIONS = [
+  { value: FONCTIONS.TERRAIN, label: 'Terrain' },
+  { value: FONCTIONS.ENCADREMENT, label: 'Encadrement' },
+  { value: FONCTIONS.COMMANDEMENT, label: 'Commandement' },
+];
+
 export const STATUT_PRESENCE = {
   PRESENT: 'present',
   ABSENT: 'absent',
@@ -65,7 +72,7 @@ export const TYPES_ABSENCE = [
   { value: 'activite', label: 'Activité' },
 ];
 
-export const COMPAGNIES = ['1ʳᵉ Compagnie', '2ᵉ Compagnie'];
+export const COMPAGNIES = ['1re Compagnie', '2e Compagnie'];
 export const SECTIONS = ['Section 1', 'Section 2', 'Section 3', 'Section 4'];
 export const PROMOTIONS = ['Promotion 2022', 'Promotion 2023', 'Promotion 2024', 'Promotion 2025'];
 
@@ -94,7 +101,7 @@ export function normalizeDepartementForApi(raw) {
   return DEPARTEMENTS[0].value;
 }
 
-export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD'];
+export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e année', '4e DD', '5e E', '5e DD'];
 
 /** Valeurs alignées avec `Eleve.CHOIX_VOIE_ACCES` côté Django (`'1'` … `'4'`). */
 export const VOIES_ACCES_ETUDIANT = [

@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, FileText, Upload as UploadIcon } from 'lucide-react';
 import Button from '../common/Button';
 import SelectField from '../common/SelectField';
 import CloudUploadZone from './CloudUploadZone';
-import { DEPARTEMENTS, NIVEAUX_SCOLARITE } from '../../utils/constants';
+import { DEPARTEMENTS } from '../../utils/constants';
 import { formatApiError } from '../../utils/apiErrors';
+import { useConfirm } from '../../context/ConfirmContext';
+import { useToast } from '../../context/ToastContext';
 import {
   SERIE_BAC_OPTIONS,
   validateEleveStep,
@@ -19,35 +21,43 @@ import {
   VOIES_ACCES_OPTIONS,
   DIPLOMES_ACCES_OPTIONS,
   GROUPES_SANGUINS_OPTIONS,
-  STATUT_ETUDIANT_OPTIONS,
-  COMPAGNIES_OPTIONS,
-  SECTIONS_OPTIONS,
-  compagnieAttendueDepuisNiveau,
   PARCOURS_MOBILITE_OPTIONS,
   ROLE_STEPS_VISIBLES,
 } from '../../data/etudiantOptions';
+import {
+  NIVEAUX_FORM_OPTIONS,
+  STATUT_ACADEMIQUE_OPTIONS,
+  applyAutoMilitaire,
+  isNiveauMobiliteEligible,
+  normalizeStatutFormValue,
+  statutAcademiqueToParcours,
+} from '../../utils/eleveScolariteAuto';
 import { PAYS_OPTIONS } from '../../data/pays';
-import { WILAYAS_OPTIONS, getCommuneOptionsForWilaya } from '../../data/wilayasMauritanie';
+import { WILAYAS_OPTIONS, getCommuneOptionsForWilaya, COMMUNE_AUTRE_VALUE } from '../../data/wilayasMauritanie';
 import { computeIMC, classifyIMC, formatIMC } from '../../utils/imc';
 import { getCurrentAcademicYear, getAcademicYearOptions, todayIso, deriveMobiliteAnneeFin } from '../../utils/anneeUniversitaire';
 import { generateFicheTaillesPdf, parseFicheTaillesText } from '../../utils/ficheTaillesPdf';
+import { loadNouvelEtudiantDraft, saveNouvelEtudiantDraft } from '../../utils/nouvelEtudiantPersistence';
 
 const ALL_STEPS = [
   { key: 'etat-civil', label: 'État civil' },
   { key: 'scolarite', label: 'Scolarité' },
-  { key: 'mobilite', label: 'Mobilité', mobiliteOnly: true },
+  { key: 'mobilite', label: 'Mobilité' },
   { key: 'pieces', label: 'Pièces' },
-  { key: 'contacts', label: 'Contacts parents' },
+  { key: 'contacts', label: 'Informations de contact' },
   { key: 'sante', label: 'Santé' },
   { key: 'militaire', label: 'Dossier militaire' },
   { key: 'hebergement', label: 'Hébergement' },
 ];
 
-function buildSteps({ role, mode }) {
+function buildSteps({ role, mode, values, eleve }) {
   const allowed = new Set(ROLE_STEPS_VISIBLES[role] || ROLE_STEPS_VISIBLES.superviseur);
-  if (mode === 'mobilite') allowed.add('mobilite');
+  const showMobilite =
+    mode === 'mobilite'
+    || isNiveauMobiliteEligible(values?.scolarite?.niveau)
+    || Boolean(eleve && (values?.mobilite?.type || values?.mobilite?.etablissement));
   return ALL_STEPS.filter((s) => {
-    if (s.mobiliteOnly) return mode === 'mobilite';
+    if (s.key === 'mobilite') return showMobilite;
     return allowed.has(s.key);
   });
 }
@@ -55,6 +65,9 @@ function buildSteps({ role, mode }) {
 const DEFAULT_FILIERE = DEPARTEMENTS[0].value;
 
 function buildDefaults() {
+  const filiere = DEFAULT_FILIERE;
+  const niveau = '3e année';
+  const autoMil = applyAutoMilitaire(filiere, niveau);
   return {
     matricule: '',
     nom: '',
@@ -65,6 +78,7 @@ function buildDefaults() {
     lieuNaissance: '',
     wilayaNaissance: '',
     communeNaissance: '',
+    communeNaissanceLibre: '',
     nationalite: 'Mauritanie',
     categorieBac: 'National',
     serieBac: '',
@@ -75,12 +89,12 @@ function buildDefaults() {
     residentAvecParents: '',
     compteBankily: '',
     sexe: 'M',
-    statut: 'actif',
-    filiere: DEFAULT_FILIERE,
+    statut: 'normal',
+    filiere,
     scolarite: {
-      departement: DEFAULT_FILIERE,
-      filiere: DEFAULT_FILIERE,
-      niveau: NIVEAUX_SCOLARITE[0],
+      departement: filiere,
+      filiere,
+      niveau,
       anneeUni1ere: getCurrentAcademicYear(),
       voieAcces: '',
       diplomeAcces: '',
@@ -99,6 +113,7 @@ function buildDefaults() {
       acteNaissance: null,
       diplomeAcces: null,
       diplomeBac: null,
+      cin: null,
       photoIdentiteMilitaire: null,
       photoIdentiteCivile: null,
       photoMilitaireIntegrale: null,
@@ -123,8 +138,8 @@ function buildDefaults() {
       imc: '',
     },
     dossierMilitaire: {
-      compagnie: '',
-      section: '',
+      compagnie: autoMil.compagnie,
+      section: autoMil.section,
       sportPratique: '',
       tourPoitrine: '',
       tourCeinture: '',
@@ -224,21 +239,92 @@ export default function FormulaireEleve({
   onStepSubmit,
   role = 'superviseur',
   mode = 'standard',
+  persistKey = '',
 }) {
-  const STEPS = useMemo(() => buildSteps({ role, mode }), [role, mode]);
-  const stepKeys = useMemo(() => STEPS.map((s) => s.key), [STEPS]);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const draftRef = useRef(null);
+  if (!draftRef.current && persistKey && !eleve) {
+    draftRef.current = loadNouvelEtudiantDraft();
+  }
 
   const [values, setValues] = useState(() => {
-    const base = eleve ? deepMerge(buildDefaults(), eleve) : buildDefaults();
+    let base = eleve ? deepMerge(buildDefaults(), eleve) : buildDefaults();
+    if (!eleve && draftRef.current?.values) {
+      base = deepMerge(base, draftRef.current.values);
+    }
     base.pieces = normalizePieces(base.pieces);
+    base.statut = normalizeStatutFormValue(base.statut);
+    base.scolarite = {
+      ...base.scolarite,
+      parcours: statutAcademiqueToParcours(base.statut),
+    };
+    const autoMil = applyAutoMilitaire(base.scolarite?.filiere, base.scolarite?.niveau);
+    base.dossierMilitaire = {
+      ...base.dossierMilitaire,
+      compagnie: base.dossierMilitaire?.compagnie || autoMil.compagnie,
+      section: base.dossierMilitaire?.section || autoMil.section,
+    };
     return base;
   });
+
+  const STEPS = useMemo(
+    () => buildSteps({ role, mode, values, eleve }),
+    [role, mode, values.scolarite?.niveau, values.mobilite?.type, values.mobilite?.etablissement, eleve],
+  );
+  const stepKeys = useMemo(() => STEPS.map((s) => s.key), [STEPS]);
   const [submitting, setSubmitting] = useState(false);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    if (!eleve && draftRef.current?.step != null) return draftRef.current.step;
+    return 0;
+  });
   const [stepError, setStepError] = useState('');
   const [submitErr, setSubmitErr] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [scanInfo, setScanInfo] = useState('');
+  const draftRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (!persistKey || eleve || draftRestoredRef.current) return;
+    if (draftRef.current?.values) {
+      draftRestoredRef.current = true;
+      toast.info('Brouillon du formulaire restauré. Les pièces jointes doivent être téléversées à nouveau.');
+    }
+  }, [persistKey, eleve, toast]);
+
+  useEffect(() => {
+    if (!persistKey || eleve) return;
+    const timer = window.setTimeout(() => {
+      saveNouvelEtudiantDraft({ step, values });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [persistKey, eleve, step, values]);
+
+  useEffect(() => {
+    if (step >= STEPS.length) {
+      setStep(Math.max(0, STEPS.length - 1));
+    }
+  }, [STEPS.length, step]);
+
+  useEffect(() => {
+    setValues((prev) => {
+      const autoMil = applyAutoMilitaire(prev.scolarite?.filiere, prev.scolarite?.niveau);
+      if (
+        autoMil.compagnie === prev.dossierMilitaire?.compagnie
+        && autoMil.section === prev.dossierMilitaire?.section
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        dossierMilitaire: {
+          ...prev.dossierMilitaire,
+          compagnie: autoMil.compagnie,
+          section: autoMil.section,
+        },
+      };
+    });
+  }, [values.scolarite?.filiere, values.scolarite?.niveau]);
 
   const update = (path, v) => {
     setValues((prev) => setPath(prev, path.split('.'), v));
@@ -274,9 +360,19 @@ export default function FormulaireEleve({
   const composedLieuNaissance = useMemo(() => {
     const isMr = (values.nationalite || '').toLowerCase() === 'mauritanie';
     if (!isMr) return values.lieuNaissance || '';
-    const parts = [values.communeNaissance, values.wilayaNaissance].filter(Boolean);
+    const communeLabel =
+      values.communeNaissance === COMMUNE_AUTRE_VALUE
+        ? values.communeNaissanceLibre
+        : values.communeNaissance;
+    const parts = [communeLabel, values.wilayaNaissance].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : values.lieuNaissance || '';
-  }, [values.nationalite, values.wilayaNaissance, values.communeNaissance, values.lieuNaissance]);
+  }, [
+    values.nationalite,
+    values.wilayaNaissance,
+    values.communeNaissance,
+    values.communeNaissanceLibre,
+    values.lieuNaissance,
+  ]);
 
   const augmentMobiliteAnneesFin = (v) => {
     const fin = deriveMobiliteAnneeFin(v.mobilite?.anneeDebut, v.mobilite?.type);
@@ -295,9 +391,22 @@ export default function FormulaireEleve({
     if (!fin.ok) {
       setStep(fin.firstStep);
       setFieldErrors(fin.errors);
-      setSubmitErr(Object.values(fin.errors)[0] || 'Vérifiez les étapes du formulaire.');
+      const msg = Object.values(fin.errors)[0] || 'Vérifiez les étapes du formulaire.';
+      setSubmitErr(msg);
+      toast.warning(msg);
       return;
     }
+
+    if (!eleve) {
+      const ok = await confirm({
+        title: 'Confirmer la création',
+        message: `Créer le dossier de ${values.prenom} ${values.nom} (matricule ${values.matricule}) ?`,
+        confirmLabel: 'Créer l’étudiant',
+        cancelLabel: 'Annuler',
+      });
+      if (!ok) return;
+    }
+
     setSubmitting(true);
     try {
       let finalValues = {
@@ -305,7 +414,9 @@ export default function FormulaireEleve({
         lieuNaissance: composedLieuNaissance || values.lieuNaissance || '',
         sante: { ...values.sante, imc: imcFormatted },
       };
-      if (mode === 'mobilite') finalValues = augmentMobiliteAnneesFin(finalValues);
+      if (isNiveauMobiliteEligible(finalValues.scolarite?.niveau)) {
+        finalValues = augmentMobiliteAnneesFin(finalValues);
+      }
       if (onStepSubmit) {
         await onStepSubmit(stepKeys[step], finalValues, { stepIndex: step, isFinal: true });
       }
@@ -315,8 +426,11 @@ export default function FormulaireEleve({
         contact: { ...finalValues.contact, email: emailSync },
         pieces: finalValues.pieces,
       });
+      toast.success(eleve ? 'Dossier enregistré avec succès.' : 'Étudiant créé avec succès.');
     } catch (err) {
-      setSubmitErr(formatApiError(err));
+      const msg = formatApiError(err);
+      setSubmitErr(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -329,7 +443,9 @@ export default function FormulaireEleve({
     const cur = validateEleveStep(step, values, { stepKeys, mode });
     if (!cur.ok) {
       setFieldErrors(cur.errors);
-      setStepError(Object.values(cur.errors)[0] || 'Vérifiez les champs en rouge.');
+      const msg = Object.values(cur.errors)[0] || 'Vérifiez les champs en rouge.';
+      setStepError(msg);
+      toast.warning(msg);
       return;
     }
     setFieldErrors({});
@@ -339,7 +455,7 @@ export default function FormulaireEleve({
       lieuNaissance: composedLieuNaissance || values.lieuNaissance || '',
       sante: { ...values.sante, imc: imcFormatted },
     };
-    if (mode === 'mobilite' && stepKeys[step] === 'mobilite') {
+    if (isNiveauMobiliteEligible(stepValues.scolarite?.niveau) && stepKeys[step] === 'mobilite') {
       stepValues = augmentMobiliteAnneesFin(stepValues);
     }
     if (onStepSubmit) {
@@ -348,7 +464,9 @@ export default function FormulaireEleve({
         await onStepSubmit(stepKeys[step], stepValues, { stepIndex: step });
         setStep(nextStep);
       } catch (err) {
-        setStepError(formatApiError(err));
+        const msg = formatApiError(err);
+        setStepError(msg);
+        toast.error(msg);
       } finally {
         setSubmitting(false);
       }
@@ -358,7 +476,7 @@ export default function FormulaireEleve({
   };
 
   const filiereOptions = DEPARTEMENTS;
-  const niveauOptions = NIVEAUX_SCOLARITE.map((x) => ({ value: x, label: x }));
+  const niveauOptions = NIVEAUX_FORM_OPTIONS;
   const anneeUniOptions = getAcademicYearOptions();
   const anneeMobiliteOptions = [{ value: '', label: '— Sélectionner —' }, ...anneeUniOptions];
   const isMauritanien = (values.nationalite || '').toLowerCase() === 'mauritanie';
@@ -408,21 +526,26 @@ export default function FormulaireEleve({
     }
   };
 
-  const handleGenerateFiche = () => {
-    generateFicheTaillesPdf({
-      eleve: values,
-      mensurations: values.dossierMilitaire,
-      poids: values.sante?.poids,
-      taille: values.sante?.tailleCm,
-    });
+  const handleGenerateFiche = async () => {
+    try {
+      await generateFicheTaillesPdf({
+        eleve: values,
+        mensurations: values.dossierMilitaire,
+        poids: values.sante?.poids,
+        taille: values.sante?.tailleCm,
+      });
+      toast.success('Fiche mesure téléchargée.');
+    } catch (err) {
+      toast.error(formatApiError(err));
+    }
   };
 
   const stepKey = stepKeys[step];
 
   return (
     <form onSubmit={submit} className="flex min-h-0 flex-col gap-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-5">
-      <div className="-mx-1 overflow-x-auto pb-2 sm:mx-0 sm:overflow-visible sm:pb-0">
-        <div className="relative flex min-w-[min(100%,520px)] shrink-0 items-start justify-between gap-1 border-b border-light-gray pb-4 sm:min-w-0 sm:gap-2">
+      <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
+        <div className="relative flex w-full min-w-0 items-start justify-between gap-1 border-b border-light-gray pb-4 sm:gap-2">
           <div
             className="pointer-events-none absolute left-[10%] right-[10%] top-[15px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:block"
             aria-hidden
@@ -539,11 +662,23 @@ export default function FormulaireEleve({
                     <SelectField
                       label="Commune / moughataa"
                       value={values.communeNaissance}
-                      onChange={(v) => update('communeNaissance', v)}
+                      onChange={(v) => updateMany([
+                        ['communeNaissance', v],
+                        ['communeNaissanceLibre', v === COMMUNE_AUTRE_VALUE ? values.communeNaissanceLibre : ''],
+                      ])}
                       options={communeOptions}
                       required
                       error={fieldErrors.communeNaissance}
                     />
+                    {values.communeNaissance === COMMUNE_AUTRE_VALUE ? (
+                      <Field
+                        label="Autre commune (préciser)"
+                        value={values.communeNaissanceLibre}
+                        onChange={(v) => update('communeNaissanceLibre', v)}
+                        required
+                        error={fieldErrors.communeNaissanceLibre}
+                      />
+                    ) : null}
                   </>
                 ) : (
                   <Field
@@ -602,117 +737,6 @@ export default function FormulaireEleve({
                 <Field label="École du Bac" value={values.ecoleBac} onChange={(v) => update('ecoleBac', v)} required error={fieldErrors.ecoleBac} />
               </div>
             </FormPanel>
-
-            <FormPanel>
-              <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Inscription & coordonnées principales
-              </h4>
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-                <SelectField
-                  label="Année universitaire"
-                  value={values.scolarite.anneeUni1ere}
-                  onChange={(v) => updateMany([
-                    ['scolarite.anneeUni1ere', v],
-                    ['anneePremiereInscription', v],
-                  ])}
-                  options={anneeUniOptions}
-                  required
-                  error={fieldErrors['scolarite.anneeUni1ere']}
-                />
-                <Field
-                  label="Date de saisie"
-                  type="date"
-                  value={values.datePremiereInscription}
-                  onChange={(v) => update('datePremiereInscription', v)}
-                  required
-                  error={fieldErrors.datePremiereInscription}
-                />
-                <Field
-                  label="Adresse primaire"
-                  value={values.contact.adresse}
-                  onChange={(v) => update('contact.adresse', v)}
-                  required
-                  error={fieldErrors['contact.adresse']}
-                />
-                <Field
-                  label="Téléphone principal (tel1)"
-                  value={values.contact.telephone}
-                  onChange={(v) => update('contact.telephone', sanitizeMrPhoneDigits(v))}
-                  required
-                  error={fieldErrors['contact.telephone']}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                  placeholder="31234567"
-                />
-                <SelectField
-                  label="Résident avec les parents"
-                  value={values.residentAvecParents}
-                  onChange={(v) => update('residentAvecParents', v)}
-                  options={[
-                    { value: '', label: '—' },
-                    { value: 'Oui', label: 'Oui' },
-                    { value: 'Non', label: 'Non' },
-                  ]}
-                  required
-                  error={fieldErrors.residentAvecParents}
-                />
-                <Field
-                  label="Compte Bankily"
-                  value={values.compteBankily}
-                  onChange={(v) => update('compteBankily', sanitizeMrPhoneDigits(v))}
-                  error={fieldErrors.compteBankily}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                  placeholder="Optionnel · 8 chiffres"
-                />
-                <Field
-                  label="E-mail personnel"
-                  value={values.contact.emailPerso}
-                  onChange={(v) => update('contact.emailPerso', v)}
-                  required
-                  error={fieldErrors['contact.emailPerso']}
-                  inputMode="email"
-                  autoComplete="email"
-                />
-                <Field
-                  label="N° tél. 2 WhatsApp"
-                  value={values.contact.tel2}
-                  onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
-                  error={fieldErrors['contact.tel2']}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                />
-                <Field
-                  label="Adresse secondaire"
-                  value={values.contact.adresseSecondaire}
-                  onChange={(v) => update('contact.adresseSecondaire', v)}
-                />
-                <SelectField
-                  label="Voie d’accès"
-                  value={values.scolarite.voieAcces}
-                  onChange={(v) => update('scolarite.voieAcces', v)}
-                  options={VOIES_ACCES_OPTIONS}
-                  required
-                  error={fieldErrors['scolarite.voieAcces']}
-                />
-                <SelectField
-                  label="Diplôme d’accès"
-                  value={values.scolarite.diplomeAcces}
-                  onChange={(v) => update('scolarite.diplomeAcces', v)}
-                  options={DIPLOMES_ACCES_OPTIONS}
-                  required
-                  error={fieldErrors['scolarite.diplomeAcces']}
-                />
-                <Field
-                  label="Établissement (diplôme d’accès)"
-                  value={values.scolarite.etablissementPremierCycle}
-                  onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
-                />
-              </div>
-            </FormPanel>
           </>
         )}
 
@@ -737,12 +761,7 @@ export default function FormulaireEleve({
               <SelectField
                 label="Niveau actuel"
                 value={values.scolarite.niveau}
-                onChange={(v) => {
-                  const compagnie = compagnieAttendueDepuisNiveau(v);
-                  const updates = [['scolarite.niveau', v]];
-                  if (compagnie) updates.push(['dossierMilitaire.compagnie', compagnie]);
-                  updateMany(updates);
-                }}
+                onChange={(v) => update('scolarite.niveau', v)}
                 options={niveauOptions}
                 required
                 error={fieldErrors['scolarite.niveau']}
@@ -750,10 +769,63 @@ export default function FormulaireEleve({
               <SelectField
                 label="Statut académique"
                 value={values.statut}
-                onChange={(v) => update('statut', v)}
-                options={STATUT_ETUDIANT_OPTIONS}
+                onChange={(v) => updateMany([
+                  ['statut', v],
+                  ['scolarite.parcours', statutAcademiqueToParcours(v)],
+                ])}
+                options={STATUT_ACADEMIQUE_OPTIONS}
                 required
                 error={fieldErrors.statut}
+              />
+              <SelectField
+                label="Année universitaire de 1ʳᵉ inscription"
+                value={values.scolarite.anneeUni1ere}
+                onChange={(v) => updateMany([
+                  ['scolarite.anneeUni1ere', v],
+                  ['anneePremiereInscription', v],
+                ])}
+                options={anneeUniOptions}
+                required
+                error={fieldErrors['scolarite.anneeUni1ere']}
+              />
+              <Field
+                label="Date de 1ʳᵉ inscription"
+                type="date"
+                value={values.datePremiereInscription}
+                onChange={(v) => update('datePremiereInscription', v)}
+                required
+                error={fieldErrors.datePremiereInscription}
+              />
+              <SelectField
+                label="Voie d’accès"
+                value={values.scolarite.voieAcces}
+                onChange={(v) => update('scolarite.voieAcces', v)}
+                options={VOIES_ACCES_OPTIONS}
+                required
+                error={fieldErrors['scolarite.voieAcces']}
+              />
+              <SelectField
+                label="Diplôme d’accès"
+                value={values.scolarite.diplomeAcces}
+                onChange={(v) => update('scolarite.diplomeAcces', v)}
+                options={DIPLOMES_ACCES_OPTIONS}
+                required
+                error={fieldErrors['scolarite.diplomeAcces']}
+              />
+              <Field
+                label="Établissement (diplôme d’accès)"
+                value={values.scolarite.etablissementPremierCycle}
+                onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
+              />
+              <ReadOnlyField
+                label="Compagnie (automatique)"
+                value={values.dossierMilitaire.compagnie}
+                hint="Déduite du niveau : 3e → 1ʳᵉ, 4e → 2ᵉ, 5e → 3ᵉ"
+              />
+              <ReadOnlyField
+                label="Section (automatique)"
+                value={values.dossierMilitaire.section}
+                hint="Déduite du département et du niveau"
               />
             </div>
           </FormPanel>
@@ -816,35 +888,45 @@ export default function FormulaireEleve({
               <span className="font-semibold text-navy">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <CloudUploadZone
-                  label="Photo d’identité (portrait du candidat)"
-                  hint="Image ≤ 500×500 px"
-                  value={values.pieces.photoIdentite}
-                  onChange={(f) => update('pieces.photoIdentite', f)}
-                  accept="image/jpeg,image/png,image/webp,image/*"
-                  kind="photo"
-                />
-              </div>
               <CloudUploadZone
+                variant="light"
+                label="Photo d’identité (portrait du candidat)"
+                hint="Image ≤ 500×500 px"
+                value={values.pieces.photoIdentite}
+                onChange={(f) => update('pieces.photoIdentite', f)}
+                accept="image/jpeg,image/png,image/webp,image/*"
+                kind="photo"
+              />
+              <CloudUploadZone
+                variant="light"
+                label="CIN (carte d’identité nationale)"
+                hint="PDF ou image ≤ 1 Mo"
+                value={values.pieces.cin}
+                onChange={(f) => update('pieces.cin', f)}
+              />
+              <CloudUploadZone
+                variant="light"
                 label="Acte de naissance"
                 hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.acteNaissance}
                 onChange={(f) => update('pieces.acteNaissance', f)}
               />
               <CloudUploadZone
+                variant="light"
                 label="Diplôme d'accès"
                 hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.diplomeAcces}
                 onChange={(f) => update('pieces.diplomeAcces', f)}
               />
               <CloudUploadZone
+                variant="light"
                 label="Diplôme du Bac"
                 hint="PDF ou image ≤ 1 Mo"
                 value={values.pieces.diplomeBac}
                 onChange={(f) => update('pieces.diplomeBac', f)}
               />
               <CloudUploadZone
+                variant="light"
                 label="Photo d'identité militaire"
                 hint="Image ≤ 500×500 px"
                 value={values.pieces.photoIdentiteMilitaire}
@@ -853,6 +935,7 @@ export default function FormulaireEleve({
                 kind="photo"
               />
               <CloudUploadZone
+                variant="light"
                 label="Photo d'identité civile"
                 hint="Image ≤ 500×500 px"
                 value={values.pieces.photoIdentiteCivile}
@@ -861,6 +944,7 @@ export default function FormulaireEleve({
                 kind="photo"
               />
               <CloudUploadZone
+                variant="light"
                 label="Photo militaire intégrale"
                 hint="Image ≤ 500×500 px"
                 value={values.pieces.photoMilitaireIntegrale}
@@ -873,10 +957,88 @@ export default function FormulaireEleve({
         )}
 
         {stepKey === 'contacts' && (
-          <FormPanel>
-            <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Contacts parents & coordonnées
-            </h4>
+          <>
+            <FormPanel>
+              <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
+                Informations de contact
+              </h4>
+              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+                <Field
+                  label="Adresse primaire"
+                  value={values.contact.adresse}
+                  onChange={(v) => update('contact.adresse', v)}
+                  required
+                  error={fieldErrors['contact.adresse']}
+                />
+                <Field
+                  label="Adresse secondaire"
+                  value={values.contact.adresseSecondaire}
+                  onChange={(v) => update('contact.adresseSecondaire', v)}
+                />
+                <Field
+                  label="Téléphone principal (tel1)"
+                  value={values.contact.telephone}
+                  onChange={(v) => update('contact.telephone', sanitizeMrPhoneDigits(v))}
+                  required
+                  error={fieldErrors['contact.telephone']}
+                  inputMode="numeric"
+                  maxLength={8}
+                  onKeyDown={blockNonDigitKey}
+                  placeholder="31234567"
+                />
+                <Field
+                  label="N° tél. 2 WhatsApp"
+                  value={values.contact.tel2}
+                  onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
+                  error={fieldErrors['contact.tel2']}
+                  inputMode="numeric"
+                  maxLength={8}
+                  onKeyDown={blockNonDigitKey}
+                />
+                <Field
+                  label="E-mail personnel"
+                  value={values.contact.emailPerso}
+                  onChange={(v) => update('contact.emailPerso', v)}
+                  required
+                  error={fieldErrors['contact.emailPerso']}
+                  inputMode="email"
+                  autoComplete="email"
+                />
+                <Field
+                  label="E-mail institutionnel"
+                  value={formatEmailInstitutionnel(values.matricule)}
+                  onChange={() => {}}
+                  disabled
+                />
+                <SelectField
+                  label="Résident avec les parents"
+                  value={values.residentAvecParents}
+                  onChange={(v) => update('residentAvecParents', v)}
+                  options={[
+                    { value: '', label: '—' },
+                    { value: 'Oui', label: 'Oui' },
+                    { value: 'Non', label: 'Non' },
+                  ]}
+                  required
+                  error={fieldErrors.residentAvecParents}
+                />
+                <Field
+                  label="Compte Bankily"
+                  value={values.compteBankily}
+                  onChange={(v) => update('compteBankily', sanitizeMrPhoneDigits(v))}
+                  error={fieldErrors.compteBankily}
+                  inputMode="numeric"
+                  maxLength={8}
+                  onKeyDown={blockNonDigitKey}
+                  placeholder="Optionnel · 8 chiffres"
+                />
+              </div>
+            </FormPanel>
+
+            <FormPanel>
+              <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
+                Contacts parents & personne à prévenir
+              </h4>
 
             <h5 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">Parents</h5>
             <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
@@ -962,11 +1124,11 @@ export default function FormulaireEleve({
                 label="Tél. urgence"
                 value={values.contact.telUrgence}
                 onChange={(v) => update('contact.telUrgence', sanitizeMrPhoneDigits(v))}
-                required
                 error={fieldErrors['contact.telUrgence']}
                 inputMode="numeric"
                 maxLength={8}
                 onKeyDown={blockNonDigitKey}
+                placeholder="Optionnel · 8 chiffres"
               />
               <Field
                 label="WhatsApp urgence"
@@ -978,7 +1140,8 @@ export default function FormulaireEleve({
                 onKeyDown={blockNonDigitKey}
               />
             </div>
-          </FormPanel>
+            </FormPanel>
+          </>
         )}
 
         {stepKey === 'sante' && (
@@ -1033,21 +1196,15 @@ export default function FormulaireEleve({
               Dossier militaire
             </h4>
             <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <SelectField
-                label="Compagnie"
+              <ReadOnlyField
+                label="Compagnie (automatique)"
                 value={values.dossierMilitaire.compagnie}
-                onChange={(v) => update('dossierMilitaire.compagnie', v)}
-                options={COMPAGNIES_OPTIONS}
-                required
-                error={fieldErrors['dossierMilitaire.compagnie']}
+                hint="Déduite du niveau scolaire"
               />
-              <SelectField
-                label="Section"
+              <ReadOnlyField
+                label="Section (automatique)"
                 value={values.dossierMilitaire.section}
-                onChange={(v) => update('dossierMilitaire.section', v)}
-                options={SECTIONS_OPTIONS}
-                required
-                error={fieldErrors['dossierMilitaire.section']}
+                hint="Déduite du département et du niveau"
               />
               <Field label="Sport pratiqué" value={values.dossierMilitaire.sportPratique} onChange={(v) => update('dossierMilitaire.sportPratique', v)} />
             </div>
@@ -1187,7 +1344,7 @@ function ImcDisplay({ imc, klass }) {
           ? 'border-red-300 bg-red-50 text-red-800'
           : 'border-light-gray bg-off-white text-text-light';
   return (
-    <label className="block min-w-0">
+    <label className="form-field-contained">
       <span className="label">IMC (auto)</span>
       <div className={`flex min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 ${tone}`}>
         <span className="font-serif text-lg font-semibold">{value || '—'}</span>
@@ -1237,6 +1394,18 @@ function ScanFicheUpload({ value, onChange }) {
   );
 }
 
+function ReadOnlyField({ label, value, hint }) {
+  return (
+    <label className="form-field-contained">
+      <span className="label">{label}</span>
+      <div className="input min-h-[44px] flex items-center bg-slate-50 text-slate-800 sm:min-h-[2.5rem]">
+        {value || '—'}
+      </div>
+      {hint ? <p className="mt-1 text-xs text-text-light">{hint}</p> : null}
+    </label>
+  );
+}
+
 function Field({
   label,
   value,
@@ -1249,16 +1418,17 @@ function Field({
   onKeyDown,
   placeholder,
   autoComplete,
+  disabled,
 }) {
   return (
-    <label className="block min-w-0">
+    <label className="form-field-contained">
       <span className="label">
         {label}
         {required && <span className="text-brand-red"> *</span>}
       </span>
       <input
         type={type}
-        className={`input min-h-[44px] sm:min-h-[2.5rem] ${error ? 'ring-2 ring-brand-red/40' : ''}`}
+        className={`input min-h-[44px] w-full max-w-full min-w-0 sm:min-h-[2.5rem] ${error ? 'ring-2 ring-brand-red/40' : ''} ${disabled ? 'bg-slate-50 text-slate-600' : ''}`}
         required={required}
         value={value ?? ''}
         inputMode={inputMode}
@@ -1266,6 +1436,8 @@ function Field({
         autoComplete={autoComplete}
         placeholder={placeholder}
         onKeyDown={onKeyDown}
+        disabled={disabled}
+        readOnly={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
       {error ? <p className="mt-1.5 text-sm font-medium leading-snug text-brand-red">{error}</p> : null}

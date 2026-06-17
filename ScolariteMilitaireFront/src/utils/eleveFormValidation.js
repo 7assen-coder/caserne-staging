@@ -4,6 +4,8 @@ import {
   SERIE_BAC_OPTIONS,
   STATUT_ETUDIANT_VALUES,
 } from '../data/etudiantOptions';
+import { COMMUNE_AUTRE_VALUE } from '../data/wilayasMauritanie';
+import { isNiveauMobiliteEligible } from './eleveScolariteAuto';
 
 export { SERIE_BAC_VALUES, SERIE_BAC_OPTIONS };
 
@@ -83,7 +85,18 @@ const STEP_KEYS = {
 
 export const STEP_KEYS_LIST = STEP_KEYS;
 
-function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
+function validatePieces(values, errors) {
+  const p = values.pieces || {};
+  const hasPhoto =
+    p.photoIdentite instanceof File || p.photoIdentiteCivile instanceof File;
+  if (!hasPhoto) errors['pieces.photoIdentite'] = reqMsg('La photo d’identité');
+  if (!(p.cin instanceof File)) errors['pieces.cin'] = reqMsg('La CIN');
+  if (!(p.acteNaissance instanceof File)) errors['pieces.acteNaissance'] = reqMsg("L'acte de naissance");
+  if (!(p.diplomeAcces instanceof File)) errors['pieces.diplomeAcces'] = reqMsg("Le diplôme d'accès");
+  if (!(p.diplomeBac instanceof File)) errors['pieces.diplomeBac'] = reqMsg('Le diplôme du Bac');
+}
+
+function validateEtatCivil(values, errors) {
   const m = String(values.matricule ?? '').trim();
   if (!m) errors.matricule = reqMsg('Le matricule');
   else if (!DIGITS_MATRICULE.test(m)) errors.matricule = 'Le matricule doit contenir exactement 5 chiffres.';
@@ -108,9 +121,14 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
 
   const wil = String(values.wilayaNaissance ?? '').trim();
   const com = String(values.communeNaissance ?? '').trim();
+  const comLibre = String(values.communeNaissanceLibre ?? '').trim();
   const lieu = String(values.lieuNaissance ?? '').trim();
   if (!wil && !lieu) errors.wilayaNaissance = reqMsg('La wilaya de naissance');
-  if (!com && !lieu) errors.communeNaissance = reqMsg('La commune de naissance');
+  if (com === COMMUNE_AUTRE_VALUE) {
+    if (!comLibre) errors.communeNaissanceLibre = reqMsg('La commune (préciser)');
+  } else if (!com && !lieu) {
+    errors.communeNaissance = reqMsg('La commune de naissance');
+  }
 
   if (!String(values.nationalite ?? '').trim()) errors.nationalite = reqMsg('La nationalité');
 
@@ -125,15 +143,9 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
   else if (!moyenneOk(moy)) errors.moyenneBac = 'Indiquez une moyenne entre 0 et 20 (ex. 14,25).';
 
   if (!String(values.ecoleBac ?? '').trim()) errors.ecoleBac = reqMsg("L'établissement du Bac");
+}
 
-  const annUni = String(values.scolarite?.anneeUni1ere ?? '').trim();
-  if (!annUni) errors['scolarite.anneeUni1ere'] = reqMsg("L'année universitaire");
-  else if (!annUniOk(annUni)) errors['scolarite.anneeUni1ere'] = 'Format attendu : AAAA-AAAA (ex : 2025-2026).';
-
-  if (!String(values.datePremiereInscription ?? '').trim()) {
-    errors.datePremiereInscription = reqMsg('La date de saisie');
-  }
-
+function validateContactInfo(values, errors) {
   const adr = String(values.contact?.adresse ?? '').trim();
   if (!adr) errors['contact.adresse'] = reqMsg("L'adresse primaire");
 
@@ -159,25 +171,13 @@ function validateEtatCivil(values, errors, { mode = 'standard' } = {}) {
   if (!ep) errors['contact.emailPerso'] = reqMsg("L'e-mail personnel");
   else if (!simpleEmailOk(ep)) errors['contact.emailPerso'] = 'Format e-mail invalide.';
 
-  if (!String(values.scolarite?.voieAcces ?? '').trim()) {
-    errors['scolarite.voieAcces'] = reqMsg("La voie d'accès");
-  }
-  if (!String(values.scolarite?.diplomeAcces ?? '').trim()) {
-    errors['scolarite.diplomeAcces'] = reqMsg('Le diplôme d’accès');
-  }
-
   const t2 = String(values.contact?.tel2 ?? '').trim();
   if (t2 && !optionalMrPhone(t2)) {
     errors['contact.tel2'] = '8 chiffres, commence par 2, 3 ou 4.';
   }
-
-  if (mode === 'standard' || mode === 'mobilite') {
-    return errors;
-  }
-  return errors;
 }
 
-function validateScolarite(values, errors, { mode = 'standard' } = {}) {
+function validateScolarite(values, errors) {
   if (!String(values.scolarite?.filiere ?? '').trim()) errors['scolarite.filiere'] = reqMsg('La filière');
   if (!String(values.scolarite?.niveau ?? '').trim()) errors['scolarite.niveau'] = reqMsg('Le niveau');
 
@@ -185,26 +185,43 @@ function validateScolarite(values, errors, { mode = 'standard' } = {}) {
   if (!statut) errors.statut = reqMsg('Le statut');
   else if (!STATUT_ETUDIANT_VALUES.includes(statut)) errors.statut = 'Statut invalide.';
 
-  if (mode === 'mobilite') {
-    if (!String(values.mobilite?.type ?? '').trim()) errors['mobilite.type'] = reqMsg('Le type de mobilité');
-    if (!String(values.mobilite?.etablissement ?? '').trim()) {
-      errors['mobilite.etablissement'] = reqMsg("L'établissement d'accueil");
-    }
-    if (!String(values.mobilite?.specialite ?? '').trim()) {
-      errors['mobilite.specialite'] = reqMsg('La spécialité de mobilité');
-    }
+  const annUni = String(values.scolarite?.anneeUni1ere ?? '').trim();
+  if (!annUni) errors['scolarite.anneeUni1ere'] = reqMsg("L'année universitaire de 1ʳᵉ inscription");
+  else if (!annUniOk(annUni)) errors['scolarite.anneeUni1ere'] = 'Format attendu : AAAA-AAAA (ex : 2025-2026).';
+
+  if (!String(values.datePremiereInscription ?? '').trim()) {
+    errors.datePremiereInscription = reqMsg('La date de 1ʳᵉ inscription');
+  }
+
+  if (!String(values.scolarite?.voieAcces ?? '').trim()) {
+    errors['scolarite.voieAcces'] = reqMsg("La voie d'accès");
+  }
+  if (!String(values.scolarite?.diplomeAcces ?? '').trim()) {
+    errors['scolarite.diplomeAcces'] = reqMsg('Le diplôme d’accès');
+  }
+}
+
+function validateMobilite(values, errors) {
+  if (!isNiveauMobiliteEligible(values.scolarite?.niveau)) return;
+  if (!String(values.mobilite?.type ?? '').trim()) errors['mobilite.type'] = reqMsg('Le type de mobilité');
+  if (!String(values.mobilite?.etablissement ?? '').trim()) {
+    errors['mobilite.etablissement'] = reqMsg("L'établissement d'accueil");
+  }
+  if (!String(values.mobilite?.specialite ?? '').trim()) {
+    errors['mobilite.specialite'] = reqMsg('La spécialité de mobilité');
   }
 }
 
 function validateContacts(values, errors) {
+  validateContactInfo(values, errors);
+
   const pp = String(values.parents?.prenomPere ?? '').trim();
   if (!pp) errors['parents.prenomPere'] = reqMsg('Le prénom du père');
   const np = String(values.parents?.nomFamillePere ?? '').trim();
   if (!np) errors['parents.nomFamillePere'] = reqMsg('Le nom de famille du père');
 
   const telUr = sanitizeMrPhoneDigits(values.contact?.telUrgence ?? '');
-  if (!telUr) errors['contact.telUrgence'] = reqMsg('Le téléphone d’urgence');
-  else if (!isValidMrPhone8(telUr)) {
+  if (telUr && !isValidMrPhone8(telUr)) {
     errors['contact.telUrgence'] = 'Le téléphone doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
   }
 
@@ -269,6 +286,9 @@ export function validateEleveStepByKey(stepKey, values, options = {}) {
     case STEP_KEYS.SCOLARITE:
       validateScolarite(values, errors, options);
       break;
+    case STEP_KEYS.PIECES:
+      validatePieces(values, errors);
+      break;
     case STEP_KEYS.CONTACTS:
       validateContacts(values, errors);
       break;
@@ -277,6 +297,9 @@ export function validateEleveStepByKey(stepKey, values, options = {}) {
       break;
     case STEP_KEYS.MILITAIRE:
       validateMilitaire(values, errors);
+      break;
+    case STEP_KEYS.MOBILITE:
+      validateMobilite(values, errors);
       break;
     default:
       break;

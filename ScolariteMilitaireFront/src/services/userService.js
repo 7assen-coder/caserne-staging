@@ -1,26 +1,19 @@
 import { api } from './api';
-import { roleToBackendFonction } from '../utils/userRole';
+import {
+  authenticateLocal,
+  createLocalUser,
+  findLocalUserByEmail,
+  findLocalUserById,
+  INITIAL_USER_PASSWORD,
+  localTokenForUserId,
+  toPublicUser,
+  updateLocalUserPassword,
+  userIdFromLocalToken,
+} from '../utils/localUserStore';
+
+export { INITIAL_USER_PASSWORD };
 
 const LOCAL_KEY = 'esp_local_users_v1';
-
-function loadLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocal(list) {
-  try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(list));
-  } catch {
-    /* localStorage indisponible : silencieux */
-  }
-}
 
 function isMissingEndpoint(err) {
   const status = err?.response?.status;
@@ -29,43 +22,56 @@ function isMissingEndpoint(err) {
 
 export const userService = {
   async createUser(payload) {
+    const email = String(payload.email || '').trim().toLowerCase();
     const body = {
-      email: String(payload.email || '').trim().toLowerCase(),
-      password: payload.password || '',
+      email,
+      password: INITIAL_USER_PASSWORD,
       first_name: payload.prenom || '',
       last_name: payload.nom || '',
       phone: payload.telephone || '',
       matricule: payload.matricule || '',
       grade: payload.grade || '',
-      role: payload.role || '',
-      fonction: roleToBackendFonction(payload.role),
+      fonction: payload.fonction || '',
     };
+
     try {
       const { data } = await api.post('/auth/register/', body);
+      createLocalUser({
+        email,
+        prenom: body.first_name,
+        nom: body.last_name,
+        telephone: body.phone,
+        matricule: body.matricule,
+        grade: body.grade,
+        fonction: body.fonction,
+      });
       return { user: data, persistence: 'backend' };
     } catch (err) {
       if (isMissingEndpoint(err)) {
-        const list = loadLocal();
-        if (list.find((u) => u.email && u.email === body.email)) {
-          throw new Error('Un utilisateur avec cet e-mail existe déjà (mode démo).', { cause: err });
-        }
-        const entry = {
-          id: `local-${Date.now()}`,
-          email: body.email,
+        const entry = createLocalUser({
+          email,
           prenom: body.first_name,
           nom: body.last_name,
-          phone: body.phone,
+          telephone: body.phone,
           matricule: body.matricule,
           grade: body.grade,
-          role: body.role,
           fonction: body.fonction,
-          createdAt: new Date().toISOString(),
-        };
-        list.unshift(entry);
-        saveLocal(list);
+        });
         return { user: entry, persistence: 'local' };
       }
-      throw err;
+      if (err?.response?.status === 400 || err?.response?.status === 409) {
+        throw err;
+      }
+      const entry = createLocalUser({
+        email,
+        prenom: body.first_name,
+        nom: body.last_name,
+        telephone: body.phone,
+        matricule: body.matricule,
+        grade: body.grade,
+        fonction: body.fonction,
+      });
+      return { user: entry, persistence: 'local-fallback' };
     }
   },
 
@@ -75,14 +81,18 @@ export const userService = {
       return { users: Array.isArray(data) ? data : [], persistence: 'backend' };
     } catch (err) {
       if (isMissingEndpoint(err)) {
-        return { users: loadLocal(), persistence: 'local' };
+        const raw = localStorage.getItem(LOCAL_KEY);
+        const users = raw ? JSON.parse(raw) : [];
+        return { users: Array.isArray(users) ? users.map(toPublicUser) : [], persistence: 'local' };
       }
       throw err;
     }
   },
 
-  removeLocalUser(id) {
-    const list = loadLocal().filter((u) => u.id !== id);
-    saveLocal(list);
-  },
+  findLocalByEmail: findLocalUserByEmail,
+  updateLocalPassword: updateLocalUserPassword,
+  authenticateLocal,
+  findLocalUserById,
+  localTokenForUserId,
+  userIdFromLocalToken,
 };

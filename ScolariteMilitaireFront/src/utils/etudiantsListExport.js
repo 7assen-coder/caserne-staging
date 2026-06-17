@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from 'file-saver';
-import { buildExportMatrix } from '../data/etudiantColonnes';
+import { buildExportMatrix, buildTransposedExportMatrix } from '../data/etudiantColonnes';
 import { APP_NAME } from '../data/institution';
 
 const BORDER = {
@@ -17,8 +17,14 @@ export function sanitizeExportText(value) {
   return String(value)
     .replace(/1ʳᵉ/gi, '1re')
     .replace(/2ᵉ/gi, '2e')
-    .replace(/[\u02B0-\u02FF\u2070-\u209F\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/3ᵉ/gi, '3e')
+    .replace(/(\d)\s*ʳ\s*ᵉ/gi, '$1re')
+    .replace(/(\d)\s*ᵉ/gi, '$1e')
+    .replace(/[\u02B0-\u02FF]/g, '')
+    .replace(/[\u2070-\u209F]/g, '')
+    .replace(/[\u0300-\u036F]/g, '')
+    .replace(/\uFFFD/g, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
 }
 
@@ -43,17 +49,6 @@ export async function fetchEspLogoDataUrl() {
   return `data:image/png;base64,${btoa(binary)}`;
 }
 
-function colWidths(headers) {
-  return headers.map((h) => {
-    const l = h.toLowerCase();
-    if (l.includes('nom')) return 28;
-    if (l.includes('mail') || l.includes('adresse') || l.includes('établissement')) return 32;
-    if (l.includes('téléphone') || l.includes('whatsapp')) return 14;
-    if (l.includes('compagnie')) return 18;
-    return 16;
-  });
-}
-
 function dateSuffix() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -62,7 +57,7 @@ function exportFilename(base) {
   return `${base}-${dateSuffix()}`;
 }
 
-function styleWorksheet(ws, XLSX, headers) {
+function styleTransposedWorksheet(ws, XLSX, rowCount, colCount) {
   const ref = ws['!ref'];
   if (!ref) return;
   const range = XLSX.utils.decode_range(ref);
@@ -74,9 +69,16 @@ function styleWorksheet(ws, XLSX, headers) {
 
       if (R === 0) {
         ws[addr].s = {
-          font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-          fill: { fgColor: { rgb: '487346' } },
+          font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 },
+          fill: { fgColor: { rgb: '1B2A4A' } },
           alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+          border: BORDER,
+        };
+      } else if (C === 0) {
+        ws[addr].s = {
+          font: { bold: true, sz: 10, color: { rgb: '1E293B' } },
+          fill: { fgColor: { rgb: 'E8EDF4' } },
+          alignment: { vertical: 'center', wrapText: true },
           border: BORDER,
         };
       } else {
@@ -90,8 +92,11 @@ function styleWorksheet(ws, XLSX, headers) {
     }
   }
 
-  ws['!cols'] = colWidths(headers).map((wch) => ({ wch }));
-  ws['!rows'] = [{ hpt: 22 }];
+  const colWidths = [{ wch: 32 }];
+  for (let c = 1; c < colCount; c += 1) colWidths.push({ wch: 22 });
+  ws['!cols'] = colWidths;
+  ws['!rows'] = [{ hpt: 28 }];
+  ws['!freeze'] = { xSplit: 1, ySplit: 1, topLeftCell: 'B2', activePane: 'bottomRight' };
 }
 
 export async function exportEtudiantsExcel(
@@ -99,19 +104,25 @@ export async function exportEtudiantsExcel(
   colonneIds,
   filenameBase = 'liste-etudiants-esp',
 ) {
-  const { headers, rows } = matrixForExport(eleves, colonneIds);
-  if (!headers.length) {
-    throw new Error('Sélectionnez au moins une colonne à exporter.');
+  const { rowLabels, studentHeaders, grid } = buildTransposedExportMatrix(eleves, colonneIds);
+  if (!rowLabels.length) {
+    throw new Error('Sélectionnez au moins une colonne à exporter (hors mensurations).');
   }
 
   const XLSX = await import('xlsx-js-style');
-  const sheetData = [headers, ...rows];
+  const headerRow = ['Champ / Étudiant', ...studentHeaders];
+  const dataRows = rowLabels.map((label, ri) => [label, ...grid[ri]]);
+  const sheetData = [headerRow, ...dataRows];
   const ws = XLSX.utils.aoa_to_sheet(sheetData);
-  styleWorksheet(ws, XLSX, headers);
+  styleTransposedWorksheet(ws, XLSX, dataRows.length, headerRow.length);
 
   const wb = XLSX.utils.book_new();
-  wb.Props = { Title: `${APP_NAME} — Liste des étudiants`, Author: APP_NAME };
-  XLSX.utils.book_append_sheet(wb, ws, 'Étudiants');
+  wb.Props = {
+    Title: `${APP_NAME} — Registre étudiants (transposé)`,
+    Author: APP_NAME,
+    Comments: 'Mensurations exclues — libellés en lignes, étudiants en colonnes.',
+  };
+  XLSX.utils.book_append_sheet(wb, ws, 'Registre');
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   saveAs(
     new Blob([buffer], {
@@ -131,31 +142,45 @@ export async function exportEtudiantsPdf(eleves, colonneIds, meta = {}) {
   const pageW = doc.internal.pageSize.getWidth();
   const title = meta.title ?? `Liste des étudiants — ${APP_NAME}`;
 
+  doc.setFillColor(72, 115, 70);
+  doc.rect(0, 0, pageW, 22, 'F');
+  doc.setFillColor(200, 165, 78);
+  doc.rect(0, 22, pageW, 1, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('République Islamique de Mauritanie', pageW / 2, 9, { align: 'center' });
+  doc.setFontSize(11);
+  doc.text('ÉCOLE SUPÉRIEURE POLYTECHNIQUE', pageW / 2, 16, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+
   try {
     const dataUrl = await fetchEspLogoDataUrl();
-    doc.addImage(dataUrl, 'PNG', 14, 8, 20, 20);
+    doc.addImage(dataUrl, 'PNG', 14, 26, 18, 18);
   } catch {
     /* logo optionnel */
   }
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(APP_NAME, pageW / 2, 16, { align: 'center' });
+  doc.setFontSize(13);
+  doc.setTextColor(15, 27, 51);
+  doc.text(APP_NAME, pageW / 2, 32, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(title, pageW / 2, 23, { align: 'center' });
+  doc.setTextColor(60, 60, 60);
+  doc.text(title, pageW / 2, 39, { align: 'center' });
   doc.setFontSize(8);
-  doc.setTextColor(100);
   doc.text(
-    `École supérieure polytechnique — ${new Date().toLocaleDateString('fr-FR')}`,
+    `Registre des étudiants — ${new Date().toLocaleDateString('fr-FR')} — ${eleves.length} dossier(s)`,
     pageW / 2,
-    28,
+    44,
     { align: 'center' },
   );
-  doc.setTextColor(0);
+  doc.setTextColor(0, 0, 0);
 
   autoTable(doc, {
-    startY: 33,
+    startY: 48,
     head: [headers],
     body: rows,
     theme: 'grid',

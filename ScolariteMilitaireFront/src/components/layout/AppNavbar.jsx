@@ -2,7 +2,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import EspLogo from '../common/EspLogo';
-import { getAppNavFlatItems } from './appNavConfig';
+import { getAppNavFlatItems, APP_NAV_EXACT_MATCH_ROUTES } from './appNavConfig';
 import { APP_NAME } from '../../data/institution';
 
 export default function AppNavbar({ mobileOpen, onMobileClose }) {
@@ -22,7 +22,7 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
         <li key={to}>
           <NavLink
             to={to}
-            end={to === '/dashboard'}
+            end={APP_NAV_EXACT_MATCH_ROUTES.has(to)}
             onClick={onNavigate}
             className={({ isActive }) =>
               `group flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors duration-150 ${
@@ -75,13 +75,7 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
 
       {mobileOpen && (
         <div className="fixed inset-0 z-[60] flex md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/25 backdrop-blur-sm"
-            aria-label="Fermer le menu"
-            onClick={onMobileClose}
-          />
-          <aside className="relative ml-auto flex h-full w-[min(100%,19rem)] flex-col border-l border-light-gray bg-white text-slate-900 shadow-2xl shadow-slate-900/10">
+          <aside className="app-mobile-nav-safe relative z-[1] flex h-full w-[min(100%,19rem)] shrink-0 flex-col border-r border-light-gray bg-white text-slate-900 shadow-2xl shadow-slate-900/10">
             <div className="flex items-center justify-between gap-2 border-b border-light-gray px-4 py-3.5">
               <Link to="/dashboard" className="flex min-w-0 items-center gap-2" onClick={onMobileClose}>
                 <EspLogo className="h-9 w-9 shrink-0" />
@@ -97,7 +91,22 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-4">{linkList(onMobileClose, false)}</div>
+            <div className="border-t border-light-gray p-4">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full rounded-lg border border-light-gray bg-slate-50 px-3 py-2.5 text-sm font-semibold text-navy transition hover:bg-slate-100"
+              >
+                Déconnexion
+              </button>
+            </div>
           </aside>
+          <button
+            type="button"
+            className="min-w-0 flex-1 bg-slate-900/25 backdrop-blur-sm"
+            aria-label="Fermer le menu"
+            onClick={onMobileClose}
+          />
         </div>
       )}
     </>

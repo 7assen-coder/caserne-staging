@@ -71,7 +71,13 @@ export function getCommunesForWilaya(nomWilaya) {
   return w ? w.communes : [];
 }
 
+export const COMMUNE_AUTRE_VALUE = '__autre__';
+
 export function getCommuneOptionsForWilaya(nomWilaya) {
   const list = getCommunesForWilaya(nomWilaya);
-  return [{ value: '', label: '— Sélectionner —' }, ...list.map((c) => ({ value: c, label: c }))];
+  return [
+    { value: '', label: '— Sélectionner —' },
+    ...list.map((c) => ({ value: c, label: c })),
+    { value: COMMUNE_AUTRE_VALUE, label: 'Autre (préciser)' },
+  ];
 }

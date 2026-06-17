@@ -7,6 +7,9 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ['pdf-lib'],
+  },
   server: {
     host: true,
     port: 9081,
