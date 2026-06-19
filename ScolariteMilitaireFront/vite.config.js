@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 9081,
     strictPort: false,
     proxy: {
@@ -28,6 +29,7 @@ export default defineConfig({
       'react-router-dom',
       'axios',
       'lucide-react',
+      'pdf-lib',
     ],
   },
 });

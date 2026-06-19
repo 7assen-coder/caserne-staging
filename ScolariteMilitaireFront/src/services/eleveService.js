@@ -1,5 +1,6 @@
 import { api } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
+import { eleves as mockElevesRaw } from '../data/mockData';
 import { todayIso } from '../utils/anneeUniversitaire';
 import { isFrontendOnly } from '../utils/frontendMode';
 import { normalizeDepartementForApi } from '../utils/constants';
@@ -57,6 +58,10 @@ async function listFromApi(filters) {
   return filterEleveRows(rows, filters);
 }
 
+function listFromMock(filters) {
+  return filterEleveRows(mockElevesRaw.map(normalizeMockEleve), filters);
+}
+
 function listFromImported(filters) {
   return filterEleveRows(loadImportedEleves().map(normalizeMockEleve), filters);
 }
@@ -70,6 +75,12 @@ function mergeWithImported(rows, filters) {
 
 function listFromImportedOnly(filters) {
   return mergeWithImported([], filters);
+}
+
+function shouldUseMockFallback(err) {
+  if (import.meta.env.VITE_USE_MOCK_ELEVES === 'true') return true;
+  if (!err?.response) return true;
+  return false;
 }
 
 /** Codes API `DossierAcademique.CHOIX_ANNEE` ↔ libellés UI `NIVEAUX_SCOLARITE`. */
@@ -388,12 +399,16 @@ export const eleveService = {
   async list(filters = {}) {
     const imported = listFromImportedOnly(filters);
     if (isFrontendOnly()) {
-      return imported;
+      return mergeWithImported(listFromMock(filters), filters);
     }
     try {
       const rows = await listFromApi(filters);
       return mergeWithImported(rows, filters);
-    } catch {
+    } catch (err) {
+      if (shouldUseMockFallback(err)) {
+        console.warn('[eleveService] API indisponible — données de démonstration.', err?.message);
+        return mergeWithImported(listFromMock(filters), filters);
+      }
       return imported;
     }
   },
@@ -403,11 +418,21 @@ export const eleveService = {
     if (imported) return normalizeMockEleve(imported);
 
     if (isFrontendOnly()) {
+      const found = mockElevesRaw.map(normalizeMockEleve).find((e) => String(e.id) === String(id));
+      if (found) return found;
       throw new Error('Élève introuvable.');
     }
 
-    const { data } = await api.get(`/eleves/${id}/`);
-    return adaptEleveFromApi(data);
+    try {
+      const { data } = await api.get(`/eleves/${id}/`);
+      return adaptEleveFromApi(data);
+    } catch (err) {
+      if (shouldUseMockFallback(err)) {
+        const found = mockElevesRaw.map(normalizeMockEleve).find((e) => String(e.id) === String(id));
+        if (found) return found;
+      }
+      throw err;
+    }
   },
 
   async createEleve(values) {
