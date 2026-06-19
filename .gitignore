@@ -1,4 +1,10 @@
 venv
+.venv/
+.venv*/
+
+# Backend local Python environments
+backend/.venv*/
+backend/.venv/
 
 # OS
 .DS_Store
@@ -26,3 +32,4 @@ dist/
 .vscode/
 *.swp
 *.swo
+CLAUDE.md

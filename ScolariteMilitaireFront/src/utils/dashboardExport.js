@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PptxGenJS from 'pptxgenjs';
 import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+import { saveAs } from './saveAsFile.js';
 import {
   eleves,
   appels,

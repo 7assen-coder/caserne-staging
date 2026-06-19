@@ -3,17 +3,17 @@ import { ChevronDown } from 'lucide-react';
 export default function SelectField({ label, value, onChange, options, required, id, error }) {
   const selectId = id ?? (label ? `select-${String(label).replace(/\s+/g, '-').slice(0, 24)}` : undefined);
   return (
-    <label className="block" htmlFor={selectId}>
+    <label className="form-field-contained" htmlFor={selectId}>
       {label != null && label !== '' && (
         <span className="label">
           {label}
           {required && <span className="text-brand-red"> *</span>}
         </span>
       )}
-      <div className="relative">
+      <div className="relative min-w-0 max-w-full">
         <select
           id={selectId}
-          className={`input w-full cursor-pointer appearance-none pr-11 ${error ? 'ring-2 ring-brand-red/40' : ''}`}
+          className={`input w-full max-w-full min-w-0 cursor-pointer appearance-none pr-11 ${error ? 'ring-2 ring-brand-red/40' : ''}`}
           value={value ?? ''}
           required={required}
           onChange={(e) => onChange(e.target.value)}

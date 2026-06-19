@@ -10,6 +10,9 @@ export function formationUrl(codeDept) {
 export function departementCodeDepuisFiliere(filiereLabel) {
   if (!filiereLabel) return 'irt';
   const s = String(filiereLabel).trim();
+  const head = s.split(/\s*[—–-]/)[0]?.trim().toLowerCase() || '';
+  const compact = head.replace(/[^a-z0-9]/g, '');
+  if (compact.includes('gc')) return 'gc';
   const m = s.match(/^([A-Za-z]{2,4})\s*[—–-]/);
   if (m) return m[1].toLowerCase();
   const first = s.split(/\s/)[0]?.toLowerCase() || 'irt';

@@ -1,6 +1,9 @@
+/** Nom affiché de l’application (interface + exports). */
+export const APP_NAME = 'Gestion ESP';
+
 export const INSTITUTION = {
   nomCourt: 'ESP',
-  nomComplet: 'École supérieure polytechnique',
+  nomComplet: 'Gestion ESP',
   nomCompletEn: 'École supérieure polytechnique',
   adresse: 'Nouakchott',
   pays: 'Mauritanie',

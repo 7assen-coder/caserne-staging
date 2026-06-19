@@ -1,22 +1,17 @@
-import { mockDelay } from './api';
-import { appels, presenceTrend, presenceParSection, topAbsences } from '../data/mockData';
-
-let _appels = [...appels];
+import {
+  addAppel,
+  computePresenceParSection,
+  computePresenceTrend,
+  computeTopAbsences,
+  getAppel,
+  listAppels,
+} from '../utils/presenceStore';
 
 export const presenceService = {
-  list: (filters = {}) => {
-    let result = _appels;
-    if (filters.section) result = result.filter((a) => a.section === filters.section);
-    if (filters.type) result = result.filter((a) => a.type === filters.type);
-    return mockDelay(result);
-  },
-  get: (id) => mockDelay(_appels.find((a) => a.id === id)),
-  create: (data) => {
-    const neu = { id: `a${Date.now()}`, date: new Date().toISOString(), ...data };
-    _appels = [neu, ..._appels];
-    return mockDelay(neu);
-  },
-  trend: () => mockDelay(presenceTrend),
-  parSection: () => mockDelay(presenceParSection),
-  topAbsences: () => mockDelay(topAbsences),
+  list: (filters = {}) => Promise.resolve(listAppels(filters)),
+  get: (id) => Promise.resolve(id ? getAppel(id) : null),
+  create: (data) => Promise.resolve(addAppel(data)),
+  trend: () => Promise.resolve(computePresenceTrend()),
+  parSection: () => Promise.resolve(computePresenceParSection()),
+  topAbsences: () => Promise.resolve(computeTopAbsences()),
 };

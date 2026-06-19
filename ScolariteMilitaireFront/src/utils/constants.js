@@ -22,6 +22,13 @@ export const FONCTION_LABEL = {
   [FONCTIONS.COMMANDEMENT]: 'Superviseur Militaire — Commandement',
 };
 
+/** Options rôle à la création utilisateur (Terrain, Encadrement, Commandement). */
+export const FONCTION_ROLE_OPTIONS = [
+  { value: FONCTIONS.TERRAIN, label: 'Terrain' },
+  { value: FONCTIONS.ENCADREMENT, label: 'Encadrement' },
+  { value: FONCTIONS.COMMANDEMENT, label: 'Commandement' },
+];
+
 export const STATUT_PRESENCE = {
   PRESENT: 'present',
   ABSENT: 'absent',
@@ -65,26 +72,41 @@ export const TYPES_ABSENCE = [
   { value: 'activite', label: 'Activité' },
 ];
 
-export const COMPAGNIES = ['1ʳᵉ Compagnie', '2ᵉ Compagnie'];
+export const COMPAGNIES = ['1re Compagnie', '2e Compagnie'];
 export const SECTIONS = ['Section 1', 'Section 2', 'Section 3', 'Section 4'];
 export const PROMOTIONS = ['Promotion 2022', 'Promotion 2023', 'Promotion 2024', 'Promotion 2025'];
 
+/* Départements : valeurs `value` = codes API Django (CHOIX_DEPARTEMENT). */
 export const DEPARTEMENTS = [
-  { code: 'GM', label: 'GM — Génie mécanique' },
-  { code: 'IRT', label: 'IRT — Informatique, réseaux et télécommunications' },
-  { code: 'GC', label: 'GC — Génie civil' },
-  { code: 'GE', label: 'GE — Génie électrique' },
-  { code: 'SID', label: 'SID — Statistique ingénierie des données' },
-  { code: 'MPG', label: 'MPG — Mine, pétrole et gaz' },
+  { value: 'GM', label: 'GM — Génie mécanique' },
+  { value: 'IRT', label: 'IRT — Informatique, réseaux et télécommunications' },
+  { value: 'GC-HE', label: 'GC-HE — Génie civil' },
+  { value: 'GE', label: 'GE — Génie électrique' },
+  { value: 'SID', label: 'SID — Statistique ingénierie des données' },
+  { value: 'MPG', label: 'MPG — Mine, pétrole et gaz' },
 ];
 
 export const FILIERES = DEPARTEMENTS.map((d) => d.label);
 
-export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e E', '5e DD'];
+/** Normalise libellés / anciens codes (`GC`, `GH-GC`) vers la valeur API canonique. */
+export function normalizeDepartementForApi(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return DEPARTEMENTS[0].value;
+  const byValue = DEPARTEMENTS.find((d) => d.value === s);
+  if (byValue) return byValue.value;
+  const byLabel = DEPARTEMENTS.find((d) => d.label === s);
+  if (byLabel) return byLabel.value;
+  const u = s.toUpperCase();
+  if (u === 'GC' || u === 'GH-GC') return 'GC-HE';
+  return DEPARTEMENTS[0].value;
+}
 
+export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e année', '4e DD', '5e E', '5e DD'];
+
+/** Valeurs alignées avec `Eleve.CHOIX_VOIE_ACCES` côté Django (`'1'` … `'4'`). */
 export const VOIES_ACCES_ETUDIANT = [
-  { value: 'Voie 1 — Interne', label: 'Voie 1 — Interne' },
-  { value: 'Voie 1 — Externe', label: 'Voie 1 — Externe' },
-  { value: 'Voie 2 — Interne', label: 'Voie 2 — Interne' },
-  { value: 'Voie 2 — Externe', label: 'Voie 2 — Externe' },
+  { value: '1', label: 'Voie 1 — Interne' },
+  { value: '2', label: 'Voie 1 — Externe' },
+  { value: '3', label: 'Voie 2 — Interne' },
+  { value: '4', label: 'Voie 2 — Externe' },
 ];

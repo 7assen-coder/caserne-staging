@@ -26,3 +26,23 @@ export function todayIso(now = new Date()) {
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/** @param {string} academicYearStr "AAAA-AAAA" */
+export function shiftAcademicYear(academicYearStr, deltaYears) {
+  const s = String(academicYearStr ?? '').trim();
+  const m = /^(\d{4})-(\d{4})$/.exec(s);
+  if (!m) return '';
+  const y0 = Number(m[1]);
+  const y1 = Number(m[2]);
+  if (!Number.isFinite(y0) || !Number.isFinite(y1)) return '';
+  return `${y0 + deltaYears}-${y1 + deltaYears}`;
+}
+
+/** Fin prévue : +1 an après le début (échange) ou +2 ans (double diplôme). */
+export function deriveMobiliteAnneeFin(anneeDebut, mobiliteType) {
+  const start = String(anneeDebut ?? '').trim();
+  if (!/^\d{4}-\d{4}$/.test(start)) return '';
+  if (mobiliteType === 'Semestre d’échange') return shiftAcademicYear(start, 1);
+  if (mobiliteType === 'Double diplôme') return shiftAcademicYear(start, 2);
+  return '';
+}

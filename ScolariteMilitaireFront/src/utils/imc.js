@@ -31,5 +31,5 @@ export function classifyIMC(imc) {
 
 export function formatIMC(imc) {
   if (imc == null || !Number.isFinite(imc)) return '';
-  return imc.toFixed(1).replace('.', ',');
+  return imc.toFixed(1);
 }

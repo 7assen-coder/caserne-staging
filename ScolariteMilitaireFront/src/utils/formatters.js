@@ -33,3 +33,17 @@ export function percent(value, total) {
   if (!total) return '0%';
   return `${Math.round((value / total) * 100)}%`;
 }
+
+/** Âge en années à partir d'une date ISO (YYYY-MM-DD). */
+export function computeAge(dateNaissance) {
+  if (!dateNaissance) return null;
+  const dob = new Date(dateNaissance);
+  if (Number.isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}

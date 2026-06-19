@@ -19,7 +19,7 @@ import {
 } from '../../utils/wordExport';
 import { printAttestationParcoursIrt, printReleveSemestreHtml } from '../../utils/printDocuments';
 import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
+import { saveAs } from '../../utils/saveAsFile.js';
 import { getDecisionCode, getDecisionLabel } from '../../utils/gradeDecision';
 import { enrichirModuleAvecReferenceEsp } from '../../data/espFormationCatalog';
 

@@ -1,4 +1,5 @@
-import { Users, UserCheck, UserX, Percent } from 'lucide-react';
+import { Users, UserCheck, UserX, Percent, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import Card from '../common/Card';
 import StatCard from '../common/StatCard';
 import Badge from '../common/Badge';
@@ -40,9 +41,23 @@ export default function ResultatAppel({ appel }) {
               </thead>
               <tbody>
                 {detail.map((d) => (
-                  <tr key={d.eleveId}>
+                  <tr key={d.eleveId ?? d.matricule}>
                     <td>{d.matricule}</td>
-                    <td>{d.nom}</td>
+                    <td>
+                      <span className="inline-flex items-center gap-2">
+                        {d.nom}
+                        {d.eleveId ? (
+                          <Link
+                            to="/eleves/dossiers"
+                            state={{ openEleveId: d.eleveId }}
+                            className="inline-flex text-navy hover:text-gold"
+                            title="Ouvrir le dossier"
+                          >
+                            <ExternalLink size={14} aria-hidden />
+                          </Link>
+                        ) : null}
+                      </span>
+                    </td>
                     <td>
                       <Badge tone={d.statut === 'present' ? 'present' : 'absent'}>
                         {d.statut === 'present' ? 'Présent' : 'Absent'}

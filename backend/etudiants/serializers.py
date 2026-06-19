@@ -1,6 +1,8 @@
+from urllib.parse import urlparse
+
 from rest_framework import serializers
 from .models import (
-    Eleve, ContactParent, DossierSante, DossierAcademique, 
+    Eleve, ContactParent, DossierSante, DossierAcademique,
     DossierMilitaire, Hebergement, DocumentEleve
 )
 
@@ -10,6 +12,7 @@ class ContactParentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DossierSanteSerializer(serializers.ModelSerializer):
+    imc = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
     class Meta:
         model = DossierSante
         fields = '__all__'
@@ -34,6 +37,18 @@ class DocumentEleveSerializer(serializers.ModelSerializer):
         model = DocumentEleve
         fields = '__all__'
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        file_fields = [
+            'cin', 'acte_naissance', 'diplome_acces', 'diplome_bac',
+            'photo_identite_militaire', 'photo_identite_civile', 'photo_militaire_integrale',
+        ]
+        for field in file_fields:
+            url = ret.get(field)
+            if url:
+                ret[field] = urlparse(url).path
+        return ret
+
 class EleveSerializer(serializers.ModelSerializer):
     contacts_parents = ContactParentSerializer(read_only=True)
     dossier_sante = DossierSanteSerializer(read_only=True)
@@ -45,3 +60,4 @@ class EleveSerializer(serializers.ModelSerializer):
     class Meta:
         model = Eleve
         fields = '__all__'
+        read_only_fields = ('annee_premiere_inscription', 'email_pro')

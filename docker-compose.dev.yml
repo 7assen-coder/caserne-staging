@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=esp
+      - POSTGRES_USER=esp
+      - POSTGRES_PASSWORD=esp
+    volumes:
+      - pg_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: "python manage.py runserver 0.0.0.0:8080"
+    volumes:
+      - ./backend:/code:z
+    ports:
+      - "8000:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=esp
+      - DB_USER=esp
+      - DB_PASSWORD=esp
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./ScolariteMilitaireFront
+      dockerfile: Dockerfile.dev
+    ports:
+      - "9081:9081"
+    environment:
+      - BACKEND_PROXY=http://backend:8080
+    volumes:
+      - ./ScolariteMilitaireFront:/app:z
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  pg_data_dev:

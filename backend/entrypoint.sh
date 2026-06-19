@@ -1,0 +1,23 @@
+#!/bin/sh
+
+# Wait for database
+echo "Waiting for database..."
+while ! nc -z $DB_HOST $DB_PORT; do
+  sleep 0.1
+done
+echo "Database started"
+
+# Run migrations
+echo "Running makemigrations..."
+rm -rf */migrations/*
+python manage.py makemigrations etudiants
+python manage.py makemigrations accounts
+echo "Running migrate..."
+python manage.py migrate
+
+# Collect static files for production
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
+# Execute the main command
+exec "$@"

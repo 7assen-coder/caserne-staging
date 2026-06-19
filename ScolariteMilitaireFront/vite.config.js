@@ -1,25 +1,33 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 9081,
+    strictPort: false,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.BACKEND_PROXY ?? 'http://127.0.0.1:8000',
         changeOrigin: true,
+        timeout: 5000,
+      },
+      '/media': {
+        target: process.env.BACKEND_PROXY ?? 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        timeout: 5000,
       },
     },
   },
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-      },
-    },
+  optimizeDeps: {
+    noDiscovery: true,
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react-router-dom',
+      'axios',
+      'lucide-react',
+    ],
   },
 });

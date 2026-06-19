@@ -11,7 +11,7 @@ import {
   AlignmentType,
   convertInchesToTwip,
 } from 'docx';
-import { saveAs } from 'file-saver';
+import { saveAs } from './saveAsFile.js';
 import { formatDate } from './formatters';
 import { INSTITUTION } from '../data/institution';
 import { getAnneeEntiereIrt, anneeDepuisCycle } from '../data/espProgrammeIrt';

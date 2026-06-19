@@ -5,12 +5,9 @@ import Button from '../components/common/Button';
 import SelectField from '../components/common/SelectField';
 import { useAuth } from '../hooks/useAuth';
 import { userService } from '../services/userService';
-import {
-  ROLE_LABEL,
-  getPermissions,
-  getCreatableRoleOptions,
-  getCanonicalRole,
-} from '../utils/userRole';
+import { INITIAL_USER_PASSWORD } from '../utils/localUserStore';
+import { FONCTION_ROLE_OPTIONS } from '../utils/constants';
+import { getPermissions, getCanonicalRole } from '../utils/userRole';
 import { sanitizeMrPhoneDigits, blockNonDigitKey, isValidMrPhone8 } from '../utils/mrPhone';
 import { formatApiError } from '../utils/apiErrors';
 
@@ -21,13 +18,15 @@ const DEFAULT_FORM = {
   telephone: '',
   matricule: '',
   grade: '',
-  password: '',
-  passwordConfirm: '',
-  role: '',
+  fonction: '',
 };
 
 function emailOk(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v ?? '').trim());
+}
+
+function fonctionLabel(value) {
+  return FONCTION_ROLE_OPTIONS.find((o) => o.value === value)?.label || value;
 }
 
 export default function NouvelUtilisateurPage() {
@@ -36,10 +35,10 @@ export default function NouvelUtilisateurPage() {
   const currentRole = getCanonicalRole(fonction);
   const perms = getPermissions(currentRole);
 
-  const creatableOptions = useMemo(() => {
-    const opts = getCreatableRoleOptions(currentRole);
-    return [{ value: '', label: '— Sélectionner un rôle —' }, ...opts];
-  }, [currentRole]);
+  const roleOptions = useMemo(
+    () => [{ value: '', label: '— Sélectionner un rôle —' }, ...FONCTION_ROLE_OPTIONS],
+    [],
+  );
 
   const [form, setForm] = useState(DEFAULT_FORM);
   const [errors, setErrors] = useState({});
@@ -67,15 +66,7 @@ export default function NouvelUtilisateurPage() {
     if (phoneDigits && !isValidMrPhone8(phoneDigits)) {
       e.telephone = 'Téléphone : 8 chiffres commençant par 2, 3 ou 4.';
     }
-    if (!form.password) e.password = 'Mot de passe requis (min. 8 caractères).';
-    else if (form.password.length < 8) e.password = 'Mot de passe : 8 caractères minimum.';
-    if (form.passwordConfirm !== form.password) {
-      e.passwordConfirm = 'La confirmation ne correspond pas.';
-    }
-    if (!form.role) e.role = 'Sélectionner un rôle.';
-    else if (!perms.canCreateUserRoles.includes(form.role)) {
-      e.role = `Vous n’êtes pas autorisé à créer ce rôle (${ROLE_LABEL[form.role] || form.role}).`;
-    }
+    if (!form.fonction) e.fonction = 'Sélectionner un rôle.';
     return e;
   };
 
@@ -98,13 +89,14 @@ export default function NouvelUtilisateurPage() {
         telephone: sanitizeMrPhoneDigits(form.telephone),
         matricule: form.matricule.trim(),
         grade: form.grade.trim(),
-        password: form.password,
-        role: form.role,
+        fonction: form.fonction,
       });
-      setSuccess(`Utilisateur créé : ${form.prenom} ${form.nom} (${ROLE_LABEL[form.role]}).`);
+      setSuccess(
+        `Utilisateur créé : ${form.prenom} ${form.nom} (${fonctionLabel(form.fonction)}). Mot de passe initial : ${INITIAL_USER_PASSWORD}.`,
+      );
       setForm(DEFAULT_FORM);
     } catch (err) {
-      setTopErr(formatApiError(err));
+      setTopErr(err?.message || formatApiError(err));
     } finally {
       setSubmitting(false);
     }
@@ -123,7 +115,7 @@ export default function NouvelUtilisateurPage() {
         <div className="xl:col-span-12">
           <h1 className="page-title">Gestion des utilisateurs</h1>
           <p className="mt-2 text-sm text-text-light md:text-base">
-            Votre rôle actuel ({ROLE_LABEL[currentRole]}) ne permet pas de créer de nouveaux utilisateurs.
+            Votre rôle actuel ne permet pas de créer de nouveaux utilisateurs.
           </p>
         </div>
       </div>
@@ -137,8 +129,8 @@ export default function NouvelUtilisateurPage() {
           Accueil
         </Link>
         <span className="mx-2">/</span>
-        <Link to="/eleves" className="hover:text-navy">
-          Étudiants
+        <Link to="/eleves/dossiers" className="hover:text-navy">
+          Gestion des élèves
         </Link>
         <span className="mx-2">/</span>
         <span className="text-navy font-semibold">Nouvel utilisateur</span>
@@ -146,7 +138,7 @@ export default function NouvelUtilisateurPage() {
 
       <div className="xl:col-span-12">
         <Link
-          to="/eleves"
+          to="/eleves/dossiers"
           className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-navy hover:text-navy/80"
         >
           <ArrowLeft size={18} aria-hidden />
@@ -155,8 +147,7 @@ export default function NouvelUtilisateurPage() {
         <div className="mb-4 border-b border-light-gray pb-4">
           <h1 className="page-title">Nouvel utilisateur</h1>
           <p className="mt-1 text-sm text-text-light md:text-base">
-            Création d’un compte avec rôle. Vous êtes connecté en tant que{' '}
-            <strong className="text-navy">{ROLE_LABEL[currentRole]}</strong>.
+            Création d’un compte avec rôle Terrain, Encadrement ou Commandement.
           </p>
         </div>
       </div>
@@ -169,8 +160,12 @@ export default function NouvelUtilisateurPage() {
           <UserPlus size={18} className="-mt-0.5 mr-1 inline" aria-hidden />
           Informations du compte
         </h2>
-        <p className="mb-5 text-xs text-text-light">
+        <p className="mb-3 text-xs text-text-light">
           Tous les champs marqués d’un astérisque (*) sont obligatoires.
+        </p>
+        <p className="mb-5 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
+          Mot de passe initial automatique : <strong>{INITIAL_USER_PASSWORD}</strong>. L&apos;utilisateur devra le
+          changer lors de sa première connexion.
         </p>
 
         {(topErr || success) && (
@@ -212,29 +207,11 @@ export default function NouvelUtilisateurPage() {
           <Field label="Grade / Fonction" error={errors.grade} value={form.grade} onChange={(v) => update('grade', v)} />
           <SelectField
             label="Rôle"
-            value={form.role}
-            onChange={(v) => update('role', v)}
-            options={creatableOptions}
+            value={form.fonction}
+            onChange={(v) => update('fonction', v)}
+            options={roleOptions}
             required
-            error={errors.role}
-          />
-          <Field
-            label="Mot de passe"
-            required
-            error={errors.password}
-            value={form.password}
-            onChange={(v) => update('password', v)}
-            type="password"
-            autoComplete="new-password"
-          />
-          <Field
-            label="Confirmer le mot de passe"
-            required
-            error={errors.passwordConfirm}
-            value={form.passwordConfirm}
-            onChange={(v) => update('passwordConfirm', v)}
-            type="password"
-            autoComplete="new-password"
+            error={errors.fonction}
           />
         </div>
 
@@ -242,7 +219,7 @@ export default function NouvelUtilisateurPage() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate('/eleves')}
+            onClick={() => navigate('/eleves/dossiers')}
             className="w-full sm:w-auto"
           >
             Annuler
@@ -270,14 +247,14 @@ function Field({
   autoComplete,
 }) {
   return (
-    <label className="block min-w-0">
+    <label className="form-field-contained block">
       <span className="label">
         {label}
         {required && <span className="text-brand-red"> *</span>}
       </span>
       <input
         type={type}
-        className={`input min-h-[44px] sm:min-h-[2.5rem] ${error ? 'ring-2 ring-brand-red/40' : ''}`}
+        className={`input min-h-[44px] w-full max-w-full min-w-0 sm:min-h-[2.5rem] ${error ? 'ring-2 ring-brand-red/40' : ''}`}
         required={required}
         value={value ?? ''}
         inputMode={inputMode}
