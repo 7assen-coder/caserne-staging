@@ -4,37 +4,57 @@ import PptxGenJS from 'pptxgenjs';
 import * as XLSX from 'xlsx';
 import { saveAs } from './saveAsFile.js';
 import {
-  eleves,
-  appels,
-  presenceParSection,
-  kpiScolarite,
-  inscriptionsParFiliere,
+  eleves as mockEleves,
+  appels as mockAppels,
+  presenceParSection as mockPresenceParSection,
+  kpiScolarite as mockKpiScolarite,
+  inscriptionsParFiliere as mockInscriptionsParFiliere,
 } from '../data/mockData';
 import { INSTITUTION } from '../data/institution';
+import { useMockEleves } from './frontendMode';
 
 const SLUG = (s) => String(s || 'export').replace(/[^\w-]+/g, '_').slice(0, 80);
 
+function emptyTable(head) {
+  return { head: [head], body: [['Aucune donnée (API — pas de jeu mock)']] };
+}
+
 function rowsInscriptions() {
-  const rows = inscriptionsParFiliere.map((f) => [f.filiere, f.confirmees, f.enAttente, f.confirmees + f.enAttente]);
+  if (!useMockEleves()) {
+    return emptyTable(['Filière / département', 'Inscriptions validées', 'En attente', 'Total']);
+  }
+  const rows = mockInscriptionsParFiliere.map((f) => [
+    f.filiere,
+    f.confirmees,
+    f.enAttente,
+    f.confirmees + f.enAttente,
+  ]);
   return { head: [['Filière / département', 'Inscriptions validées', 'En attente', 'Total']], body: rows };
 }
 
-function rowsSuspendus() {
-  const s = eleves.filter((e) => e.statut === 'suspendu');
+function rowsSuspendus(elevesList) {
+  const source = useMockEleves() ? mockEleves : elevesList || [];
+  const s = source.filter((e) => e.statut === 'suspendu');
   return {
     head: [['Matricule', 'Nom', 'Prénom', 'Filière', 'Motif (extrait)']],
-    body: s.map((e) => [
-      e.matricule,
-      e.nom,
-      e.prenom,
-      e.filiere,
-      (e.suspension?.motif || '—').slice(0, 60),
-    ]),
+    body:
+      s.length === 0
+        ? [['—', '—', '—', '—', 'Aucun étudiant suspendu']]
+        : s.map((e) => [
+            e.matricule,
+            e.nom,
+            e.prenom,
+            e.filiere ?? e.scolarite?.filiere ?? '',
+            (e.suspension?.motif || '—').slice(0, 60),
+          ]),
   };
 }
 
 function rowsPresence() {
-  const a = appels.slice(0, 14);
+  if (!useMockEleves()) {
+    return emptyTable(['Date', 'Type', 'Section', 'Effectif', 'Présents', 'Absents', 'Statut']);
+  }
+  const a = mockAppels.slice(0, 14);
   return {
     head: [['Date', 'Type', 'Section', 'Effectif', 'Présents', 'Absents', 'Statut']],
     body: a.map((x) => [
@@ -49,26 +69,31 @@ function rowsPresence() {
   };
 }
 
-function getTable(rapportType) {
+function getTable(rapportType, elevesList) {
   if (rapportType === 'inscriptions') return rowsInscriptions();
-  if (rapportType === 'suspendus') return rowsSuspendus();
+  if (rapportType === 'suspendus') return rowsSuspendus(elevesList);
   if (rapportType === 'presence') return rowsPresence();
   return { head: [['—']], body: [['Aucun jeu de données']] };
 }
 
 const TITRES = {
-  inscriptions: "Rapport — Synthèse des inscriptions (par filière)",
-  suspendus: "Rapport — Étudiants en suspension",
-  presence: "Rapport — Présence & appels (extraits récents)",
+  inscriptions: 'Rapport — Synthèse des inscriptions (par filière)',
+  suspendus: 'Rapport — Étudiants en suspension',
+  presence: 'Rapport — Présence & appels (extraits récents)',
 };
 
-export async function exportRapportDashboard(rapportType, format) {
-  const { head, body } = getTable(rapportType);
+/** @param {{ elevesList?: unknown[] }} [options] */
+export async function exportRapportDashboard(rapportType, format, options = {}) {
+  const elevesList = options.elevesList || [];
+  const { head, body } = getTable(rapportType, elevesList);
   const title = TITRES[rapportType] || 'Rapport';
+  const kpiLine = useMockEleves()
+    ? `Indicateurs : étudiants actifs (KPI) ${mockKpiScolarite.etudiantsActifs} · inscriptions en attente ${mockKpiScolarite.inscriptionsEnAttente} · absences (alerte) voir section présence`
+    : `Indicateurs : effectif API ${elevesList.length} · exports mock désactivés`;
   const kpi = [
     `Établissement : ${INSTITUTION.nomComplet} (${INSTITUTION.pays})`,
     `Généré le : ${new Date().toLocaleString('fr-FR')}`,
-    `Indicateurs : étudiants actifs (KPI) ${kpiScolarite.etudiantsActifs} · inscriptions en attente ${kpiScolarite.inscriptionsEnAttente} · absences (alerte) voir section présence`,
+    kpiLine,
   ];
 
   if (format === 'pdf') {
@@ -122,20 +147,20 @@ export async function exportRapportDashboard(rapportType, format) {
       colW: head[0].map(() => 12.2 / head[0].length),
     });
 
-    if (rapportType === 'presence') {
+    if (rapportType === 'presence' && useMockEleves()) {
       const s2 = pptx.addSlide();
-      s2.addText("Répartition par section (taux indicatif)", { x: 0.5, y: 0.35, fontSize: 16, bold: true });
+      s2.addText('Répartition par section (taux indicatif)', { x: 0.5, y: 0.35, fontSize: 16, bold: true });
       s2.addTable(
         [
           ['Section', 'Taux (%)', 'Effectif (référence)'],
-          ...presenceParSection.map((p) => [p.section, String(p.taux), String(p.effectif)]),
+          ...mockPresenceParSection.map((p) => [p.section, String(p.taux), String(p.effectif)]),
         ],
         { x: 0.5, y: 1, w: 12, fontSize: 9 },
       );
     }
     if (rapportType === 'inscriptions') {
       const s2 = pptx.addSlide();
-      s2.addText("Contexte pédagogique (IRT — référence publique)", { x: 0.5, y: 0.35, fontSize: 14, bold: true });
+      s2.addText('Contexte pédagogique (IRT — référence publique)', { x: 0.5, y: 0.35, fontSize: 14, bold: true });
       s2.addText(
         "Compétences et débouchés : développement logiciel, systèmes d'information, réseaux & sécurité. Voir le site officiel de la filière IRT pour le détail de l'offre de formation.",
         { x: 0.5, y: 0.85, w: 12, fontSize: 10 },

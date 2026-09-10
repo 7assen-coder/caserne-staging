@@ -2,7 +2,7 @@ import { api } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
 import { eleves as mockElevesRaw } from '../data/mockData';
 import { todayIso } from '../utils/anneeUniversitaire';
-import { isFrontendOnly } from '../utils/frontendMode';
+import { isFrontendOnly, useMockEleves } from '../utils/frontendMode';
 import { normalizeDepartementForApi } from '../utils/constants';
 import { formatApiError } from '../utils/apiErrors';
 import {
@@ -77,10 +77,8 @@ function listFromImportedOnly(filters) {
   return mergeWithImported([], filters);
 }
 
-function shouldUseMockFallback(err) {
-  if (import.meta.env.VITE_USE_MOCK_ELEVES === 'true') return true;
-  if (!err?.response) return true;
-  return false;
+function shouldUseMockFallback() {
+  return useMockEleves();
 }
 
 /** Codes API `DossierAcademique.CHOIX_ANNEE` ↔ libellés UI `NIVEAUX_SCOLARITE`. */
@@ -398,15 +396,18 @@ function dossierAcademiquePayload(values, eleveId) {
 export const eleveService = {
   async list(filters = {}) {
     const imported = listFromImportedOnly(filters);
-    if (isFrontendOnly()) {
+    if (useMockEleves() || isFrontendOnly()) {
+      if (!useMockEleves()) {
+        return imported;
+      }
       return mergeWithImported(listFromMock(filters), filters);
     }
     try {
       const rows = await listFromApi(filters);
       return mergeWithImported(rows, filters);
     } catch (err) {
-      if (shouldUseMockFallback(err)) {
-        console.warn('[eleveService] API indisponible — données de démonstration.', err?.message);
+      if (shouldUseMockFallback()) {
+        console.warn('[eleveService] Mock élèves activé (VITE_USE_MOCK_ELEVES).', err?.message);
         return mergeWithImported(listFromMock(filters), filters);
       }
       return imported;
@@ -417,9 +418,13 @@ export const eleveService = {
     const imported = findImportedById(id);
     if (imported) return normalizeMockEleve(imported);
 
-    if (isFrontendOnly()) {
+    if (useMockEleves()) {
       const found = mockElevesRaw.map(normalizeMockEleve).find((e) => String(e.id) === String(id));
       if (found) return found;
+      throw new Error('Élève introuvable.');
+    }
+
+    if (isFrontendOnly()) {
       throw new Error('Élève introuvable.');
     }
 
@@ -427,7 +432,7 @@ export const eleveService = {
       const { data } = await api.get(`/eleves/${id}/`);
       return adaptEleveFromApi(data);
     } catch (err) {
-      if (shouldUseMockFallback(err)) {
+      if (shouldUseMockFallback()) {
         const found = mockElevesRaw.map(normalizeMockEleve).find((e) => String(e.id) === String(id));
         if (found) return found;
       }

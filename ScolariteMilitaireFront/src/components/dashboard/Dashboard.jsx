@@ -27,6 +27,7 @@ import {
 } from '../../utils/dashboardStats';
 import { ROLE_LABEL, getCanonicalRole, getPermissions } from '../../utils/userRole';
 import { getCurrentAcademicYear } from '../../utils/anneeUniversitaire';
+import { APP_NAME } from '../../data/institution';
 
 function isInMobilite(e) {
   const m = e?.mobilite;
@@ -220,7 +221,7 @@ export default function Dashboard() {
             >
               <EspLogo className="h-10 w-10 shrink-0 rounded-full ring-2 ring-white shadow-sm" />
               <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-slate-900">Gestion ESP</p>
+                <p className="truncate text-base font-semibold text-slate-900">{APP_NAME}</p>
               </div>
             </Link>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">

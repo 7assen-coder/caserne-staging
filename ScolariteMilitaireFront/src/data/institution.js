@@ -1,10 +1,11 @@
 /** Nom affiché de l’application (interface + exports). */
-export const APP_NAME = 'Gestion ESP';
+export const APP_NAME = 'CASERNE';
 
 export const INSTITUTION = {
   nomCourt: 'ESP',
-  nomComplet: 'Gestion ESP',
-  nomCompletEn: 'École supérieure polytechnique',
+  nomComplet: 'CASERNE',
+  nomCompletEn: 'CASERNE — Command post for military academic affairs (ESP)',
+  tagline: 'Poste de commandement de la scolarité (ESP)',
   adresse: 'Nouakchott',
   pays: 'Mauritanie',
   site: 'https://www.esp.mr',

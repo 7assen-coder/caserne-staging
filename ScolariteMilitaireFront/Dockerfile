@@ -10,8 +10,13 @@ RUN npm ci
 # Copy the rest of the frontend code
 COPY . .
 
-# Pass the API URL to Vite at build time so it knows to hit the Nginx proxy
-ENV VITE_API_BASE_URL=/api
+# Build-time API URL (Render static/docker: set VITE_API_BASE_URL=https://caserne-api.onrender.com/api)
+ARG VITE_API_BASE_URL=/api
+ARG VITE_FRONTEND_ONLY=false
+ARG VITE_USE_MOCK_ELEVES=false
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_FRONTEND_ONLY=$VITE_FRONTEND_ONLY
+ENV VITE_USE_MOCK_ELEVES=$VITE_USE_MOCK_ELEVES
 RUN npm run build
 
 # --- Stage 2: Serve ---

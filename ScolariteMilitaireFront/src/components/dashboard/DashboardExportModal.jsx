@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FileSpreadsheet,
   FileType,
@@ -10,8 +10,10 @@ import {
 import Button from '../common/Button';
 import FullScreenLayer from '../common/FullScreenLayer';
 import SelectField from '../common/SelectField';
-import { eleves } from '../../data/mockData';
+import { eleves as mockEleves } from '../../data/mockData';
 import { exportRapportDashboard } from '../../utils/dashboardExport';
+import { useMockEleves } from '../../utils/frontendMode';
+import { eleveService } from '../../services/eleveService';
 import {
   downloadAttestationParcoursIrt,
   downloadAttestationScolarite,
@@ -93,13 +95,35 @@ export default function DashboardExportModal({ open, onClose }) {
   const [onglet, setOnglet] = useState('rapports');
   const [rapportType, setRapportType] = useState('inscriptions');
   const [format, setFormat] = useState('pdf');
-  const [eleveId, setEleveId] = useState(eleves[0]?.id || '');
+  const [eleves, setEleves] = useState(() => (useMockEleves() ? mockEleves : []));
+  const [eleveId, setEleveId] = useState(() => (useMockEleves() ? mockEleves[0]?.id || '' : ''));
   const [semIndex, setSemIndex] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const [qMat, setQMat] = useState('');
   const [fDept, setFDept] = useState('');
   const [fAnnee, setFAnnee] = useState('');
+
+  useEffect(() => {
+    if (!open || useMockEleves()) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await eleveService.list({});
+        if (cancelled) return;
+        setEleves(rows);
+        setEleveId((prev) => {
+          if (prev && rows.some((e) => String(e.id) === String(prev))) return prev;
+          return rows[0]?.id || '';
+        });
+      } catch {
+        if (!cancelled) setEleves([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const deptOptions = useMemo(() => {
     const set = new Set();
@@ -110,7 +134,7 @@ export default function DashboardExportModal({ open, onClose }) {
         .sort((a, b) => String(a).localeCompare(String(b), 'fr'))
         .map((d) => ({ value: d, label: d })),
     );
-  }, []);
+  }, [eleves]);
   const anneeOptions = useMemo(() => {
     const set = new Set();
     for (const e of eleves) set.add(e.scolarite?.niveau ?? '');
@@ -120,7 +144,7 @@ export default function DashboardExportModal({ open, onClose }) {
         .sort((a, b) => String(a).localeCompare(String(b), 'fr'))
         .map((a) => ({ value: a, label: a })),
     );
-  }, []);
+  }, [eleves]);
 
   const elevesFiltres = useMemo(() => {
     const q = String(qMat).trim().toLowerCase();
@@ -132,9 +156,9 @@ export default function DashboardExportModal({ open, onClose }) {
       if (fAnnee && an !== fAnnee) return false;
       return true;
     });
-  }, [qMat, fDept, fAnnee]);
+  }, [eleves, qMat, fDept, fAnnee]);
 
-  const eleve = useMemo(() => eleves.find((e) => e.id === eleveId) || eleves[0], [eleveId]);
+  const eleve = useMemo(() => eleves.find((e) => e.id === eleveId) || eleves[0], [eleves, eleveId]);
   const semIdxEffectif = Math.min(
     semIndex,
     Math.max(0, (eleve?.relevesSemestres?.length ?? 1) - 1),
@@ -147,7 +171,7 @@ export default function DashboardExportModal({ open, onClose }) {
   const lancerRapport = async () => {
     setBusy(true);
     try {
-      await exportRapportDashboard(rapportType, format);
+      await exportRapportDashboard(rapportType, format, { elevesList: eleves });
       onClose?.();
     } catch (e) {
       console.error(e);

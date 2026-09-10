@@ -17,7 +17,18 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-b1yk9ocnx-heapopytef8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '187.127.228.192,localhost,127.0.0.1,backend').split(',')
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,backend').split(',')
+    if h.strip()
+]
+
+
+def _split_origins(env_name, defaults):
+    raw = os.environ.get(env_name, '').strip()
+    if not raw:
+        return list(defaults)
+    return [o.strip() for o in raw.split(',') if o.strip()]
 
 
 # Application definition
@@ -75,11 +86,14 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME','esp'),
-        'USER': os.environ.get('DB_USER','esp'),
-        'PASSWORD': os.environ.get('DB_PASSWORD','esp'),
+        'NAME': os.environ.get('DB_NAME', 'esp'),
+        'USER': os.environ.get('DB_USER', 'esp'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'esp'),
         'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
         'PORT': os.environ.get('DB_PORT', '5433'),
+        'OPTIONS': {
+            'sslmode': os.environ.get('DB_SSLMODE', 'prefer'),
+        },
     }
 }
 
@@ -140,14 +154,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# CORS (credentials + cookies JWT)
+# CORS (credentials + cookies JWT) — set CORS_ALLOWED_ORIGINS for Render static origin
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
+_CORS_DEFAULTS = (
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:9081',
     'http://127.0.0.1:9081',
-]
+)
+CORS_ALLOWED_ORIGINS = _split_origins('CORS_ALLOWED_ORIGINS', _CORS_DEFAULTS)
+
+CSRF_TRUSTED_ORIGINS = _split_origins(
+    'CSRF_TRUSTED_ORIGINS',
+    (
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:9081',
+        'http://127.0.0.1:9081',
+    ),
+)
+
+# Behind Render / reverse proxies
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 JWT_COOKIE_ACCESS_NAME = 'esp_access'
 JWT_COOKIE_REFRESH_NAME = 'esp_refresh'
@@ -173,8 +201,8 @@ REST_FRAMEWORK = {
 
 # Spectacular Configuration
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Gestion des Elèves API',
-    'DESCRIPTION': 'API pour le module de Gestion des Elèves',
+    'TITLE': 'CASERNE API',
+    'DESCRIPTION': 'API — Poste de commandement de la scolarité (ESP)',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }

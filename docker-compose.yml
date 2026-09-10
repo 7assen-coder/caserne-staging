@@ -21,10 +21,10 @@ services:
     ports:
       - "8000:8080"
     environment:
-      - DEBUG=True # for now until https and domain name
-      # Optional: set a strong secret key for production here
-      # - SECRET_KEY=your-production-secret-key-here
-      - ALLOWED_HOSTS=187.127.228.192,localhost,127.0.0.1,backend
+      # Override at deploy: ALLOWED_HOSTS=<PUBLIC_IP>,localhost,127.0.0.1,backend
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-esp-demo-change-me-oracle-hassen-2026}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=esp
@@ -47,4 +47,3 @@ services:
 volumes:
   pg_data:
   media_data:
-

@@ -1,0 +1,52 @@
+# CASERNE staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
+# Set secret env in dashboard. Web UI uses Docker (nginx) with VITE_* build args.
+
+services:
+  - type: web
+    name: caserne-api
+    runtime: docker
+    plan: free
+    repo: https://github.com/7assen-coder/caserne-staging
+    branch: main
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/docs/
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: DB_SSLMODE
+        value: require
+      - key: DB_PORT
+        value: "5432"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://caserne-web.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://caserne-web.onrender.com
+
+  - type: web
+    name: caserne-web
+    runtime: docker
+    plan: free
+    repo: https://github.com/7assen-coder/caserne-staging
+    branch: main
+    rootDir: ScolariteMilitaireFront
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: VITE_FRONTEND_ONLY
+        value: "false"
+      - key: VITE_USE_MOCK_ELEVES
+        value: "false"
+      - key: VITE_API_BASE_URL
+        value: https://caserne-api.onrender.com/api

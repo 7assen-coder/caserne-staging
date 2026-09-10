@@ -7,7 +7,7 @@ import {
   APP_NAV_EXACT_MATCH_ROUTES,
   isNavItemActive,
 } from './appNavConfig';
-import { APP_NAME } from '../../data/institution';
+import { APP_NAME, INSTITUTION } from '../../data/institution';
 
 function NavLeaf({ item, light, onNavigate, pathname }) {
   const { to, icon: Icon, label } = item;
@@ -133,8 +133,11 @@ export default function AppNavbar({ mobileOpen, onMobileClose }) {
         <div className="border-b border-white/15 px-5 py-5">
           <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
             <EspLogo className="h-10 w-10 shrink-0" />
-            <div>
+            <div className="min-w-0">
               <p className="truncate text-base font-semibold text-white">{APP_NAME}</p>
+              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-white/55">
+                {INSTITUTION.tagline}
+              </p>
             </div>
           </Link>
         </div>

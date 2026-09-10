@@ -28,3 +28,6 @@ COPY . /code/
 COPY entrypoint.sh /code/
 RUN chmod +x /code/entrypoint.sh
 ENTRYPOINT ["/code/entrypoint.sh"]
+
+# Render injects PORT; local/docker-compose can override the command
+CMD ["sh", "-c", "gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8080} --workers 3"]
