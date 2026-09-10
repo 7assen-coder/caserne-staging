@@ -1,9 +1,11 @@
-# CASERNE staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
-# Set secret env in dashboard. Web UI uses Docker (nginx) with VITE_* build args.
+# GESESP staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
+# Public URLs: https://gesesp.com (UI) · https://api.gesesp.com (API)
+# Until DNS: https://gesesp.onrender.com · https://gesesp-api.onrender.com
+# Attach custom domains on Render, then set secret DB_* in the dashboard.
 
 services:
   - type: web
-    name: caserne-api
+    name: gesesp-api
     runtime: docker
     plan: free
     repo: https://github.com/7assen-coder/caserne-staging
@@ -21,7 +23,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOWED_HOSTS
-        sync: false
+        value: api.gesesp.com,gesesp-api.onrender.com
       - key: DB_HOST
         sync: false
       - key: DB_NAME
@@ -31,12 +33,12 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: https://caserne-web.onrender.com
+        value: https://gesesp.com,https://www.gesesp.com,https://gesesp.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://caserne-web.onrender.com
+        value: https://gesesp.com,https://www.gesesp.com,https://gesesp.onrender.com
 
   - type: web
-    name: caserne-web
+    name: gesesp
     runtime: docker
     plan: free
     repo: https://github.com/7assen-coder/caserne-staging
@@ -49,4 +51,4 @@ services:
       - key: VITE_USE_MOCK_ELEVES
         value: "false"
       - key: VITE_API_BASE_URL
-        value: https://caserne-api.onrender.com/api
+        value: https://gesesp-api.onrender.com/api

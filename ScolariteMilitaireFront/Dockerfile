@@ -2,15 +2,13 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy package files and install dependencies
 COPY package.json package-lock.json ./
 RUN npm install
 RUN npm ci
 
-# Copy the rest of the frontend code
 COPY . .
 
-# Build-time API URL (Render static/docker: set VITE_API_BASE_URL=https://caserne-api.onrender.com/api)
+# Production public API: https://api.gesesp.com/api
 ARG VITE_API_BASE_URL=/api
 ARG VITE_FRONTEND_ONLY=false
 ARG VITE_USE_MOCK_ELEVES=false
@@ -21,11 +19,9 @@ RUN npm run build
 
 # --- Stage 2: Serve ---
 FROM nginx:1.30.0-alpine
-# Copy the compiled files from the builder stage
+ARG NGINX_CONF=nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Overwrite the default Nginx config with our custom one
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

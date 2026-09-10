@@ -37,6 +37,8 @@ services:
     build:
       context: ./ScolariteMilitaireFront
       dockerfile: Dockerfile
+      args:
+        NGINX_CONF: nginx.compose.conf
     volumes:
       - media_data:/usr/share/nginx/media:ro
     ports:

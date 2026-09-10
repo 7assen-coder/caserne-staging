@@ -8,7 +8,7 @@ export const INSTITUTION = {
   tagline: 'Poste de commandement de la scolarité (ESP)',
   adresse: 'Nouakchott',
   pays: 'Mauritanie',
-  site: 'https://www.esp.mr',
+  site: 'https://gesesp.com',
   logoUrl: '/esp-logo.png',
   departementIrt: 'Département informatique, réseaux & télécommunications (IRT)',
   signatureLibelle: 'Le responsable de la scolarité',

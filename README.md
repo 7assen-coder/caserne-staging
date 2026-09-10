@@ -1,10 +1,18 @@
-# CASERNE
+# CASERNE (public site: GESESP.com)
 
 **Poste de commandement de la scolarité (ESP)**
 
 Branch: `demo/oracle-hassen` — **do not merge into `main` / `master`.**
 
-Staging target: **Neon Postgres** + **Render** (API Web Service + Static Site). Mock élèves disabled.
+Public URLs:
+
+| Role | URL |
+|------|-----|
+| App (supervisor) | **https://gesesp.com** |
+| API | **https://api.gesesp.com** |
+| API docs | **https://api.gesesp.com/api/docs** |
+
+Staging host: **Render** (+ Postgres). Mock élèves disabled.
 
 ---
 
@@ -13,10 +21,10 @@ Staging target: **Neon Postgres** + **Render** (API Web Service + Static Site). 
 | Env | Host | Branch | Audience |
 |-----|------|--------|----------|
 | Local | Developer Mac | `demo/oracle-hassen` | Dev |
-| Staging / demo | Render + Neon | `demo/oracle-hassen` | Supervisor |
-| Production | Future always-on host / VPS | same app + TLS | Phase B |
+| Staging / demo | Render · custom domain **gesesp.com** | `demo/oracle-hassen` | Supervisor |
+| Production | Same or VPS | Phase B | Ops |
 
-**Promotion:** push/pull this branch → Render auto-deploy (or Manual Deploy). No hotfixes on `main`.
+**Promotion:** push this branch → Render auto-deploy. No hotfixes on `main`.
 
 ---
 
@@ -24,25 +32,32 @@ Staging target: **Neon Postgres** + **Render** (API Web Service + Static Site). 
 
 ```text
 Supervisor browser
-  → https://<caserne-static>.onrender.com   (CASERNE SPA)
-  → https://<caserne-api>.onrender.com/api  (Django / Gunicorn)
-  → Neon Postgres
+  → https://gesesp.com              (CASERNE SPA / nginx)
+  → https://api.gesesp.com/api      (Django / Gunicorn)
+  → Postgres (Render free / Neon)
 ```
 
-- Frontend build sets `VITE_API_BASE_URL=https://<caserne-api>.onrender.com/api`
-- API allows that origin via `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS`
-- Auth: Bearer token (primary) + cookies when same-site
+- Build: `VITE_API_BASE_URL=https://api.gesesp.com/api`
+- API: `ALLOWED_HOSTS=api.gesesp.com,...` · `CORS_ALLOWED_ORIGINS=https://gesesp.com,https://www.gesesp.com`
+- Temporary Render hostnames (`*.onrender.com`) stay as fallbacks until DNS is attached
 
-**Cold start:** free Render web services sleep after idle; first request can take 30–60s.  
-**Media:** container disk is ephemeral on free tier — uploads may vanish on redeploy (OK for supervisor demo).
+**Cold start:** free Render web services may sleep (~30–60s first hit).  
+**Media:** free disk is ephemeral across redeploys.
 
 ---
 
-## Phase 0 — Accounts (human)
+## Custom domain (GESESP.com) on Render
 
-1. **[Neon Console](https://console.neon.tech)** → create free project → copy DB host, database, user, password, port `5432`. Prefer the **direct** (non-pooler) host for migrations.
-2. **[Render Dashboard](https://dashboard.render.com)** → sign up / sign in → connect GitHub → grant access to `Bouhe-Moustapa/esp_management` (branch `demo/oracle-hassen`).
-3. If Render asks for a payment card and you cannot proceed, stop and switch path (Railway / VPS).
+1. Own/register **gesesp.com**
+2. On **gesesp** (web): Custom Domain → `gesesp.com` + `www.gesesp.com`
+3. On **gesesp-api**: Custom Domain → `api.gesesp.com`
+4. Set DNS (Render shows CNAME / A records)
+5. Rebuild web so Vite bakes `https://api.gesesp.com/api`
+
+Until DNS is live, you can still use:
+
+- https://gesesp.onrender.com  
+- https://gesesp-api.onrender.com  
 
 ---
 
@@ -50,132 +65,51 @@ Supervisor browser
 
 ```bash
 docker compose up -d db
-
 cd backend && source .venv311/bin/activate
 python manage.py runserver 0.0.0.0:8000
-
-cd ScolariteMilitaireFront
-# VITE_FRONTEND_ONLY=false , VITE_USE_MOCK_ELEVES=false
-npm run dev
+cd ScolariteMilitaireFront && npm run dev
 ```
 
-- App: http://127.0.0.1:9081  
-- API docs: http://127.0.0.1:8000/api/docs  
+- App: http://127.0.0.1:9081 · Docs: http://127.0.0.1:8000/api/docs  
 
 ```bash
-cd backend
 python manage.py create_esp_superuser --email EmEm@esp.mr --password 'YOUR_PASSWORD'
 ```
 
-Optional full Docker stack (API proxied as `/api`):
-
-```bash
-export DEBUG=False
-export SECRET_KEY="$(openssl rand -hex 32)"
-docker compose up -d --build
-```
+Compose frontend uses `nginx.compose.conf` (proxies `/api` to `backend`).
 
 ---
 
-## Staging — Neon + Render
-
-### 1) Neon
-
-Create project `caserne`. Note:
-
-| Env var | Value |
-|---------|--------|
-| `DB_HOST` | Neon direct host |
-| `DB_PORT` | `5432` |
-| `DB_NAME` | Neon database name |
-| `DB_USER` | Neon role |
-| `DB_PASSWORD` | Neon password |
-| `DB_SSLMODE` | `require` |
-
-### 2) Render Web Service (API)
-
-- **Name:** `caserne-api`
-- **Branch:** `demo/oracle-hassen`
-- **Root / Docker:** `backend` · Dockerfile `backend/Dockerfile`
-- **Instance:** Free
-- **Start:** image `CMD` already binds `0.0.0.0:$PORT`
-
-Runtime env:
-
-| Key | Example |
-|-----|---------|
-| `DEBUG` | `False` |
-| `SECRET_KEY` | strong random |
-| `ALLOWED_HOSTS` | `caserne-api.onrender.com` |
-| `DB_*` / `DB_SSLMODE` | from Neon |
-| `CORS_ALLOWED_ORIGINS` | `https://caserne-web.onrender.com` |
-| `CSRF_TRUSTED_ORIGINS` | `https://caserne-web.onrender.com` |
-
-Deploy API first; copy its URL `https://<caserne-api>.onrender.com`.
-
-### 3) Render Static Site (CASERNE UI)
-
-- **Name:** `caserne-web`
-- **Branch:** `demo/oracle-hassen`
-- **Root directory:** `ScolariteMilitaireFront`
-- **Build:** `npm ci && npm run build`
-- **Publish:** `dist`
-- **SPA:** rewrite all routes to `/index.html`
-
-Build env:
+## Staging env (Render)
 
 | Key | Value |
 |-----|--------|
+| `DEBUG` | `False` |
+| `ALLOWED_HOSTS` | `api.gesesp.com,gesesp-api.onrender.com` |
+| `CORS_ALLOWED_ORIGINS` | `https://gesesp.com,https://www.gesesp.com,https://gesesp.onrender.com` |
+| `CSRF_TRUSTED_ORIGINS` | same as CORS |
+| `DB_SSLMODE` | `require` |
+| `VITE_API_BASE_URL` | `https://api.gesesp.com/api` (or `https://gesesp-api.onrender.com/api` before DNS) |
 | `VITE_FRONTEND_ONLY` | `false` |
 | `VITE_USE_MOCK_ELEVES` | `false` |
-| `VITE_API_BASE_URL` | `https://<caserne-api>.onrender.com/api` |
 
-Then set API `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` to `https://<caserne-web>.onrender.com` and redeploy API if needed.
-
-### Blueprint (optional)
-
-Repo root [`render.yaml`](render.yaml) can seed both services; still set secret env vars in the dashboard.
-
-### Admin on Render
-
-Render Shell on `caserne-api`:
+Admin (Render Shell on API):
 
 ```bash
 python manage.py create_esp_superuser --email EmEm@esp.mr --password 'YOUR_PASSWORD'
 ```
 
-### Update procedure
-
-Push to `demo/oracle-hassen` → Render rebuilds. Or **Manual Deploy** in the dashboard.
-
-### Backup (Neon)
-
-Use Neon console PITR / export, or:
-
-```bash
-pg_dump "postgresql://USER:PASS@HOST/DB?sslmode=require" > caserne-backup.sql
-```
-
 ---
 
-## Supervisor acceptance checklist
+## Supervisor checklist
 
-- [ ] Open static URL — brand shows **CASERNE**
-- [ ] First load may be slow (cold start) — wait and retry
-- [ ] Log in with provided admin
-- [ ] Dashboard / dossiers show **0** fake mock students
-- [ ] `https://<api>/api/docs` loads
-- [ ] Create one étudiant → appears after refresh
-- [ ] Logout / login again OK
-
----
-
-## Phase B
-
-Always-on host or paid Render: persistent media disk, custom domain. Keep this branch unmerged.
+- [ ] Open **https://gesesp.com** (or https://gesesp.onrender.com)
+- [ ] Brand shows CASERNE; first load may be slow (cold start)
+- [ ] Login works; dossiers empty (no 64 mock students)
+- [ ] https://api.gesesp.com/api/docs loads (or https://gesesp-api.onrender.com/api/docs)
+- [ ] Create one étudiant → visible after refresh
 
 ## Security
 
-- `DEBUG=False` on staging
-- Never commit real `SECRET_KEY` or DB passwords
-- Data policy: `VITE_USE_MOCK_ELEVES=false`
+- Never commit real `SECRET_KEY` / DB passwords
+- Do not merge this branch into `main`
