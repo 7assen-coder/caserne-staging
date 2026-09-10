@@ -1,4 +1,4 @@
-# CASERNE (public site: GESESP.com)
+# GESESP
 
 **Poste de commandement de la scolarité (ESP)**
 
@@ -32,7 +32,7 @@ Staging host: **Render** (+ Postgres). Mock élèves disabled.
 
 ```text
 Supervisor browser
-  → https://gesesp.com              (CASERNE SPA / nginx)
+  → https://gesesp.com              (GESESP SPA / nginx)
   → https://api.gesesp.com/api      (Django / Gunicorn)
   → Postgres (Render free / Neon)
 ```
@@ -104,7 +104,7 @@ python manage.py create_esp_superuser --email EmEm@esp.mr --password 'YOUR_PASSW
 ## Supervisor checklist
 
 - [ ] Open **https://gesesp.com** (or https://gesesp.onrender.com)
-- [ ] Brand shows CASERNE; first load may be slow (cold start)
+- [ ] Brand shows GESESP; first load may be slow (cold start)
 - [ ] Login works; dossiers empty (no 64 mock students)
 - [ ] https://api.gesesp.com/api/docs loads (or https://gesesp-api.onrender.com/api/docs)
 - [ ] Create one étudiant → visible after refresh

@@ -201,7 +201,7 @@ REST_FRAMEWORK = {
 
 # Spectacular Configuration
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'CASERNE API',
+    'TITLE': 'GESESP API',
     'DESCRIPTION': 'API — Poste de commandement de la scolarité (ESP)',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
