@@ -1,5 +1,6 @@
 # Polyspace staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
-# Staging: https://polyspace.onrender.com (UI) · https://polyspace-api-dlp4.onrender.com (API)
+# Staging: https://polyspace.onrender.com (UI proxies /api → https://polyspace-api-dlp4.onrender.com)
+# SPA bakes VITE_API_BASE_URL=/api/v1 so CSRF/JWT cookies are first-party on the UI host.
 # Note: clean slug polyspace-api.onrender.com is held externally; live API uses -dlp4 until reclaimable.
 # Transition aliases still allowed: gesesp.onrender.com · gesesp-api.onrender.com
 # Production: https://polyspace.mr · https://api.polyspace.mr (VPS — not this blueprint)
@@ -106,7 +107,8 @@ services:
       - key: VITE_APP_ENV
         value: staging
       - key: VITE_API_BASE_URL
-        value: https://polyspace-api-dlp4.onrender.com/api/v1
+        # Same-origin via SPA nginx /api proxy (first-party CSRF/JWT cookies).
+        value: /api/v1
       - key: VITE_SENTRY_DSN
         sync: false
       - key: VITE_SENTRY_TRACES_SAMPLE_RATE

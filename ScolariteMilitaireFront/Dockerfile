@@ -9,8 +9,8 @@ RUN npm ci
 
 COPY . .
 
-# Production public API: https://api.polyspace.mr/api
-# Staging: https://polyspace-api.onrender.com/api/v1 + VITE_APP_ENV=staging
+# Production: absolute https://api.polyspace.mr/api/v1 (or compose nginx proxy + /api/v1).
+# Staging Render: /api/v1 (SPA nginx proxies to polyspace-api-dlp4) + VITE_APP_ENV=staging
 ARG VITE_API_BASE_URL=/api/v1
 ARG VITE_FRONTEND_ONLY=false
 ARG VITE_USE_MOCK_ELEVES=false
