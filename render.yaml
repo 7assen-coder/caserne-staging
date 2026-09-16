@@ -1,5 +1,6 @@
 # Polyspace staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
-# Staging: https://polyspace.onrender.com (UI) · https://polyspace-api.onrender.com (API)
+# Staging: https://polyspace.onrender.com (UI) · https://polyspace-api-dlp4.onrender.com (API)
+# Note: clean slug polyspace-api.onrender.com is held externally; live API uses -dlp4 until reclaimable.
 # Transition aliases still allowed: gesesp.onrender.com · gesesp-api.onrender.com
 # Production: https://polyspace.mr · https://api.polyspace.mr (VPS — not this blueprint)
 # Attach custom domains on Render, then set secret DB_* / EMAIL_* in the dashboard.
@@ -32,7 +33,7 @@ services:
       - key: PLATFORM_NAME
         value: Polyspace
       - key: ALLOWED_HOSTS
-        value: polyspace-api.onrender.com,gesesp-api.onrender.com
+        value: polyspace-api-dlp4.onrender.com,polyspace-api.onrender.com,gesesp-api.onrender.com
       - key: DB_HOST
         sync: false
       - key: DB_NAME
@@ -105,7 +106,7 @@ services:
       - key: VITE_APP_ENV
         value: staging
       - key: VITE_API_BASE_URL
-        value: https://polyspace-api.onrender.com/api/v1
+        value: https://polyspace-api-dlp4.onrender.com/api/v1
       - key: VITE_SENTRY_DSN
         sync: false
       - key: VITE_SENTRY_TRACES_SAMPLE_RATE
