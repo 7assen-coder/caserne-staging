@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from './saveAsFile.js';
+import { apiPaths } from '../services/apiPaths';
 import {
   demandeNatureLabel,
   demandeStatutLabel,
@@ -8,7 +9,7 @@ import {
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { APP_NAME } from '../data/institution';
 import { buildDemandeDetailExportRows } from './demandeStats';
-import { loadDemandes } from './demandeStore';
+import { apiList } from './opsApi';
 
 const SYNTHESIS_COLUMNS = [
   { key: 'matricule', label: 'Matricule' },
@@ -44,30 +45,34 @@ async function tryAddLogo(doc) {
 }
 
 function synthesisRows(students) {
-  const all = loadDemandes();
-  return students.map((s) => {
-    const items = all.filter((i) => String(i.eleveId) === String(s.id));
-    const enCours = items.filter((i) => i.statut === 'en_cours').length;
-    const last = items.sort((a, b) =>
-      String(b.dateDepot).localeCompare(String(a.dateDepot)),
-    )[0];
-    const derniere = last
-      ? `${formatDateFr(last.dateDepot)} · ${demandeNatureLabel(last.nature)}`
-      : '—';
-    return {
-      matricule: sanitizeExportText(s.matricule),
-      nomComplet: sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
-      departement: sanitizeExportText(s.departement),
-      niveau: sanitizeExportText(s.niveau),
-      nbDemandes: String(s.nbDemandes ?? items.length),
-      enCours: String(enCours),
-      derniere: sanitizeExportText(derniere),
-    };
-  });
+  return students.map((s) => ({
+    matricule: sanitizeExportText(s.matricule),
+    nomComplet: sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
+    departement: sanitizeExportText(s.departement),
+    niveau: sanitizeExportText(s.niveau),
+    nbDemandes: String(s.nbDemandes ?? 0),
+    enCours: String(s.enCours ?? 0),
+    derniere: sanitizeExportText(s.derniereLabel || '—'),
+  }));
+}
+
+async function fetchDemandesMapped() {
+  const raw = await apiList(apiPaths.demandes.list);
+  return raw.map((r) => ({
+    id: r.id,
+    eleveId: String(r.eleve),
+    code: r.code ?? '',
+    description: r.description ?? '',
+    nature: r.nature ?? '',
+    dateDepot: r.date_depot ?? '',
+    statut: r.statut ?? 'en_cours',
+    demandePdf: r.demande_pdf ? { name: 'demande.pdf' } : null,
+    pjPdf: r.pj_pdf ? { name: 'pj.pdf' } : null,
+  }));
 }
 
 export async function exportDemandeSynthesisExcel(students, filenameBase = 'synthese-demandes-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = SYNTHESIS_COLUMNS.map((c) => c.label);
   const body = synthesisRows(students).map((row) =>
     SYNTHESIS_COLUMNS.map((c) => row[c.key] ?? ''),
@@ -83,12 +88,12 @@ export async function exportDemandeSynthesisExcel(students, filenameBase = 'synt
 }
 
 export async function exportDemandeDetailExcel(students, filenameBase = 'registre-demandes-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule', 'Nom et prénom', 'Département', 'Niveau', 'Code', 'Description', 'Nature',
     'Date dépôt', 'Statut', 'Demande PDF', 'PJ PDF',
   ];
-  const body = buildDemandeDetailExportRows(students).map(({ item, student: s }) => [
+  const body = buildDemandeDetailExportRows(students, await fetchDemandesMapped()).map(({ item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.departement),
@@ -160,7 +165,7 @@ export async function exportDemandeDetailPdf(
   if (filtersLabel) doc.text(`Filtres : ${filtersLabel}`, textX, 38);
 
   const headers = ['Matricule', 'Nom', 'Dépt', 'Code', 'Description', 'Nature', 'Dépôt', 'Statut'];
-  const body = buildDemandeDetailExportRows(students).map(({ item, student: s }) => [
+  const body = buildDemandeDetailExportRows(students, await fetchDemandesMapped()).map(({ item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.departement),

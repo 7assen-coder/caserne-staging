@@ -15,8 +15,11 @@ import {
   Wallet,
 } from 'lucide-react';
 import Button from '../common/Button';
+import QueryErrorPanel from '../common/QueryErrorPanel';
+import OpsStatCard from '../ops/OpsStatCard';
+import OpsFilterSelect from '../ops/OpsFilterSelect';
 import DroitsExportMenu from './DroitsExportMenu';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { droitsService } from '../../services/droitsService';
 import {
   COMPAGNIE_NIVEAU_LABEL,
@@ -27,63 +30,23 @@ import {
   yearOptions,
 } from '../../data/droitsCatalog';
 import { useAuth } from '../../hooks/useAuth';
+import { queryKeys } from '../../lib/queryKeys';
 import { ROLE_LABEL, getCanonicalRole, getPermissions } from '../../utils/userRole';
 import { useToast } from '../../context/ToastContext';
 import { formatApiError, humanizeError } from '../../utils/apiErrors';
 import { exportDroitsExcel, exportDroitsPdf } from '../../utils/droitsListExport';
 import { computeDroitsStats } from '../../utils/droitsStats';
-import { DROITS_CHANGED } from '../../utils/droitsStore';
+import { DROITS_CHANGED } from '../../services/droitsService';
 import { initials } from '../../utils/formatters';
 
 const now = new Date();
 
-function StatCard({ label, value, hint, icon: Icon, accent }) {
-  const accents = {
-    navy: 'border-l-navy bg-white',
-    green: 'border-l-emerald-600 bg-emerald-50/40',
-    amber: 'border-l-amber-500 bg-amber-50/40',
-    slate: 'border-l-slate-400 bg-slate-50/60',
-  };
-  return (
-    <div
-      className={`flex min-h-[5.5rem] flex-col justify-between rounded-xl border border-light-gray border-l-4 px-4 py-3.5 shadow-sm ${accents[accent] ?? accents.navy}`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-        {Icon ? <Icon size={16} className="shrink-0 text-slate-400" aria-hidden /> : null}
-      </div>
-      <p className="font-serif text-2xl font-semibold tabular-nums leading-none text-navy sm:text-3xl">
-        {value}
-      </p>
-      {hint ? <p className="text-[11px] text-slate-500">{hint}</p> : <span className="h-4" aria-hidden />}
-    </div>
-  );
+function FilterSelect(props) {
+  return <OpsFilterSelect {...props} />;
 }
 
-function FilterSelect({ label, value, onChange, options, id }) {
-  return (
-    <label htmlFor={id} className="flex min-w-0 flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <div className="relative">
-        <select
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="input w-full cursor-pointer appearance-none py-2.5 pl-3 pr-9 text-sm"
-        >
-          {options.map((o) => (
-            <option key={String(o.value)} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          aria-hidden
-        />
-      </div>
-    </label>
-  );
+function StatCard(props) {
+  return <OpsStatCard {...props} />;
 }
 
 function EtatBadge({ etat }) {
@@ -123,7 +86,7 @@ function WorkflowStep({ step, label, active, done }) {
 }
 
 export default function GestionDroits() {
-  const { fonction } = useAuth();
+  const { fonction, bootstrapped, isAuthenticated } = useAuth();
   const role = getCanonicalRole(fonction);
   const perms = getPermissions(role);
   const canEdit = perms.canEditStudent;
@@ -136,20 +99,22 @@ export default function GestionDroits() {
   const [draftRows, setDraftRows] = useState([]);
   const [defaultMontant, setDefaultMontant] = useState('');
   const [searchQ, setSearchQ] = useState('');
-  const [key, setKey] = useState(0);
   const [busy, setBusy] = useState(null);
   const [exportBusy, setExportBusy] = useState(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const refresh = () => setKey((k) => k + 1);
+    const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.droits.all });
     window.addEventListener(DROITS_CHANGED, refresh);
     return () => window.removeEventListener(DROITS_CHANGED, refresh);
-  }, []);
+  }, [queryClient]);
 
-  const { data: batch, loading, error } = useFetch(
-    () => droitsService.loadBatch(annee, mois, compagnie),
-    [annee, mois, compagnie, key],
-  );
+  const batchParams = { annee, mois, compagnie };
+  const { data: batch, isPending: loading, error, refetch, isError } = useQuery({
+    queryKey: queryKeys.droits.batch(batchParams),
+    queryFn: () => droitsService.loadBatch(annee, mois, compagnie),
+    enabled: bootstrapped && isAuthenticated,
+  });
 
   useEffect(() => {
     if (!batch) return;
@@ -190,24 +155,35 @@ export default function GestionDroits() {
     toast.success(etat === 'percu' ? 'Tous marqués Perçu.' : 'Tous marqués Non perçu.');
   };
 
-  const applyDefaultToAll = () => {
+  const applyDefaultToAll = async () => {
     const m = Number(defaultMontant);
     if (!Number.isFinite(m) || m < 0) {
       toast.warning('Montant par défaut invalide.');
       return;
     }
     setDraftRows((rows) => rows.map((r) => ({ ...r, montant: m })));
-    droitsService.setDefaultMontant(annee, mois, compagnie, m);
-    toast.success('Montant appliqué à tous les étudiants.');
+    try {
+      await droitsService.setDefaultMontant(
+        annee,
+        mois,
+        compagnie,
+        m,
+        batch?.batchId,
+        batch?.batchRowVersion,
+      );
+      toast.success('Montant appliqué à tous les étudiants.');
+    } catch (err) {
+      toast.error(humanizeError(err));
+    }
   };
 
   const handleValidate = async () => {
     setBusy('validate');
     try {
-      await droitsService.validate(annee, mois, compagnie, draftRows);
+      await droitsService.validate(annee, mois, compagnie, draftRows, batch?.batchId);
       toast.success('Feuille de droits validée.');
       setEditMode(false);
-      setKey((k) => k + 1);
+      queryClient.invalidateQueries({ queryKey: queryKeys.droits.all });
     } catch (err) {
       toast.error(humanizeError(err));
     } finally {
@@ -218,10 +194,10 @@ export default function GestionDroits() {
   const handleUnlock = async () => {
     setBusy('unlock');
     try {
-      droitsService.unlock(annee, mois, compagnie);
+      await droitsService.unlock(annee, mois, compagnie, batch?.batchId);
       setEditMode(true);
       toast.info('Mode édition activé.');
-      setKey((k) => k + 1);
+      queryClient.invalidateQueries({ queryKey: queryKeys.droits.all });
     } catch (err) {
       toast.error(humanizeError(err));
     } finally {
@@ -232,12 +208,19 @@ export default function GestionDroits() {
   const handleSaveDraft = async () => {
     setBusy('save');
     try {
-      droitsService.saveAll(annee, mois, compagnie, draftRows);
+      await droitsService.saveAll(annee, mois, compagnie, draftRows, batch?.batchId);
       if (defaultMontant) {
-        droitsService.setDefaultMontant(annee, mois, compagnie, Number(defaultMontant));
+        await droitsService.setDefaultMontant(
+          annee,
+          mois,
+          compagnie,
+          Number(defaultMontant),
+          batch?.batchId,
+          batch?.batchRowVersion,
+        );
       }
       toast.success('Modifications enregistrées.');
-      setKey((k) => k + 1);
+      queryClient.invalidateQueries({ queryKey: queryKeys.droits.all });
     } catch (err) {
       toast.error(humanizeError(err));
     } finally {
@@ -270,16 +253,6 @@ export default function GestionDroits() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-8">
-      <nav>
-        <div className="inline-flex items-center gap-2 rounded-full border border-light-gray bg-white px-3 py-1.5 text-sm text-text-light shadow-sm">
-          <Link to="/dashboard" className="font-medium transition hover:text-navy">
-            Accueil
-          </Link>
-          <span aria-hidden>/</span>
-          <span className="font-semibold text-navy">Droits</span>
-        </div>
-      </nav>
-
       <header className="flex flex-col gap-4 rounded-2xl border border-light-gray bg-white px-5 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex min-w-0 items-center gap-3.5">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-navy text-white shadow-sm">
@@ -467,10 +440,14 @@ export default function GestionDroits() {
           </label>
         </div>
 
-        {error ? (
-          <p className="mx-5 my-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 sm:mx-6">
-            {formatApiError(error)}
-          </p>
+        {isError ? (
+          <div className="mx-5 my-4 sm:mx-6">
+            <QueryErrorPanel
+              error={error}
+              title="Impossible de charger les droits."
+              onRetry={() => refetch()}
+            />
+          </div>
         ) : null}
 
         {loading ? (
@@ -515,8 +492,8 @@ export default function GestionDroits() {
                       <tr key={row.eleveId} className="border-b border-slate-100 hover:bg-slate-50/60">
                         <td className="px-4 py-3">
                           <div className="flex min-w-0 items-center gap-2.5">
-                            {row.photoUrl ? (
-                              <img src={row.photoUrl} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />
+                            {row.photoThumbUrl || row.photoUrl ? (
+                              <img src={row.photoThumbUrl || row.photoUrl} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-slate-200" />
                             ) : (
                               <span className="grid h-9 w-9 place-items-center rounded-lg bg-navy text-[10px] font-bold text-white">
                                 {initials(row.nom, row.prenom)}

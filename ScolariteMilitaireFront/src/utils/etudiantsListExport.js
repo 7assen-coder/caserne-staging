@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from './saveAsFile.js';
-import { buildExportMatrix, buildTransposedExportMatrix } from '../data/etudiantColonnes';
+import { buildExportMatrix, resolveColonnesExportSansMensurations } from '../data/etudiantColonnes';
 import { APP_NAME } from '../data/institution';
 
 const BORDER = {
@@ -66,7 +66,7 @@ function exportFilename(base) {
   return `${base}-${dateSuffix()}`;
 }
 
-function styleTransposedWorksheet(ws, XLSX, rowCount, colCount) {
+function styleWorksheet(ws, XLSX, headers) {
   const ref = ws['!ref'];
   if (!ref) return;
   const range = XLSX.utils.decode_range(ref);
@@ -83,17 +83,10 @@ function styleTransposedWorksheet(ws, XLSX, rowCount, colCount) {
           alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
           border: BORDER,
         };
-      } else if (C === 0) {
-        ws[addr].s = {
-          font: { bold: true, sz: 10, color: { rgb: '1E293B' } },
-          fill: { fgColor: { rgb: 'E8EDF4' } },
-          alignment: { vertical: 'center', wrapText: true },
-          border: BORDER,
-        };
       } else {
         ws[addr].s = {
           font: { sz: 10, color: { rgb: '1E293B' } },
-          fill: R % 2 === 0 ? { fgColor: { rgb: 'FFFFFF' } } : { fgColor: { rgb: 'F7F8FA' } },
+          fill: R % 2 === 0 ? { fgColor: { rgb: 'F7F8FA' } } : { fgColor: { rgb: 'FFFFFF' } },
           alignment: { vertical: 'center', wrapText: true },
           border: BORDER,
         };
@@ -101,11 +94,11 @@ function styleTransposedWorksheet(ws, XLSX, rowCount, colCount) {
     }
   }
 
-  const colWidths = [{ wch: 32 }];
-  for (let c = 1; c < colCount; c += 1) colWidths.push({ wch: 22 });
-  ws['!cols'] = colWidths;
+  ws['!cols'] = headers.map((h) => ({
+    wch: Math.min(40, Math.max(12, String(h).length + 4)),
+  }));
   ws['!rows'] = [{ hpt: 28 }];
-  ws['!freeze'] = { xSplit: 1, ySplit: 1, topLeftCell: 'B2', activePane: 'bottomRight' };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' };
 }
 
 export async function exportEtudiantsExcel(
@@ -113,23 +106,22 @@ export async function exportEtudiantsExcel(
   colonneIds,
   filenameBase = 'liste-etudiants-esp',
 ) {
-  const { rowLabels, studentHeaders, grid } = buildTransposedExportMatrix(eleves, colonneIds);
-  if (!rowLabels.length) {
+  const exportIds = resolveColonnesExportSansMensurations(colonneIds).map((c) => c.id);
+  const { headers, rows } = matrixForExport(eleves, exportIds);
+  if (!headers.length) {
     throw new Error('Sélectionnez au moins une colonne à exporter (hors mensurations).');
   }
 
   const XLSX = await import('xlsx-js-style');
-  const headerRow = ['Champ / Étudiant', ...studentHeaders];
-  const dataRows = rowLabels.map((label, ri) => [label, ...grid[ri]]);
-  const sheetData = [headerRow, ...dataRows];
+  const sheetData = [headers, ...rows];
   const ws = XLSX.utils.aoa_to_sheet(sheetData);
-  styleTransposedWorksheet(ws, XLSX, dataRows.length, headerRow.length);
+  styleWorksheet(ws, XLSX, headers);
 
   const wb = XLSX.utils.book_new();
   wb.Props = {
-    Title: `${APP_NAME} — Registre étudiants (transposé)`,
+    Title: `${APP_NAME} — Registre étudiants`,
     Author: APP_NAME,
-    Comments: 'Mensurations exclues — libellés en lignes, étudiants en colonnes.',
+    Comments: 'Mensurations exclues — une ligne par étudiant.',
   };
   XLSX.utils.book_append_sheet(wb, ws, 'Registre');
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -149,47 +141,61 @@ export async function exportEtudiantsPdf(eleves, colonneIds, meta = {}) {
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
-  const title = meta.title ?? `Liste des étudiants — ${APP_NAME}`;
+  const pageH = doc.internal.pageSize.getHeight();
+  const HEADER_H = 22;
+  const title = sanitizeExportText(
+    String(meta.title ?? 'Liste des étudiants').replace(new RegExp(`\\s*[—-]\\s*${APP_NAME}\\s*$`, 'i'), '').trim()
+      || 'Liste des étudiants',
+  );
+  const dateStr = new Date().toLocaleDateString('fr-FR');
 
-  doc.setFillColor(72, 115, 70);
-  doc.rect(0, 0, pageW, 22, 'F');
-  doc.setFillColor(200, 165, 78);
-  doc.rect(0, 22, pageW, 1, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('République Islamique de Mauritanie', pageW / 2, 9, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text('ÉCOLE SUPÉRIEURE POLYTECHNIQUE', pageW / 2, 16, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-
+  let logoDataUrl = null;
   try {
-    const dataUrl = await fetchEspLogoDataUrl();
-    doc.addImage(dataUrl, 'PNG', 14, 26, 18, 18);
+    logoDataUrl = await fetchEspLogoDataUrl();
   } catch {
     /* logo optionnel */
   }
 
+  doc.setFillColor(72, 115, 70);
+  doc.rect(0, 0, pageW, HEADER_H, 'F');
+  doc.setFillColor(200, 165, 78);
+  doc.rect(0, HEADER_H, pageW, 1.2, 'F');
+
+  const logoSize = 12;
+  const logoX = 10;
+  const logoY = (HEADER_H - logoSize) / 2;
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', logoX, logoY, logoSize, logoSize);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  const textX = logoDataUrl ? logoX + logoSize + 5 : pageW / 2;
+  doc.text('ÉCOLE SUPÉRIEURE POLYTECHNIQUE', textX, HEADER_H / 2 + 1.5, {
+    align: logoDataUrl ? 'left' : 'center',
+  });
+  doc.setTextColor(0, 0, 0);
+
+  let y = HEADER_H + 9;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(15, 27, 51);
-  doc.text(APP_NAME, pageW / 2, 32, { align: 'center' });
+  doc.text(title, pageW / 2, y, { align: 'center' });
+
+  y += 6;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(60, 60, 60);
-  doc.text(title, pageW / 2, 39, { align: 'center' });
-  doc.setFontSize(8);
-  doc.text(
-    `Registre des étudiants — ${new Date().toLocaleDateString('fr-FR')} — ${eleves.length} dossier(s)`,
-    pageW / 2,
-    44,
-    { align: 'center' },
-  );
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${dateStr} · ${eleves.length} dossier(s)`, pageW / 2, y, { align: 'center' });
   doc.setTextColor(0, 0, 0);
 
   autoTable(doc, {
-    startY: 48,
+    startY: y + 6,
     head: [headers],
     body: rows,
     theme: 'grid',
@@ -214,13 +220,14 @@ export async function exportEtudiantsPdf(eleves, colonneIds, meta = {}) {
     margin: { left: 10, right: 10 },
     tableWidth: 'auto',
     horizontalPageBreak: true,
-    didDrawPage() {
+    didDrawPage(data) {
+      const pageCount = doc.getNumberOfPages();
       doc.setFontSize(7);
       doc.setTextColor(100);
       doc.text(
-        `${APP_NAME} — ${eleves.length} étudiant(s)`,
+        `${APP_NAME} — Page ${data.pageNumber}/${pageCount}`,
         pageW / 2,
-        doc.internal.pageSize.getHeight() - 6,
+        pageH - 6,
         { align: 'center' },
       );
       doc.setTextColor(0);

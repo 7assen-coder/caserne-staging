@@ -19,7 +19,14 @@ function NomPrenomCell({ eleve: r }) {
       <p className="font-medium text-text">
         {prenom} {nom}
       </p>
-      <p className="text-sm text-text-light">{r.sexe === 'F' ? 'Féminin' : 'Masculin'}</p>
+      <p className="flex flex-wrap items-center gap-1.5 text-sm text-text-light">
+        <span>{r.sexe === 'F' ? 'F' : 'M'}</span>
+        {r.profilIncomplet ? (
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-100">
+            À compléter
+          </span>
+        ) : null}
+      </p>
     </div>
   );
 }

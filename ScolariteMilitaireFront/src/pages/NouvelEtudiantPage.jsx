@@ -150,18 +150,6 @@ export default function NouvelEtudiantPage() {
   if (!perms.canCreateStudent) {
     return (
       <div className="grid grid-cols-1 gap-6 md:gap-8 xl:grid-cols-12 xl:gap-x-8">
-        <nav className="text-base text-text-light xl:col-span-12">
-          <Link to="/dashboard" className="hover:text-navy">
-            Accueil
-          </Link>
-          <span className="mx-2">/</span>
-          <Link to="/eleves/dossiers" className="hover:text-navy">
-            Gestion des élèves
-          </Link>
-          <span className="mx-2">/</span>
-          <span className="text-navy font-semibold">Nouvel étudiant</span>
-        </nav>
-
         <div className="xl:col-span-12">
           <Link
             to="/eleves/dossiers"
@@ -185,20 +173,8 @@ export default function NouvelEtudiantPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:gap-8 xl:grid-cols-12 xl:gap-x-8">
-      <nav className="text-base text-text-light xl:col-span-12">
-        <Link to="/dashboard" className="hover:text-navy">
-          Accueil
-        </Link>
-        <span className="mx-2">/</span>
-        <Link to="/eleves/dossiers" className="hover:text-navy">
-          Gestion des élèves
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="text-navy font-semibold">Nouvel étudiant</span>
-      </nav>
-
-      <div className="xl:col-span-12">
+    <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-6 overflow-x-hidden md:gap-8 xl:grid-cols-12 xl:gap-x-8">
+      <div className="min-w-0 xl:col-span-12">
         <Link
           to="/eleves/dossiers"
           className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-navy hover:text-navy/80"
@@ -206,16 +182,12 @@ export default function NouvelEtudiantPage() {
           <ArrowLeft size={18} aria-hidden />
           Retour à la liste
         </Link>
-        <div className="mb-6 border-b border-light-gray pb-4">
-          <h1 className="page-title">Nouvel étudiant</h1>
-          <p className="mt-1 text-sm text-text-light md:text-base">
-            Création d’un dossier — formulaire multi-étapes. Vous êtes connecté en tant que{' '}
-            <strong className="text-navy">{ROLE_LABEL[role]}</strong>.
-          </p>
+        <div className="mb-6 min-w-0 border-b border-light-gray pb-4">
+          <h1 className="page-title text-2xl sm:text-3xl md:text-5xl">Nouvel étudiant</h1>
         </div>
       </div>
 
-      <div className="xl:col-span-12 min-h-0 w-full max-w-full overflow-x-hidden rounded-2xl border border-light-gray bg-white px-3 pb-10 pt-4 shadow-[0_1px_3px_rgba(15,27,51,0.06)] sm:px-8 sm:pb-12 sm:pt-6">
+      <div className="xl:col-span-12 min-h-0 w-full min-w-0 max-w-full overflow-x-hidden rounded-2xl border border-light-gray bg-white px-3 pb-24 pt-4 shadow-[0_1px_3px_rgba(15,27,51,0.06)] sm:px-8 sm:pb-12 sm:pt-6">
         <FormulaireEleve
           role={role}
           mode="standard"

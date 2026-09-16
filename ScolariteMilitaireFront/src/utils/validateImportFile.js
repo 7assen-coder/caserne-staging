@@ -1,26 +1,33 @@
-import { IMPORT_MAX_BYTES, IMPORT_MAX_LABEL } from './importExportLimits';
+import { IMPORT_MAX_BYTES } from './importExportLimits';
 
-export function validateImportFile(file) {
+export function validateImportFile(file, t) {
   if (!(file instanceof File)) {
-    return { ok: false, message: 'Fichier invalide.' };
+    return { ok: false, message: t ? t('eleves:importInvalidFormat') : 'Fichier invalide.' };
   }
 
   if (file.size > IMPORT_MAX_BYTES) {
     return {
       ok: false,
-      message: `Le fichier est trop volumineux. Taille maximale : ${IMPORT_MAX_LABEL}.`,
+      message: t ? t('eleves:importInvalidFormat') : 'Fichier trop volumineux.',
     };
   }
 
   const name = file.name.toLowerCase();
   const allowed =
-    name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv');
+    name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.docx');
   if (!allowed) {
     return {
       ok: false,
-      message: 'Format non accepté. Utilisez un fichier Excel (.xlsx) ou CSV (.csv).',
+      message: t
+        ? t('eleves:importInvalidFormat')
+        : 'Format non accepté. Utilisez Excel (.xlsx) ou Word (.docx).',
     };
   }
 
   return { ok: true };
+}
+
+export function isDocxFile(file) {
+  if (!(file instanceof File)) return false;
+  return file.name.toLowerCase().endsWith('.docx');
 }

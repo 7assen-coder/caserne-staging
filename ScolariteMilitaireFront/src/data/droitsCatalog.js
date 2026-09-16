@@ -32,7 +32,7 @@ export const DROITS_COMPAGNIES = COMPAGNIES_OPTIONS.filter((o) => o.value);
 export const COMPAGNIE_NIVEAU_LABEL = {
   '1re Compagnie': '3e année',
   '2e Compagnie': '4e année',
-  '3e Compagnie': '5e année',
+  '3e Compagnie': '5e E / DD',
 };
 
 export function droitsEtatLabel(value) {

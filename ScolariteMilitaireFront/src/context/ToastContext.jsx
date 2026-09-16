@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { humanizeError } from '../utils/apiErrors';
 
 const ToastContext = createContext(null);
@@ -37,10 +38,12 @@ const ICON_STYLES = {
 };
 
 function ToastItem({ item, onDismiss }) {
+  const { t } = useTranslation('common');
   const Icon = ICONS[item.type] ?? Info;
+  const role = item.type === 'error' || item.type === 'warning' ? 'alert' : 'status';
   return (
     <div
-      role="alert"
+      role={role}
       className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border px-4 py-3.5 shadow-lg ring-1 ring-black/5 animate-[toast-in_0.28s_ease-out] ${STYLES[item.type] ?? STYLES.info}`}
     >
       <Icon size={22} className={`mt-0.5 shrink-0 ${ICON_STYLES[item.type] ?? ICON_STYLES.info}`} aria-hidden />
@@ -48,8 +51,8 @@ function ToastItem({ item, onDismiss }) {
       <button
         type="button"
         onClick={() => onDismiss(item.id)}
-        className="-mr-1 shrink-0 rounded-lg p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100"
-        aria-label="Fermer"
+        className="-me-1 shrink-0 rounded-lg p-1 opacity-70 transition hover:bg-black/5 hover:opacity-100"
+        aria-label={t('close')}
       >
         <X size={18} />
       </button>

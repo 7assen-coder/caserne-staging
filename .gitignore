@@ -16,6 +16,9 @@ __pycache__/
 *.pyo
 .env
 .env.local
+.env.prod
+.env.obs
+backend/.env.prod
 
 # Django media (uploaded files)
 backend/media/
@@ -33,3 +36,21 @@ dist/
 *.swp
 *.swo
 CLAUDE.md
+
+# Phase 26 — never commit dumps / local backup smoke
+.backup-smoke/
+backups/
+*.dump
+*.dump.age
+media_restore/
+.env.sentry.local
+backend/.env.resend_key
+
+# Local Resend API key drop (never commit)
+backend/.env.resend_key
+backend/.env.cloudflare.local
+
+# Playwright / coverage artifacts
+**/test-results/
+**/playwright-report/
+**/coverage/

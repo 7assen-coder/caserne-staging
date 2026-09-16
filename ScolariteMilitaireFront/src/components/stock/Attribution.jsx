@@ -3,13 +3,24 @@ import { PackageCheck } from 'lucide-react';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Badge from '../common/Badge';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 import { stockService } from '../../services/stockService';
 import { eleveService } from '../../services/eleveService';
 
 export default function Attribution({ onDone }) {
-  const { data: eleves } = useFetch(() => eleveService.list(), []);
-  const { data: stock } = useFetch(() => stockService.list(), []);
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const { data: eleves } = useQuery({
+    queryKey: queryKeys.eleves.list({ mode: 'allPages', scope: 'stock' }),
+    queryFn: () => eleveService.listAllPages(),
+    enabled: bootstrapped && isAuthenticated,
+  });
+  const { data: stock } = useQuery({
+    queryKey: queryKeys.stock.list(),
+    queryFn: () => stockService.list(),
+    enabled: bootstrapped && isAuthenticated,
+  });
   const [eleveId, setEleveId] = useState('');
   const [articleId, setArticleId] = useState('');
   const [quantite, setQuantite] = useState(1);

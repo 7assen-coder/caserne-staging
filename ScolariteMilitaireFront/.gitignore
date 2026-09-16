@@ -26,3 +26,9 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+test-results/
+playwright-report/
+
+# Local fiche-mesure calibration previews
+.tmp/
+

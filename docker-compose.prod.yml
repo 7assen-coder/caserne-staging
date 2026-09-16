@@ -1,0 +1,194 @@
+# Production stack — Hostinger VPS (/opt/polyspace/app)
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# Scale API (Phase 40): docker compose -f docker-compose.prod.yml up -d --scale backend=2 --scale celery=2
+#   Caddy uses Compose DNS round-robin on `backend:8080` (no sticky sessions).
+#   Requires shared Redis + MinIO (USE_S3_MEDIA=True). Never mount local media on backend.
+# Reverse proxy: Caddy (auto HTTPS for polyspace.mr + api.polyspace.mr)
+#
+# Prerequisites: backend/.env.prod with SECRET_KEY, strong DB password, etc.
+# Never commit .env.prod
+
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-esp}
+      POSTGRES_USER: ${DB_USER:-esp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes:
+      - /opt/polyspace/data/postgres:/var/lib/postgresql/data
+    # Internal only — not published to host public interface
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-esp} -d ${DB_NAME:-esp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - /opt/polyspace/data/redis:/data
+    expose:
+      - "6379"
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    volumes:
+      - /opt/polyspace/data/minio:/data
+    expose:
+      - "9000"
+      - "9001"
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      - minio
+    restart: "on-failure"
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minio} $${MINIO_ROOT_PASSWORD};
+      mc mb -p local/$${AWS_STORAGE_BUCKET_NAME:-polyspace-media} || true;
+      mc anonymous set none local/$${AWS_STORAGE_BUCKET_NAME:-polyspace-media} || true;
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["/code/gunicorn.sh"]
+    env_file:
+      - ./backend/.env.prod
+    environment:
+      DJANGO_ENV: production
+      DEBUG: "False"
+      SECURITY_HEADERS_ENABLED: "True"
+      SECURE_SSL_REDIRECT: "True"
+      ALLOWED_HOSTS: api.polyspace.mr,backend
+      CORS_ALLOWED_ORIGINS: https://polyspace.mr,https://www.polyspace.mr
+      CSRF_TRUSTED_ORIGINS: https://polyspace.mr,https://www.polyspace.mr
+      JWT_COOKIE_SAMESITE: "None"
+      JWT_COOKIE_SECURE: "True"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-esp}
+      DB_USER: ${DB_USER:-esp}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      CONN_MAX_AGE: "600"
+      REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      USE_LOCMEM_CACHE: "False"
+      CELERY_TASK_ALWAYS_EAGER: "False"
+      HEALTHZ_REQUIRE_REDIS: "True"
+      USE_S3_MEDIA: "True"
+      MEDIA_DELIVERY: stream
+      BACKEND_REPLICAS: ${BACKEND_REPLICAS:-1}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_S3_REGION_NAME: us-east-1
+      AWS_S3_ADDRESSING_STYLE: path
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    expose:
+      - "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: "celery -A backend worker -l info --concurrency=${CELERY_CONCURRENCY:-2}"
+    env_file:
+      - ./backend/.env.prod
+    environment:
+      DJANGO_ENV: production
+      DEBUG: "False"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-esp}
+      DB_USER: ${DB_USER:-esp}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      USE_S3_MEDIA: "True"
+      MEDIA_DELIVERY: stream
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_S3_REGION_NAME: us-east-1
+      AWS_S3_ADDRESSING_STYLE: path
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      - backend
+      - redis
+
+  frontend:
+    build:
+      context: ./ScolariteMilitaireFront
+      dockerfile: Dockerfile
+      args:
+        NGINX_CONF: nginx.conf
+        VITE_API_BASE_URL: https://api.polyspace.mr/api/v1
+        VITE_APP_ENV: production
+        VITE_FRONTEND_ONLY: "false"
+        VITE_USE_MOCK_ELEVES: "false"
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_TRACES_SAMPLE_RATE: ${VITE_SENTRY_TRACES_SAMPLE_RATE:-0}
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    name: polyspace

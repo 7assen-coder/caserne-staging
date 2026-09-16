@@ -1,0 +1,26 @@
+# Production reverse proxy — auto HTTPS (Let's Encrypt)
+# DNS A records for polyspace.mr / www / api must point at this VPS.
+# Optional status/grafana hosts: see docs/ops-observability.md (SSH tunnel preferred).
+
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+polyspace.mr, www.polyspace.mr {
+	encode gzip
+	reverse_proxy frontend:80
+}
+
+api.polyspace.mr {
+	encode gzip
+	@metrics path /metrics /metrics/*
+	respond @metrics 404
+	# Phase 40: Compose DNS round-robin when `docker compose ... --scale backend=N`.
+	# Prefer /api/readyz for LB health (requires Redis+DB). No sticky cookie.
+	reverse_proxy backend:8080 {
+		lb_policy round_robin
+		health_uri /api/readyz/
+		health_interval 15s
+		health_timeout 5s
+	}
+}

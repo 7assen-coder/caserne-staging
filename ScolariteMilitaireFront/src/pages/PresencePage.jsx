@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { BarChart3, ClipboardList, History, UserCheck } from 'lucide-react';
 import HistoriqueAppel from '../components/presence/HistoriqueAppel';
 import LancerAppel from '../components/presence/LancerAppel';
@@ -24,16 +23,6 @@ export default function PresencePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-8">
-      <nav>
-        <div className="inline-flex items-center gap-2 rounded-full border border-light-gray bg-white px-3 py-1.5 text-sm text-text-light shadow-sm">
-          <Link to="/dashboard" className="font-medium transition hover:text-navy">
-            Accueil
-          </Link>
-          <span aria-hidden>/</span>
-          <span className="font-semibold text-navy">Présence</span>
-        </div>
-      </nav>
-
       <header className="flex flex-col gap-4 rounded-2xl border border-light-gray bg-white px-5 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex min-w-0 items-center gap-3.5">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-navy text-white shadow-sm">

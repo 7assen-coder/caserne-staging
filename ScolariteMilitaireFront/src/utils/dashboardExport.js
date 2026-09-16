@@ -1,7 +1,5 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import PptxGenJS from 'pptxgenjs';
-import * as XLSX from 'xlsx';
 import { saveAs } from './saveAsFile.js';
 import {
   eleves as mockEleves,
@@ -118,6 +116,7 @@ export async function exportRapportDashboard(rapportType, format, options = {}) 
   }
 
   if (format === 'xlsx') {
+    const XLSX = await import('xlsx-js-style');
     const aoa = [[title], [], ...kpi.map((l) => [l]), [], ...head, ...body];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
@@ -131,6 +130,7 @@ export async function exportRapportDashboard(rapportType, format, options = {}) 
   }
 
   if (format === 'pptx') {
+    const { default: PptxGenJS } = await import('pptxgenjs');
     const pptx = new PptxGenJS();
     pptx.title = title;
     const slide1 = pptx.addSlide();

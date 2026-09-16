@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import Button from '../common/Button';
 import ImportDossier from '../eleves/ImportDossier';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 import { eleveService } from '../../services/eleveService';
 import { TYPES_ABSENCE, MOTIFS_ABSENCE } from '../../utils/constants';
 
 export default function DemandePermission({ onSubmit, onCancel }) {
-  const { data: eleves } = useFetch(() => eleveService.list(), []);
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const { data: eleves } = useQuery({
+    queryKey: queryKeys.eleves.list({ mode: 'allPages', scope: 'permissions' }),
+    queryFn: () => eleveService.listAllPages(),
+    enabled: bootstrapped && isAuthenticated,
+  });
   const [values, setValues] = useState({
     eleveId: '',
     typeAbsence: TYPES_ABSENCE[0].value,

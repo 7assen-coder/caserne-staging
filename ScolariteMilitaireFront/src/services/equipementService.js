@@ -1,29 +1,31 @@
 import { eleveService } from './eleveService';
+import { apiPaths } from './apiPaths';
 import {
-  addEquipementItem,
-  countItemsByEleveId,
-  deleteEquipementItem,
-  findEquipementItemById,
-  getItemsByEleveId,
-  returnEquipementItem,
-  updateEquipementItem,
-} from '../utils/equipementStore';
+  apiDelete,
+  apiList,
+  apiPatch,
+  apiPost,
+  notifyChanged,
+  toFormData,
+  withExpectedVersion,
+} from '../utils/opsApi';
 
-function fileToAttachment(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        name: file.name,
-        mimeType: file.type || 'application/pdf',
-        dataUrl: reader.result,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier PDF.'));
-    reader.readAsDataURL(file);
-  });
+export const EQUIPEMENT_CHANGED = 'esp-equipement-changed';
+
+function mapItem(raw) {
+  return {
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    type: raw.nature ?? '',
+    description: raw.description ?? '',
+    quantite: raw.quantite ?? 1,
+    dateRemise: raw.date_remise ?? '',
+    etat: raw.etat === 'rendu' ? 'rendu' : 'en_usage',
+    dateRetour: raw.date_retour ?? null,
+    pdfAttachment: raw.pdf ? { url: raw.pdf, name: 'piece.pdf' } : null,
+    rowVersion: raw.row_version ?? 1,
+  };
 }
 
 function filterStudentRows(rows, filters = {}) {
@@ -38,82 +40,94 @@ function filterStudentRows(rows, filters = {}) {
     );
   }
   if (filters.section) {
-    list = list.filter(
-      (e) =>
-        (e.dossierMilitaire?.section ?? e.section) === filters.section,
-    );
+    list = list.filter((e) => (e.dossierMilitaire?.section ?? e.section) === filters.section);
   }
   if (filters.compagnie) {
-    list = list.filter(
-      (e) =>
-        (e.dossierMilitaire?.compagnie ?? e.compagnie) === filters.compagnie,
-    );
+    list = list.filter((e) => (e.dossierMilitaire?.compagnie ?? e.compagnie) === filters.compagnie);
   }
   return list;
 }
 
-function toListRow(eleve) {
-  const section = eleve.dossierMilitaire?.section ?? eleve.section ?? '';
-  return {
-    id: eleve.id,
-    matricule: eleve.matricule ?? '',
-    nom: eleve.nom ?? '',
-    prenom: eleve.prenom ?? '',
-    section,
-    nbItems: countItemsByEleveId(eleve.id),
-    photoUrl: eleve.photoUrl ?? null,
-  };
-}
-
 export const equipementService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list(filters);
-    const filtered = filterStudentRows(eleves, filters);
-    return filtered.map((e) => ({
-      ...toListRow(e),
-      nbItems: countItemsByEleveId(e.id),
+    const eleves = await eleveService.listAllPages(filters);
+    const items = await apiList(apiPaths.equipements.list);
+    const countBy = {};
+    items.forEach((it) => {
+      const id = String(it.eleve);
+      countBy[id] = (countBy[id] ?? 0) + 1;
+    });
+    return filterStudentRows(eleves, filters).map((e) => ({
+      id: e.id,
+      matricule: e.matricule ?? '',
+      nom: e.nom ?? '',
+      prenom: e.prenom ?? '',
+      section: e.dossierMilitaire?.section ?? e.section ?? '',
+      nbItems: countBy[String(e.id)] ?? 0,
+      photoUrl: e.photoUrl ?? null,
     }));
   },
 
   async getStudent(eleveId) {
     const eleve = await eleveService.get(eleveId);
     if (!eleve) return null;
+    const items = (await apiList(apiPaths.equipements.list, { eleve: eleveId })).map(mapItem);
     return {
       ...eleve,
       section: eleve.dossierMilitaire?.section ?? eleve.section ?? '',
-      items: getItemsByEleveId(eleveId),
+      items,
     };
   },
 
-  getItems(eleveId) {
-    return getItemsByEleveId(eleveId);
+  async getItems(eleveId) {
+    return (await apiList(apiPaths.equipements.list, { eleve: eleveId })).map(mapItem);
+  },
+
+  async findItem(itemId) {
+    const { apiGet } = await import('../utils/opsApi');
+    return mapItem(await apiGet(apiPaths.equipements.detail(itemId)));
   },
 
   async addItem(eleveId, payload, pdfFile = null) {
-    let pdfAttachment = null;
-    if (pdfFile instanceof File) {
-      pdfAttachment = await fileToAttachment(pdfFile);
-    }
-    return addEquipementItem({ ...payload, eleveId, pdfAttachment });
+    const body = toFormData({
+      eleve: eleveId,
+      code: payload.code ?? '',
+      nature: payload.type ?? payload.nature ?? '',
+      description: payload.description ?? '',
+      quantite: payload.quantite ?? 1,
+      date_remise: payload.dateRemise ?? '',
+      etat: 'en_usage',
+      pdf: pdfFile instanceof File ? pdfFile : undefined,
+    });
+    const raw = await apiPost(apiPaths.equipements.list, body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(EQUIPEMENT_CHANGED);
+    return mapItem(raw);
   },
 
-  async updateItemPdf(itemId, pdfFile) {
-    if (!(pdfFile instanceof File)) {
-      return updateEquipementItem(itemId, { pdfAttachment: null });
-    }
-    const pdfAttachment = await fileToAttachment(pdfFile);
-    return updateEquipementItem(itemId, { pdfAttachment });
+  async updateItemPdf(itemId, pdfFile, rowVersion) {
+    const body = withExpectedVersion(toFormData({ pdf: pdfFile }), rowVersion);
+    const raw = await apiPatch(apiPaths.equipements.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(EQUIPEMENT_CHANGED);
+    return mapItem(raw);
   },
 
-  deleteItem(itemId) {
-    return deleteEquipementItem(itemId);
+  async deleteItem(itemId, rowVersion) {
+    await apiDelete(apiPaths.equipements.detail(itemId), {
+      data: withExpectedVersion({}, rowVersion),
+    });
+    notifyChanged(EQUIPEMENT_CHANGED);
   },
 
-  returnItem(itemId, dateRetour) {
-    return returnEquipementItem(itemId, dateRetour);
-  },
-
-  findItem(itemId) {
-    return findEquipementItemById(itemId);
+  async returnItem(itemId, dateRetour, rowVersion) {
+    const raw = await apiPost(
+      apiPaths.equipements.retour(itemId),
+      withExpectedVersion({ date_retour: dateRetour || undefined }, rowVersion),
+    );
+    notifyChanged(EQUIPEMENT_CHANGED);
+    return mapItem(raw);
   },
 };

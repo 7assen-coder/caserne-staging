@@ -1,29 +1,37 @@
-# GESESP staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
-# Public URLs: https://gesesp.com (UI) · https://api.gesesp.com (API)
-# Until DNS: https://gesesp.onrender.com · https://gesesp-api.onrender.com
-# Attach custom domains on Render, then set secret DB_* in the dashboard.
+# Polyspace staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
+# Target: https://polyspace.mr (UI) · https://api.polyspace.mr (API)
+# Legacy until cutover: https://gesesp.onrender.com · https://gesesp-api.onrender.com
+# Attach custom domains on Render, then set secret DB_* / EMAIL_* in the dashboard.
 
 services:
   - type: web
-    name: gesesp-api
+    name: polyspace-api
     runtime: docker
     plan: free
     repo: https://github.com/7assen-coder/caserne-staging
     branch: main
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /api/docs/
+    healthCheckPath: /api/healthz/
     envVars:
+      - key: DJANGO_ENV
+        value: staging
       - key: DEBUG
         value: "False"
+      - key: SECURITY_HEADERS_ENABLED
+        value: "True"
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
       - key: DB_SSLMODE
         value: require
       - key: DB_PORT
         value: "5432"
       - key: SECRET_KEY
         generateValue: true
+      - key: PLATFORM_NAME
+        value: Polyspace
       - key: ALLOWED_HOSTS
-        value: api.gesesp.com,gesesp-api.onrender.com
+        value: gesesp-api.onrender.com,polyspace-api.onrender.com
       - key: DB_HOST
         sync: false
       - key: DB_NAME
@@ -33,12 +41,55 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: https://gesesp.com,https://www.gesesp.com,https://gesesp.onrender.com
+        value: https://gesesp.onrender.com,https://polyspace.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://gesesp.com,https://www.gesesp.com,https://gesesp.onrender.com
+        value: https://gesesp.onrender.com,https://polyspace.onrender.com
+      - key: JWT_COOKIE_SAMESITE
+        value: "None"
+      - key: JWT_COOKIE_SECURE
+        value: "True"
+      - key: LOGIN_MAX_FAILURES
+        value: "5"
+      - key: LOGIN_LOCKOUT_SECONDS
+        value: "900"
+      - key: DEFAULT_FROM_EMAIL
+        value: Polyspace <noreply@polyspace.mr>
+      - key: EMAIL_HOST
+        value: smtp-relay.brevo.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "True"
+      - key: USE_LOCMEM_CACHE
+        value: "True"
+      - key: HEALTHZ_REQUIRE_REDIS
+        value: "False"
+      - key: HEALTHZ_REQUIRE_STORAGE
+        value: "False"
+      - key: CONN_MAX_AGE
+        value: "60"
+      - key: GUNICORN_WORKERS
+        value: "2"
+      - key: GUNICORN_THREADS
+        value: "1"
+      # Phase 24: stream without nginx X-Accel (Render). Phase 23: set USE_S3_MEDIA + AWS_* for R2 in dashboard.
+      - key: MEDIA_DELIVERY
+        value: stream
+      - key: USE_S3_MEDIA
+        value: "False"
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: "0"
 
   - type: web
-    name: gesesp
+    name: polyspace
     runtime: docker
     plan: free
     repo: https://github.com/7assen-coder/caserne-staging
@@ -50,5 +101,11 @@ services:
         value: "false"
       - key: VITE_USE_MOCK_ELEVES
         value: "false"
+      - key: VITE_APP_ENV
+        value: staging
       - key: VITE_API_BASE_URL
         value: https://gesesp-api.onrender.com/api
+      - key: VITE_SENTRY_DSN
+        sync: false
+      - key: VITE_SENTRY_TRACES_SAMPLE_RATE
+        value: "0"

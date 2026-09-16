@@ -19,10 +19,10 @@ const NIVEAU_ALIASES = {
   '4DD': '4e DD',
   '4-E': '5e E',
   '4E ECHANGE': '5e E',
+  '5E': '5e E',
+  '5-E': '5e E',
   '5-DD': '5e DD',
   '5DD': '5e DD',
-  '5': '5e année',
-  '5E': '5e année',
 };
 
 function normKey(v) {
@@ -256,7 +256,7 @@ function rowToEleve(row, rowNum) {
 }
 
 async function readExcelRows(file) {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];

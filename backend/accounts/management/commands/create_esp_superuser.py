@@ -3,6 +3,9 @@ import getpass
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 
+from accounts.models import UserProfile
+from accounts.serializers import ensure_profile
+
 
 def _normalize_email(email: str) -> str:
     return (email or '').strip().lower()
@@ -10,7 +13,7 @@ def _normalize_email(email: str) -> str:
 
 class Command(BaseCommand):
     help = (
-        'Crée ou met à jour un superutilisateur dont l’e-mail se termine par @esp.mr '
+        'Crée ou met à jour un superutilisateur / administrateur dont l’e-mail se termine par @esp.mr '
         '(cohérent avec la connexion front : username = e-mail).'
     )
 
@@ -50,8 +53,18 @@ class Command(BaseCommand):
             existing.is_active = True
             existing.set_password(password)
             existing.save()
+            profile = ensure_profile(existing)
+            profile.fonction = UserProfile.ROLE_ADMINISTRATEUR
+            profile.is_active_access = True
+            profile.must_change_password = False
+            profile.save(update_fields=['fonction', 'is_active_access', 'must_change_password'])
             self.stdout.write(self.style.SUCCESS(f'Superutilisateur mis à jour : {email}'))
             return
 
-        User.objects.create_superuser(username=email, email=email, password=password)
+        user = User.objects.create_superuser(username=email, email=email, password=password)
+        profile = ensure_profile(user)
+        profile.fonction = UserProfile.ROLE_ADMINISTRATEUR
+        profile.is_active_access = True
+        profile.must_change_password = False
+        profile.save(update_fields=['fonction', 'is_active_access', 'must_change_password'])
         self.stdout.write(self.style.SUCCESS(f'Superutilisateur créé : {email}'))

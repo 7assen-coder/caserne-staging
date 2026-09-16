@@ -1,11 +1,9 @@
 import { eleveService } from './eleveService';
+import { apiPaths } from './apiPaths';
 import { parcoursToStatutAcademique, statutAcademiqueLabel } from '../utils/eleveScolariteAuto';
-import {
-  getScolariteByEleveId,
-  updateMobiliteScolarite,
-  updateSemestreValidation,
-  upsertScolariteRecord,
-} from '../utils/scolariteStore';
+import { apiPatch, notifyChanged, withExpectedVersion } from '../utils/opsApi';
+
+export const SCOLARITE_CHANGED = 'esp-scolarite-changed';
 
 function filterStudentRows(rows, filters = {}) {
   let list = rows ?? [];
@@ -25,42 +23,20 @@ function filterStudentRows(rows, filters = {}) {
       return dept === d || dept.startsWith(`${d} `) || dept.startsWith(d);
     });
   }
-  if (filters.niveau) {
-    list = list.filter((e) => e.niveau === filters.niveau);
-  }
-  if (filters.statut) {
-    list = list.filter((e) => e.statutAcademique === filters.statut);
-  }
-  if (filters.mobilite === 'with') {
-    list = list.filter((e) => e.mobilite?.type);
-  }
-  if (filters.mobilite === 'without') {
-    list = list.filter((e) => !e.mobilite?.type);
-  }
+  if (filters.niveau) list = list.filter((e) => e.niveau === filters.niveau);
+  if (filters.statut) list = list.filter((e) => e.statutAcademique === filters.statut);
+  if (filters.mobilite === 'with') list = list.filter((e) => e.mobilite?.type);
+  if (filters.mobilite === 'without') list = list.filter((e) => !e.mobilite?.type);
   return list;
 }
 
-function mergeMobilite(eleve, record) {
-  const fromEleve = eleve.mobilite ?? {};
-  const fromStore = record?.mobilite ?? {};
-  if (!fromStore?.type && !fromEleve?.type) return null;
-  return {
-    type: fromStore.type || fromEleve.type || '',
-    etablissement: fromStore.etablissement || fromEleve.etablissement || '',
-    specialite: fromStore.specialite || fromEleve.specialite || '',
-    raison: fromStore.raison || fromEleve.raison || '',
-    anneeDebut: fromStore.anneeDebut || fromEleve.anneeDebut || '',
-    anneeFin: fromStore.anneeFin || fromEleve.anneeFin || '',
-  };
-}
-
-function toListRow(eleve, record) {
+function toListRow(eleve) {
   const s = eleve.scolarite ?? {};
   const statutAcademique =
     eleve.statutAcademique
     ?? parcoursToStatutAcademique(s.parcours)
     ?? parcoursToStatutAcademique(eleve.statut === 'suspendu' ? 'Exclu' : 'En cours normal');
-  const mobilite = mergeMobilite(eleve, record);
+  const mobilite = eleve.mobilite?.type ? eleve.mobilite : null;
   return {
     id: eleve.id,
     matricule: eleve.matricule ?? '',
@@ -71,21 +47,19 @@ function toListRow(eleve, record) {
     niveau: s.niveau ?? eleve.cycle ?? '',
     statutAcademique,
     statutLabel: statutAcademiqueLabel(statutAcademique),
-    semestres: record?.semestres ?? {},
+    semestres: eleve.semestres ?? {},
     mobilite,
     mobiliteLabel: mobilite?.type
       ? `${mobilite.type}${mobilite.etablissement ? ` · ${mobilite.etablissement}` : ''}`
       : '',
+    rowVersion: eleve.rowVersion ?? eleve.row_version ?? 1,
   };
 }
 
 export const scolariteService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list({ q: filters.q });
-    const enriched = eleves.map((eleve) => {
-      const record = getScolariteByEleveId(eleve.id);
-      return toListRow(eleve, record);
-    });
+    const eleves = await eleveService.listAllPages({ q: filters.q });
+    const enriched = eleves.map((eleve) => toListRow(eleve));
     return filterStudentRows(enriched, filters);
   },
 
@@ -96,7 +70,6 @@ export const scolariteService = {
     } catch {
       eleve = null;
     }
-
     if (!eleve && listRow && String(listRow.id) === String(eleveId)) {
       eleve = {
         id: listRow.id,
@@ -105,35 +78,48 @@ export const scolariteService = {
         prenom: listRow.prenom,
         photoUrl: listRow.photoUrl,
         statutAcademique: listRow.statutAcademique,
-        scolarite: {
-          departement: listRow.departement,
-          niveau: listRow.niveau,
-        },
+        scolarite: { departement: listRow.departement, niveau: listRow.niveau },
         mobilite: listRow.mobilite ?? null,
+        semestres: listRow.semestres ?? {},
         relevesSemestres: [],
       };
     }
-
     if (!eleve) return null;
+    const row = toListRow(eleve);
+    return { ...eleve, ...row, relevesSemestres: eleve.relevesSemestres ?? [], scolarite: eleve.scolarite ?? {} };
+  },
 
-    let record = getScolariteByEleveId(eleveId);
-    if (!record) {
-      record = upsertScolariteRecord(eleveId, { semestres: {}, mobilite: null });
-    }
-    const row = toListRow(eleve, record);
+  async updateSemestre(eleveId, semestreKey, value, rowVersion) {
+    const data = await apiPatch(
+      apiPaths.eleves.scolariteSemestres(eleveId),
+      withExpectedVersion(
+        {
+          code: semestreKey,
+          statut: value || '',
+        },
+        rowVersion,
+      ),
+    );
+    notifyChanged(SCOLARITE_CHANGED);
     return {
-      ...eleve,
-      ...row,
-      relevesSemestres: eleve.relevesSemestres ?? [],
-      scolarite: eleve.scolarite ?? {},
+      eleveId: String(eleveId),
+      semestres: data.semestres ?? {},
+      mobilite: null,
+      rowVersion: data.row_version ?? rowVersion,
     };
   },
 
-  updateSemestre(eleveId, semestreKey, value) {
-    return updateSemestreValidation(eleveId, semestreKey, value);
-  },
-
-  updateMobilite(eleveId, mobilite) {
-    return updateMobiliteScolarite(eleveId, mobilite);
+  async updateMobilite(eleveId, mobilite, rowVersion) {
+    const data = await apiPatch(
+      apiPaths.eleves.scolariteMobilite(eleveId),
+      withExpectedVersion(mobilite ?? {}, rowVersion),
+    );
+    notifyChanged(SCOLARITE_CHANGED);
+    return {
+      eleveId: String(eleveId),
+      semestres: {},
+      mobilite: data.mobilite ?? null,
+      rowVersion: data.row_version ?? rowVersion,
+    };
   },
 };

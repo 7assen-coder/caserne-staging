@@ -1,0 +1,17 @@
+{
+  "pageTitle": "ملفي الشخصي",
+  "pageSubtitle": "الحساب والأمان",
+  "accountFallback": "حساب ESP",
+  "sessionActive": "جلسة نشطة",
+  "personalInfo": "الهوية",
+  "personalInfoHint": "معلومات حسابك",
+  "security": "الأمان",
+  "securityHint": "تغيير كلمة المرور (رمز OTP عبر البريد)",
+  "prenom": "الاسم الشخصي",
+  "nom": "الاسم العائلي",
+  "email": "البريد الإلكتروني",
+  "telephone": "الهاتف",
+  "grade": "الرتبة",
+  "empty": "غير مذكور",
+  "breadcrumbAria": "مسار التنقل"
+}

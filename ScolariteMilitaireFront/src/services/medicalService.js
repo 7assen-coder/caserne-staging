@@ -1,176 +1,156 @@
 import { eleveService } from './eleveService';
-import { consultationTypeLabel } from '../data/medicalCatalog';
-import { computeAge } from '../utils/formatters';
+import { apiPaths } from './apiPaths';
 import {
-  addConsultation,
-  countConsultationsByEleveId,
-  deleteConsultation,
-  findConsultationById,
-  getConsultationsByEleveId,
-  getLastConsultationByEleveId,
-  mergeMedicalProfile,
-  updateConsultation,
-  upsertMedicalProfile,
-} from '../utils/medicalStore';
+  apiDelete,
+  apiList,
+  apiPatch,
+  apiPost,
+  notifyChanged,
+  toFormData,
+  withExpectedVersion,
+} from '../utils/opsApi';
 
-function fileToAttachment(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        name: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        dataUrl: reader.result,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
-    reader.readAsDataURL(file);
-  });
-}
+export const MEDICAL_CHANGED = 'esp-medical-changed';
 
-function scolariteFields(eleve) {
-  const s = eleve.scolarite ?? {};
+function mapConsultation(raw) {
   return {
-    departement: s.departement ?? s.filiere ?? eleve.filiere ?? eleve.departement ?? '',
-    niveau: s.niveau ?? eleve.cycle ?? eleve.niveau ?? '',
-  };
-}
-
-function filterStudentRows(rows, filters = {}) {
-  let list = rows ?? [];
-  const q = (filters.q ?? '').toLowerCase().trim();
-  if (q) {
-    list = list.filter(
-      (e) =>
-        e.nom?.toLowerCase().includes(q) ||
-        e.prenom?.toLowerCase().includes(q) ||
-        String(e.matricule ?? '').toLowerCase().includes(q) ||
-        String(e.groupeSanguin ?? '').toLowerCase().includes(q),
-    );
-  }
-  if (filters.departement) {
-    const d = filters.departement;
-    list = list.filter(
-      (e) =>
-        e.departement === d
-        || e.departement?.startsWith(`${d} `)
-        || e.departement?.startsWith(d),
-    );
-  }
-  if (filters.niveau) {
-    list = list.filter((e) => e.niveau === filters.niveau);
-  }
-  if (filters.medical === 'with') {
-    list = list.filter((e) => (e.nbConsultations ?? 0) > 0);
-  }
-  if (filters.medical === 'without') {
-    list = list.filter((e) => (e.nbConsultations ?? 0) === 0);
-  }
-  if (filters.type === 'consultation' || filters.type === 'incident') {
-    list = list.filter((e) => (e[`has${filters.type === 'consultation' ? 'Consultation' : 'Incident'}`] ?? false));
-  }
-  return list;
-}
-
-function toListRow(eleve) {
-  const { departement, niveau } = scolariteFields(eleve);
-  const last = getLastConsultationByEleveId(eleve.id);
-  const items = getConsultationsByEleveId(eleve.id);
-  const age = computeAge(eleve.dateNaissance);
-  return {
-    id: eleve.id,
-    matricule: eleve.matricule ?? '',
-    nom: eleve.nom ?? '',
-    prenom: eleve.prenom ?? '',
-    photoUrl: eleve.photoUrl ?? null,
-    departement,
-    niveau,
-    age: age ?? null,
-    groupeSanguin: eleve.sante?.groupeSanguin ?? '',
-    nbConsultations: countConsultationsByEleveId(eleve.id),
-    hasConsultation: items.some((c) => c.type === 'consultation'),
-    hasIncident: items.some((c) => c.type === 'incident'),
-    derniereDate: last?.dateConsultation ?? null,
-    derniereMotif: last?.motif ?? '',
-    derniereType: last ? consultationTypeLabel(last.type) : '',
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    type: raw.type ?? 'consultation',
+    motif: raw.motif ?? '',
+    dateConsultation: raw.date_consultation ?? '',
+    avisInfirmerie: raw.avis_infirmerie ?? '',
+    pjPdf: raw.pj_pdf ? { url: raw.pj_pdf } : null,
+    rowVersion: raw.row_version ?? 1,
   };
 }
 
 export const medicalService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list({ q: filters.q });
-    return filterStudentRows(eleves.map((e) => toListRow(e)), filters);
+    const eleves = await eleveService.listAllPages({ q: filters.q });
+    const all = (await apiList(apiPaths.consultations.list)).map(mapConsultation);
+    const byEleve = {};
+    all.forEach((c) => {
+      const id = String(c.eleveId);
+      if (!byEleve[id]) byEleve[id] = [];
+      byEleve[id].push(c);
+    });
+    let rows = eleves.map((e) => {
+      const items = byEleve[String(e.id)] ?? [];
+      const last = items[0];
+      return {
+        id: e.id,
+        matricule: e.matricule ?? '',
+        nom: e.nom ?? '',
+        prenom: e.prenom ?? '',
+        photoUrl: e.photoUrl ?? null,
+        age: e.age ?? '',
+        groupeSanguin: e.sante?.groupeSanguin ?? '',
+        nbConsultations: items.length,
+        derniereDate: last?.dateConsultation ?? null,
+        derniereMotif: last?.motif ?? '',
+      };
+    });
+    const q = (filters.q ?? '').toLowerCase().trim();
+    if (q) {
+      rows = rows.filter(
+        (e) =>
+          e.nom?.toLowerCase().includes(q) ||
+          e.prenom?.toLowerCase().includes(q) ||
+          String(e.matricule ?? '').toLowerCase().includes(q),
+      );
+    }
+    return rows;
   },
 
-  async getStudent(eleveId, listRow = null) {
-    let eleve = null;
-    try {
-      eleve = await eleveService.get(eleveId);
-    } catch {
-      eleve = null;
-    }
-
-    if (!eleve && listRow && String(listRow.id) === String(eleveId)) {
-      eleve = {
-        id: listRow.id,
-        matricule: listRow.matricule,
-        nom: listRow.nom,
-        prenom: listRow.prenom,
-        photoUrl: listRow.photoUrl,
-        dateNaissance: listRow.dateNaissance ?? '',
-        sante: { groupeSanguin: listRow.groupeSanguin ?? '' },
-        scolarite: { departement: listRow.departement, niveau: listRow.niveau },
-      };
-    }
-
+  async getStudent(eleveId) {
+    const eleve = await eleveService.get(eleveId);
     if (!eleve) return null;
-
-    const { departement, niveau } = scolariteFields(eleve);
-    const profile = mergeMedicalProfile(eleveId, eleve.sante ?? {});
+    const consultations = (await apiList(apiPaths.consultations.list, { eleve: eleveId })).map(
+      mapConsultation,
+    );
     return {
       ...eleve,
-      departement,
-      niveau,
-      age: computeAge(eleve.dateNaissance),
-      medicalProfile: profile,
-      consultations: getConsultationsByEleveId(eleveId),
+      consultations,
+      medicalProfile: {
+        eleveId: String(eleveId),
+        maladiesChroniques: eleve.sante?.maladiesChroniques ?? '',
+        medicaments: eleve.sante?.medicaments ?? '',
+        dossierMedicalPdf: eleve.sante?.dossierMedicalPdf ?? null,
+        photoMedicale: eleve.sante?.photoMedicale ?? null,
+      },
     };
   },
 
-  async updateProfile(eleveId, payload, { dossierFile = null, photoFile = null } = {}) {
-    const patch = { ...payload };
-    if (dossierFile instanceof File) patch.dossierMedicalPdf = await fileToAttachment(dossierFile);
-    if (photoFile instanceof File) patch.photoMedicale = await fileToAttachment(photoFile);
-    return upsertMedicalProfile(eleveId, patch);
+  async updateProfile(eleveId, profile, files = {}) {
+    const eleve = await eleveService.get(eleveId);
+    const santeId = eleve?.dossierSanteId;
+    if (!santeId) throw new Error('Dossier santé introuvable.');
+    const body = toFormData({
+      maladies_chroniques: profile.maladiesChroniques ?? '',
+      medicaments_a_vie: profile.medicaments ?? '',
+      dossier_medical_pdf: files.dossierMedicalPdf instanceof File ? files.dossierMedicalPdf : undefined,
+      photo_medicale: files.photoMedicale instanceof File ? files.photoMedicale : undefined,
+    });
+    await apiPatch(apiPaths.sante.detail(santeId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(MEDICAL_CHANGED);
+    return profile;
   },
 
-  async addConsultation(eleveId, payload, { pjFile = null } = {}) {
-    let pjPdf = null;
-    if (pjFile instanceof File) pjPdf = await fileToAttachment(pjFile);
-    return addConsultation({ ...payload, eleveId, pjPdf });
+  async addConsultation(eleveId, payload, files = {}) {
+    const pdfFile = files?.pjPdf instanceof File ? files.pjPdf : files instanceof File ? files : null;
+    const body = toFormData({
+      eleve: eleveId,
+      code: payload.code ?? '',
+      type: payload.type ?? 'consultation',
+      motif: payload.motif ?? '',
+      date_consultation: payload.dateConsultation ?? '',
+      avis_infirmerie: payload.avisInfirmerie ?? '',
+      pj_pdf: pdfFile || undefined,
+    });
+    const raw = await apiPost(apiPaths.consultations.list, body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(MEDICAL_CHANGED);
+    return mapConsultation(raw);
   },
 
-  async updateConsultation(consultationId, payload, { pjFile } = {}) {
-    const patch = { ...payload };
-    if (pjFile instanceof File) patch.pjPdf = await fileToAttachment(pjFile);
-    return updateConsultation(consultationId, patch);
+  async updateConsultation(itemId, payload, files = {}) {
+    const pdfFile = files?.pjPdf instanceof File ? files.pjPdf : files instanceof File ? files : null;
+    const body = withExpectedVersion(
+      toFormData({
+        code: payload.code,
+        type: payload.type,
+        motif: payload.motif,
+        date_consultation: payload.dateConsultation,
+        avis_infirmerie: payload.avisInfirmerie,
+        pj_pdf: pdfFile || undefined,
+      }),
+      payload.rowVersion,
+    );
+    const raw = await apiPatch(apiPaths.consultations.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(MEDICAL_CHANGED);
+    return mapConsultation(raw);
   },
 
-  async updateConsultationPdf(consultationId, file) {
-    if (!(file instanceof File)) {
-      return updateConsultation(consultationId, { pjPdf: null });
-    }
-    const attachment = await fileToAttachment(file);
-    return updateConsultation(consultationId, { pjPdf: attachment });
+  async deleteConsultation(itemId, rowVersion) {
+    await apiDelete(apiPaths.consultations.detail(itemId), {
+      data: withExpectedVersion({}, rowVersion),
+    });
+    notifyChanged(MEDICAL_CHANGED);
   },
 
-  deleteConsultation(consultationId) {
-    return deleteConsultation(consultationId);
-  },
-
-  findConsultation(consultationId) {
-    return findConsultationById(consultationId);
+  async updateConsultationPdf(itemId, file, rowVersion) {
+    const body = withExpectedVersion(toFormData({ pj_pdf: file }), rowVersion);
+    const raw = await apiPatch(apiPaths.consultations.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(MEDICAL_CHANGED);
+    return mapConsultation(raw);
   },
 };

@@ -1,6 +1,9 @@
-export const MAX_PHOTO_DIMENSION = 500;
-export const MAX_DOCUMENT_SIZE = 1 * 1024 * 1024;
+import { PHOTO_MAX_EDGE, DOC_MAX_BYTES, INTAKE_MAX_BYTES } from './compressUpload';
+
+export const MAX_PHOTO_DIMENSION = PHOTO_MAX_EDGE;
+export const MAX_DOCUMENT_SIZE = DOC_MAX_BYTES;
 export const MAX_EQUIPEMENT_PDF_SIZE = 5 * 1024 * 1024;
+export const MAX_INTAKE_SIZE = INTAKE_MAX_BYTES;
 
 async function readHeader(file, byteCount) {
   const slice = file.slice(0, byteCount);
@@ -47,6 +50,10 @@ function readImageDimensions(file) {
   });
 }
 
+/**
+ * Validate a file *after* compressUploadFile. Photos: type + max edge.
+ * Documents: type + size ≤ 1 Mo.
+ */
 export async function validateUploadFile(file, kind = 'document', options = {}) {
   if (!(file instanceof File)) return { ok: false, message: 'Fichier invalide.' };
 
@@ -76,7 +83,7 @@ export async function validateUploadFile(file, kind = 'document', options = {}) 
       if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
         return {
           ok: false,
-          message: `Résolution trop grande : ${width}×${height} px (maximum ${MAX_PHOTO_DIMENSION}×${MAX_PHOTO_DIMENSION} px).`,
+          message: `Résolution trop grande : ${width}×${height} px (maximum ${MAX_PHOTO_DIMENSION} px sur le plus grand côté).`,
         };
       }
     } catch (err) {

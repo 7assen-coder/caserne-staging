@@ -48,7 +48,7 @@ export async function exportScolariteSynthesisExcel(
   visibleSemestres = SEMESTRE_KEYS,
   filenameBase = 'synthese-scolarite-esp',
 ) {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const cols = baseColumns(visibleSemestres);
   const headers = cols.map((c) => c.label);
   const body = students.map((s) => {
@@ -113,7 +113,7 @@ export async function exportScolariteSynthesisPdf(
 
 /** Registre long : une ligne par semestre renseigné */
 export async function exportScolariteDetailExcel(students, filenameBase = 'registre-scolarite-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule',
     'Nom et prénom',
