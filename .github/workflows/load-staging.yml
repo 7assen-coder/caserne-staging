@@ -13,7 +13,7 @@ jobs:
       K6_EMAIL: ${{ secrets.K6_EMAIL }}
       K6_PASSWORD: ${{ secrets.K6_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Require secrets
         run: |
           if [ -z "$K6_EMAIL" ] || [ -z "$K6_PASSWORD" ]; then
