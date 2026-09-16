@@ -25,4 +25,4 @@
 2. Essayer un autre navigateur ou le réseau mobile (pas seulement le Wi‑Fi caserne).
 3. Noter l’heure, le message d’erreur exact, et votre adresse e-mail `@esp.mr`.
 
-Environnement de **test** (`gesesp.onrender.com`) : bandeau jaune — ne pas traiter comme la production.
+Environnement de **test** (`polyspace.onrender.com`) : bandeau jaune — ne pas traiter comme la production.

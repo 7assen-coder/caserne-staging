@@ -1,6 +1,7 @@
 # Polyspace staging blueprint (deploy mirror: 7assen-coder/caserne-staging)
-# Target: https://polyspace.mr (UI) · https://api.polyspace.mr (API)
-# Legacy until cutover: https://gesesp.onrender.com · https://gesesp-api.onrender.com
+# Staging: https://polyspace.onrender.com (UI) · https://polyspace-api.onrender.com (API)
+# Transition aliases still allowed: gesesp.onrender.com · gesesp-api.onrender.com
+# Production: https://polyspace.mr · https://api.polyspace.mr (VPS — not this blueprint)
 # Attach custom domains on Render, then set secret DB_* / EMAIL_* in the dashboard.
 
 services:
@@ -31,7 +32,7 @@ services:
       - key: PLATFORM_NAME
         value: Polyspace
       - key: ALLOWED_HOSTS
-        value: gesesp-api.onrender.com,polyspace-api.onrender.com
+        value: polyspace-api.onrender.com,gesesp-api.onrender.com
       - key: DB_HOST
         sync: false
       - key: DB_NAME
@@ -41,9 +42,9 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: https://gesesp.onrender.com,https://polyspace.onrender.com
+        value: https://polyspace.onrender.com,https://gesesp.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://gesesp.onrender.com,https://polyspace.onrender.com
+        value: https://polyspace.onrender.com,https://gesesp.onrender.com
       - key: JWT_COOKIE_SAMESITE
         value: "None"
       - key: JWT_COOKIE_SECURE
@@ -104,7 +105,7 @@ services:
       - key: VITE_APP_ENV
         value: staging
       - key: VITE_API_BASE_URL
-        value: https://gesesp-api.onrender.com/api
+        value: https://polyspace-api.onrender.com/api/v1
       - key: VITE_SENTRY_DSN
         sync: false
       - key: VITE_SENTRY_TRACES_SAMPLE_RATE

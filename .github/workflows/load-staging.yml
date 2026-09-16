@@ -21,11 +21,11 @@ jobs:
             exit 1
           fi
           if [ -z "$BASE_URL" ]; then
-            echo "BASE_URL=https://gesesp-api.onrender.com" >> "$GITHUB_ENV"
+            echo "BASE_URL=https://polyspace-api.onrender.com" >> "$GITHUB_ENV"
           fi
       - name: Wake staging
         run: |
-          API="${BASE_URL:-https://gesesp-api.onrender.com}"
+          API="${BASE_URL:-https://polyspace-api.onrender.com}"
           curl -fsS --max-time 120 "${API%/}/api/healthz/" || true
           sleep 5
       - name: Run k6 officers-100

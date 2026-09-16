@@ -1,7 +1,7 @@
 # Ops — capacity plan & SLOs (Phase 37)
 
 **Production host:** Hostinger VPS (`polyspace.mr` / `api.polyspace.mr`).  
-**Staging:** Render (`gesesp*.onrender.com`) — go-live **gate** only; cold start allowed; **not** measured against prod SLOs.
+**Staging:** Render (`polyspace*.onrender.com`) — go-live **gate** only; cold start allowed; **not** measured against prod SLOs.
 
 Related: [ops-observability.md](ops-observability.md) · [ops-testing.md](ops-testing.md) · [ops-disaster-recovery.md](ops-disaster-recovery.md) · [load/k6/README.md](../load/k6/README.md)
 

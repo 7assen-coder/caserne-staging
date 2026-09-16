@@ -1,6 +1,6 @@
 # k6 load tests — Phase 34 (+ Phase 37 SLO alignment)
 
-Target: **staging API only** (default `https://gesesp-api.onrender.com`). Never point at production.
+Target: **staging API only** (default `https://polyspace-api.onrender.com`). Never point at production.
 
 **SLOs:** Production targets live in [`docs/ops-slo-capacity.md`](../../docs/ops-slo-capacity.md) (stricter: login p95 &lt; 2s, list p95 &lt; 1s).  
 This folder’s `officers-100` script is a **staging go-live gate** (login &lt; 3s, list/detail &lt; 2s) — PASS does not prove prod SLOs.
@@ -15,13 +15,13 @@ brew install k6
 ## Wake Render free dyno first
 
 ```bash
-curl -fsS --max-time 120 https://gesesp-api.onrender.com/api/healthz/
+curl -fsS --max-time 120 https://polyspace-api.onrender.com/api/healthz/
 ```
 
 ## Smoke (5 VUs, 1 min)
 
 ```bash
-k6 run -e BASE_URL=https://gesesp-api.onrender.com \
+k6 run -e BASE_URL=https://polyspace-api.onrender.com \
   -e K6_EMAIL='officer@esp.mr' \
   -e K6_PASSWORD='…' \
   load/k6/smoke.js
@@ -30,7 +30,7 @@ k6 run -e BASE_URL=https://gesesp-api.onrender.com \
 ## Go-live gate (100 concurrent officers)
 
 ```bash
-k6 run -e BASE_URL=https://gesesp-api.onrender.com \
+k6 run -e BASE_URL=https://polyspace-api.onrender.com \
   -e K6_EMAIL='officer@esp.mr' \
   -e K6_PASSWORD='…' \
   --out json=docs/load-reports/run-$(date +%Y%m%d).json \

@@ -76,8 +76,8 @@ npm run test:e2e -- e2e/smoke.login-page.spec.js e2e/smoke.a11y-rtl.spec.js
 ### Staging E2E (optional; not PR CI)
 
 ```bash
-export E2E_BASE_URL=https://gesesp.onrender.com
-export E2E_API_URL=https://gesesp-api.onrender.com
+export E2E_BASE_URL=https://polyspace.onrender.com
+export E2E_API_URL=https://polyspace-api.onrender.com
 export E2E_EMAIL='…@esp.mr'
 export E2E_PASSWORD='…'
 export E2E_SKIP_WEBSERVER=1
@@ -125,17 +125,17 @@ Helper (optional, needs `gh`):
 ./scripts/check-ci-green.sh demo/oracle-hassen
 ```
 
-## Staging smoke & demo readiness (gesesp)
+## Staging smoke & demo readiness (polyspace)
 
-**Targets:** SPA `https://gesesp.onrender.com` · API `https://gesesp-api.onrender.com`
+**Targets:** SPA `https://polyspace.onrender.com` · API `https://polyspace-api.onrender.com`
 
 ### Cold start (expected on free Render)
 
 Free instances sleep after idle. First hit can take **30–60s**. Wake before a demo:
 
 ```bash
-curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://gesesp-api.onrender.com/api/healthz/
-curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://gesesp.onrender.com/
+curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://polyspace-api.onrender.com/api/healthz/
+curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://polyspace.onrender.com/
 ```
 
 Treat cold start as **expected**, not a product defect. Staging gates in [`ops-slo-capacity.md`](ops-slo-capacity.md) assume a **warm** API.

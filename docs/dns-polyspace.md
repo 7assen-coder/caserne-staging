@@ -28,10 +28,10 @@ Optional (ops only — prefer SSH tunnel instead of public DNS):
 
 | URL | Role |
 |-----|------|
-| https://gesesp.onrender.com | SPA test |
-| https://gesesp-api.onrender.com | API test |
+| https://polyspace.onrender.com | SPA test |
+| https://polyspace-api.onrender.com | API test |
 
-Optional later: `CNAME demo.polyspace.mr` → `gesesp.onrender.com` (and API CNAME to Render hostname).
+Optional later: `CNAME demo.polyspace.mr` → `polyspace.onrender.com` (and API CNAME to `polyspace-api.onrender.com`).
 
 ## After DNS
 

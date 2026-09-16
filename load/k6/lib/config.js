@@ -6,7 +6,7 @@
  * Staging officers-100 gate: login p95 < 3s, list/detail p95 < 2s — go-live only, not prod proof.
  */
 export function baseUrl() {
-  const raw = __ENV.BASE_URL || 'https://gesesp-api.onrender.com';
+  const raw = __ENV.BASE_URL || 'https://polyspace-api.onrender.com';
   return raw.replace(/\/$/, '');
 }
 

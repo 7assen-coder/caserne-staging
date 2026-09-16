@@ -8,9 +8,9 @@ Branch: `demo/oracle-hassen` — **do not merge into `main` / `master`.**
 
 | Role | Production (VPS) | Staging (Render) |
 |------|------------------|------------------|
-| App | **https://polyspace.mr** | **https://gesesp.onrender.com** |
-| API | **https://api.polyspace.mr** | **https://gesesp-api.onrender.com** |
-| API docs | **https://api.polyspace.mr/api/docs** | **https://gesesp-api.onrender.com/api/docs** |
+| App | **https://polyspace.mr** | **https://polyspace.onrender.com** |
+| API | **https://api.polyspace.mr** | **https://polyspace-api.onrender.com** |
+| API docs | **https://api.polyspace.mr/api/docs** | **https://polyspace-api.onrender.com/api/docs** |
 | Database | Postgres on Hostinger VPS | Render Postgres (separate) |
 
 Mock élèves disabled on both. Staging may cold-start (~30–60s); production VPS is always-on.
@@ -22,7 +22,7 @@ Mock élèves disabled on both. Staging may cold-start (~30–60s); production V
 | Env | Front URL | API URL | DB | Deploy |
 |-----|-----------|---------|-----|--------|
 | Local | `http://127.0.0.1:9081` | `http://127.0.0.1:8000/api` | Compose `:5433` | laptop |
-| Staging | `https://gesesp.onrender.com` | `https://gesesp-api.onrender.com/api` | Render PG | push → GitHub mirror → Render |
+| Staging | `https://polyspace.onrender.com` | `https://polyspace-api.onrender.com/api` | Render PG | push → GitHub mirror → Render |
 | Production | `https://polyspace.mr` | `https://api.polyspace.mr/api` | VPS `pg_data` | approved tag + [`scripts/deploy-prod.sh`](scripts/deploy-prod.sh) |
 
 **Promotion:** develop on staging (Render). When approved, deploy a **tag** to the VPS — do not auto-promote experimental commits to prod. No hotfixes on org `main` without review.
@@ -35,12 +35,12 @@ Mac tooling (once): `brew install --cask docker` then `brew install git gh jq cu
 
 ```text
 Staging (test)                         Production (officers)
-  gesesp.onrender.com                    polyspace.mr
-       → gesesp-api.onrender.com              → api.polyspace.mr
+  polyspace.onrender.com                    polyspace.mr
+       → polyspace-api.onrender.com              → api.polyspace.mr
        → Render Postgres                      → VPS Postgres + Redis + MinIO + Celery
 ```
 
-- Staging build: `VITE_API_BASE_URL=https://gesesp-api.onrender.com/api/v1` · `VITE_APP_ENV=staging`
+- Staging build: `VITE_API_BASE_URL=https://polyspace-api.onrender.com/api/v1` · `VITE_APP_ENV=staging`
 - Prod build: `VITE_API_BASE_URL=https://api.polyspace.mr/api/v1` · `VITE_APP_ENV=production`
 - Auth: httpOnly cookie JWT + CSRF; login lockout after failed attempts
 - Observability (Phase 32): Sentry (errors) · Prometheus/Grafana/Loki on VPS · Uptime Kuma — see [`docs/ops-observability.md`](docs/ops-observability.md)
@@ -156,17 +156,17 @@ Web: `/login/recovery` (`login_recovery`) · Profil → Sécurité (`profile_res
 |-----|--------|
 | `DJANGO_ENV` | `staging` |
 | `DEBUG` | `False` |
-| `ALLOWED_HOSTS` | `gesesp-api.onrender.com` (+ `demo.polyspace.mr` if used) |
-| `CORS_ALLOWED_ORIGINS` | `https://gesesp.onrender.com` (+ demo host if used) |
+| `ALLOWED_HOSTS` | `polyspace-api.onrender.com` (+ `demo.polyspace.mr` if used) |
+| `CORS_ALLOWED_ORIGINS` | `https://polyspace.onrender.com` (+ demo host if used) |
 | `CSRF_TRUSTED_ORIGINS` | same as CORS |
 | `DB_*` | **Render Postgres only** (never VPS) |
 | `DB_SSLMODE` | `require` |
-| `VITE_API_BASE_URL` | `https://gesesp-api.onrender.com/api/v1` |
+| `VITE_API_BASE_URL` | `https://polyspace-api.onrender.com/api/v1` |
 | `VITE_APP_ENV` | `staging` (yellow banner in SPA) |
 | `VITE_FRONTEND_ONLY` / `VITE_USE_MOCK_ELEVES` | `false` |
 | `SENTRY_DSN` | optional shared org, `environment=staging` |
 
-Wake API before demos: `curl -s https://gesesp-api.onrender.com/api/healthz/`
+Wake API before demos: `curl -s https://polyspace-api.onrender.com/api/healthz/`
 
 Admin (Render Shell on API):
 
@@ -194,7 +194,7 @@ Deploy: `./scripts/deploy-prod.sh <tag>` — see [`docs/ops-observability.md`](d
 
 ### Staging (test)
 
-- [ ] Open **https://gesesp.onrender.com** — yellow « ENVIRONNEMENT DE TEST » banner
+- [ ] Open **https://polyspace.onrender.com** — yellow « ENVIRONNEMENT DE TEST » banner
 - [ ] First load may be slow (cold start); wake `/api/healthz/` if needed
 - [ ] Login + create one étudiant
 

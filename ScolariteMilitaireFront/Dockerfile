@@ -10,7 +10,7 @@ RUN npm ci
 COPY . .
 
 # Production public API: https://api.polyspace.mr/api
-# Staging: https://gesesp-api.onrender.com/api + VITE_APP_ENV=staging
+# Staging: https://polyspace-api.onrender.com/api/v1 + VITE_APP_ENV=staging
 ARG VITE_API_BASE_URL=/api/v1
 ARG VITE_FRONTEND_ONLY=false
 ARG VITE_USE_MOCK_ELEVES=false

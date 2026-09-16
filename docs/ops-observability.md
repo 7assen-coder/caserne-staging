@@ -15,8 +15,8 @@ Free stack: **Sentry** (errors) · **Prometheus + Grafana + Loki + Alloy** (metr
 Never commit DSNs (keep `.env.sentry.local`, `.env.prod`, `backend/.env.prod` gitignored).
 
 - [x] Sentry.org projects exist and match local DSNs (`polyspace-backend` / `polyspace-frontend`, DE ingest)
-- [x] Render `gesesp-api`: `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE=0`, `DJANGO_ENV=staging`
-- [x] Render `gesesp`: `VITE_SENTRY_DSN`, `VITE_SENTRY_TRACES_SAMPLE_RATE=0`, `VITE_APP_ENV=staging` (web **rebuild** after `VITE_*`)
+- [x] Render `polyspace-api`: `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE=0`, `DJANGO_ENV=staging`
+- [x] Render `polyspace`: `VITE_SENTRY_DSN`, `VITE_SENTRY_TRACES_SAMPLE_RATE=0`, `VITE_APP_ENV=staging` (web **rebuild** after `VITE_*`)
 - [x] Local `.env.prod` + `backend/.env.prod` filled with Sentry DSNs (rates `0`)
 - [ ] VPS: copy those env files to `/opt/polyspace/app` and redeploy so SPA rebuilds with `VITE_SENTRY_DSN` (`scripts/deploy-prod.sh <tag>`) — blocked until `polyspace.mr` DNS / VPS is live
 - [x] Sentry UI alert on `polyspace-backend`: **Production new issues (email)** (Email / preferred channel); org `polyspace`
@@ -71,7 +71,7 @@ In Kuma UI (first visit sets admin password), add:
 |------|-----|----------|--------|
 | Prod API | `https://api.polyspace.mr/api/healthz/` | 60s | **P0** — alert if down &gt; 3 min |
 | Prod SPA | `https://polyspace.mr/healthz` | 60s | **P0** |
-| Staging API | `https://gesesp-api.onrender.com/api/healthz/` | 5 min | **P2** — free dynos sleep; longer grace / low severity |
+| Staging API | `https://polyspace-api.onrender.com/api/healthz/` | 5 min | **P2** — free dynos sleep; longer grace / low severity |
 
 Notifications: Telegram bot (free) or email. Do **not** page on-call for staging cold starts.
 
@@ -91,7 +91,7 @@ Django scrapes `backend:8080/metrics` on the `polyspace` network. Public `/metri
 
 ## 7. Promote staging → production
 
-1. Validate on https://gesesp.onrender.com (yellow test banner).
+1. Validate on https://polyspace.onrender.com (yellow test banner).
 2. **CI green** on the release commit (`ci-ok` — see [`docs/ops-testing.md`](ops-testing.md)).
 3. **Load gate:** k6 `officers-100` PASS within last 7 days; file report under [`docs/load-reports/`](load-reports/).
 4. Tag release: `git tag -a vX.Y.Z -m "…" && git push origin vX.Y.Z`

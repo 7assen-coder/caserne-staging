@@ -4,7 +4,7 @@
 |-------|--------|
 | Date | YYYY-MM-DD |
 | Operator | |
-| BASE_URL | https://gesesp-api.onrender.com |
+| BASE_URL | https://polyspace-api.onrender.com |
 | Script | `load/k6/officers-100.js` |
 | VUs (hold) | 100 |
 | Duration | ~8m (2+5+1) |
