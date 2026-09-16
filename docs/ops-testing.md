@@ -115,14 +115,51 @@ Load tests: [`.github/workflows/load-staging.yml`](../.github/workflows/load-sta
 Before `./scripts/deploy-prod.sh <tag>`:
 
 1. [ ] CI green on the tagged commit (`ci-ok`)
-2. [ ] k6 `officers-100` **PASS** within the last 7 days (report under [`docs/load-reports/`](load-reports/))
-3. [ ] Then deploy
+2. [ ] Staging smoke PASS (section below)
+3. [ ] k6 `officers-100` **PASS** within the last 7 days (report under [`docs/load-reports/`](load-reports/)) — optional stretch for small releases
+4. [ ] Then deploy
 
 Helper (optional, needs `gh`):
 
 ```bash
 ./scripts/check-ci-green.sh demo/oracle-hassen
 ```
+
+## Staging smoke & demo readiness (gesesp)
+
+**Targets:** SPA `https://gesesp.onrender.com` · API `https://gesesp-api.onrender.com`
+
+### Cold start (expected on free Render)
+
+Free instances sleep after idle. First hit can take **30–60s**. Wake before a demo:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://gesesp-api.onrender.com/api/healthz/
+curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' https://gesesp.onrender.com/
+```
+
+Treat cold start as **expected**, not a product defect. Staging gates in [`ops-slo-capacity.md`](ops-slo-capacity.md) assume a **warm** API.
+
+### Smoke checklist
+
+1. [ ] Hard refresh SPA (new Vite assets)
+2. [ ] Login `EmEm@esp.mr` → dashboard, no forced password modal
+3. [ ] `/eleves/dossiers` loads; pagination `page_size=25`
+4. [ ] Import 3A/4A (or fixture) → list + dashboard update **without** full browser refresh
+5. [ ] Répartition par compagnie shows assigned compagnies after import
+6. [ ] Phone-width (~375): dossiers filters usable, no horizontal page scroll
+7. [ ] Warm login / list p95 within staging gate (manual stopwatch or k6 smoke)
+
+### Scale readiness (staging ≠ prod)
+
+| Area | Staging now | Prod path |
+|------|-------------|-----------|
+| Dyno | Free / sleep | Always-on VPS / paid |
+| Celery | Often eager | Worker + Redis |
+| Media | Ephemeral risk | MinIO / S3 |
+| Scale | Single instance | See [`ops-horizontal-scale.md`](ops-horizontal-scale.md) |
+
+Do **not** promote to `polyspace.mr` until CI green + staging smoke PASS + capacity assumptions in [`ops-slo-capacity.md`](ops-slo-capacity.md) still hold.
 
 ## Load testing
 

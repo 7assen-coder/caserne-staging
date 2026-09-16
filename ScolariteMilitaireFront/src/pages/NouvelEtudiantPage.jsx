@@ -4,12 +4,14 @@ import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import FormulaireEleve from '../components/eleves/FormulaireEleve';
 import { eleveService } from '../services/eleveService';
 import { useAuth } from '../hooks/useAuth';
+import { useInvalidateEleves } from '../hooks/useElevesQueries';
 import { ROLE_LABEL, getCanonicalRole, getPermissions } from '../utils/userRole';
 import {
   clearNouvelEtudiantPersistence,
   loadNouvelEtudiantFlow,
   saveNouvelEtudiantFlow,
 } from '../utils/nouvelEtudiantPersistence';
+import { notifyElevesChanged } from '../utils/importedElevesStore';
 
 const STEP_KEY_TO_API = {
   'etat-civil': 'eleve',
@@ -26,6 +28,7 @@ export default function NouvelEtudiantPage() {
   const { fonction } = useAuth();
   const role = getCanonicalRole(fonction);
   const perms = getPermissions(role);
+  const invalidateEleves = useInvalidateEleves();
 
   const flowRef = useRef(loadNouvelEtudiantFlow() ?? {
     eleveId: null,
@@ -55,7 +58,12 @@ export default function NouvelEtudiantPage() {
   };
 
   const handleLeave = () => {
+    const created = Boolean(flowRef.current.eleveId);
     resetFlow();
+    if (created) {
+      notifyElevesChanged();
+      invalidateEleves();
+    }
     navigate('/eleves/dossiers', { replace: false });
   };
 

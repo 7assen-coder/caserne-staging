@@ -4,13 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft } from 'lucide-react';
 import FileUploadField from '../components/common/FileUploadField';
 import { useToast } from '../context/ToastContext';
+import { useInvalidateEleves } from '../hooks/useElevesQueries';
 import { uploadFileToImportApi } from '../utils/importEtudiantsBulk';
+import { notifyElevesChanged } from '../utils/importedElevesStore';
 import { isDocxFile, validateImportFile } from '../utils/validateImportFile';
 import { humanizeError } from '../utils/apiErrors';
 
 export default function ImportEtudiantsPage() {
   const { t } = useTranslation(['eleves']);
   const toast = useToast();
+  const invalidateEleves = useInvalidateEleves();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -53,6 +56,10 @@ export default function ImportEtudiantsPage() {
         }),
         errors,
       });
+      if (ok > 0) {
+        notifyElevesChanged();
+        await invalidateEleves();
+      }
       if (errors.length === 0 && ok > 0) {
         toast.success(t('eleves:importSuccess', { count: ok }));
       } else if (ok > 0) {
@@ -133,10 +140,10 @@ function ImportStatusBanner({ status, t }) {
         : 'border-red-200 bg-red-50 text-red-900';
 
   return (
-    <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${cls}`}>
-      <p>{status.text}</p>
+    <div className={`mt-4 min-w-0 max-w-full overflow-x-hidden rounded-lg border px-3 py-2 text-sm sm:px-4 ${cls}`}>
+      <p className="break-words">{status.text}</p>
       {status.errors?.length > 0 && (
-        <ul className="mt-2 max-h-40 list-inside list-disc overflow-y-auto text-xs">
+        <ul className="mt-2 max-h-48 list-inside list-disc overflow-y-auto break-words text-xs sm:max-h-56">
           {status.errors.slice(0, 15).map((err, idx) => (
             <li key={idx}>
               {t('eleves:importLineError', {

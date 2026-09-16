@@ -5,10 +5,15 @@ export const IMPORTED_ELEVES_CHANGED = 'esp-imported-eleves-changed';
 
 const KEY = 'esp_imported_eleves_v1';
 
-function notify() {
+/** Notify list/dashboard listeners (API import success or mock store change). */
+export function notifyElevesChanged() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(IMPORTED_ELEVES_CHANGED));
   }
+}
+
+function notify() {
+  notifyElevesChanged();
 }
 
 /** Only used when VITE_FRONTEND_ONLY=true. */
