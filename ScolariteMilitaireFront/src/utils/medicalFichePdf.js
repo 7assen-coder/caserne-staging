@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { consultationTypeLabel } from '../data/medicalCatalog';
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
+import { formatListFieldDisplay } from './listField';
 import { APP_NAME } from '../data/institution';
 
 function formatDateFr(iso) {
@@ -39,10 +40,27 @@ export async function downloadMedicalFichePdf(eleve, consultations = [], profile
   doc.text(`Groupe sanguin : ${sanitizeExportText(eleve.sante?.groupeSanguin || profile.groupeSanguin || '—')}`, textX, 48);
   doc.text(`Date d'édition : ${new Date().toLocaleDateString('fr-FR')}`, textX, 54);
 
-  if (profile.maladiesChroniques || profile.medicaments) {
+  let medicalBlockEndY = null;
+  if (profile.maladiesChroniques || profile.medicaments || profile.assureur || profile.antecedents) {
     doc.setFontSize(9);
-    doc.text(`Maladies chroniques : ${sanitizeExportText(profile.maladiesChroniques || '—')}`, 14, 62);
-    doc.text(`Médicaments à vie : ${sanitizeExportText(profile.medicaments || '—')}`, 14, 68);
+    let y = 62;
+    if (profile.assureur) {
+      doc.text(`Assureur : ${sanitizeExportText(formatListFieldDisplay(profile.assureur) || '—')}`, 14, y);
+      y += 6;
+    }
+    if (profile.antecedents) {
+      doc.text(`Antécédents : ${sanitizeExportText(formatListFieldDisplay(profile.antecedents) || '—')}`, 14, y);
+      y += 6;
+    }
+    if (profile.maladiesChroniques) {
+      doc.text(`Maladies chroniques : ${sanitizeExportText(formatListFieldDisplay(profile.maladiesChroniques) || '—')}`, 14, y);
+      y += 6;
+    }
+    if (profile.medicaments) {
+      doc.text(`Médicaments à vie : ${sanitizeExportText(formatListFieldDisplay(profile.medicaments) || '—')}`, 14, y);
+      y += 6;
+    }
+    medicalBlockEndY = y;
   }
 
   const head = ['Code', 'Type', 'Motif', 'Date', 'Avis infirmerie', 'PJ'];
@@ -56,7 +74,7 @@ export async function downloadMedicalFichePdf(eleve, consultations = [], profile
   ]);
 
   autoTable(doc, {
-    startY: profile.maladiesChroniques || profile.medicaments ? 74 : 62,
+    startY: medicalBlockEndY != null ? medicalBlockEndY + 4 : 62,
     head: [head],
     body: body.length ? body : [['—', 'Aucune consultation enregistrée', '—', '—', '—', '—']],
     styles: { fontSize: 8, cellPadding: 2 },

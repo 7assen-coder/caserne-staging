@@ -1,37 +1,37 @@
 import { eleveService } from './eleveService';
-import { demandeNatureLabel } from '../data/demandeCatalog';
+import { apiPaths } from './apiPaths';
 import {
-  addDemande,
-  countDemandesByEleveId,
-  deleteDemande,
-  findDemandeById,
-  getDemandesByEleveId,
-  getLastDemandeByEleveId,
-  updateDemande,
-} from '../utils/demandeStore';
+  apiDelete,
+  apiList,
+  apiPatch,
+  apiPost,
+  notifyChanged,
+  toFormData,
+  withExpectedVersion,
+} from '../utils/opsApi';
 
-function fileToAttachment(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        name: file.name,
-        mimeType: file.type || 'application/pdf',
-        dataUrl: reader.result,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier PDF.'));
-    reader.readAsDataURL(file);
-  });
+export const DEMANDES_CHANGED = 'esp-demandes-changed';
+
+function mapDemande(raw) {
+  return {
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    description: raw.description ?? '',
+    nature: raw.nature ?? 'divers',
+    dateDepot: raw.date_depot ?? '',
+    statut: raw.statut ?? 'en_cours',
+    demandePdf: raw.demande_pdf ? { url: raw.demande_pdf } : null,
+    pjPdf: raw.pj_pdf ? { url: raw.pj_pdf } : null,
+    rowVersion: raw.row_version ?? 1,
+  };
 }
 
 function scolariteFields(eleve) {
   const s = eleve.scolarite ?? {};
   return {
-    departement: s.departement ?? s.filiere ?? eleve.filiere ?? eleve.departement ?? '',
-    niveau: s.niveau ?? eleve.cycle ?? eleve.niveau ?? '',
+    departement: s.departement ?? s.filiere ?? eleve.filiere ?? '',
+    niveau: s.niveau ?? eleve.cycle ?? '',
   };
 }
 
@@ -49,63 +49,51 @@ function filterStudentRows(rows, filters = {}) {
   if (filters.departement) {
     const d = filters.departement;
     list = list.filter(
-      (e) =>
-        e.departement === d
-        || e.departement?.startsWith(`${d} `)
-        || e.departement?.startsWith(d),
+      (e) => e.departement === d || e.departement?.startsWith(`${d} `) || e.departement?.startsWith(d),
     );
   }
-  if (filters.niveau) {
-    list = list.filter((e) => e.niveau === filters.niveau);
-  }
-  if (filters.demande === 'with') {
-    list = list.filter((e) => (e.nbDemandes ?? 0) > 0);
-  }
-  if (filters.demande === 'without') {
-    list = list.filter((e) => (e.nbDemandes ?? 0) === 0);
-  }
-  if (filters.statut === 'en_cours') {
-    list = list.filter((e) => (e.enCours ?? 0) > 0);
-  }
+  if (filters.niveau) list = list.filter((e) => e.niveau === filters.niveau);
   return list;
-}
-
-function toListRow(eleve) {
-  const { departement, niveau } = scolariteFields(eleve);
-  const last = getLastDemandeByEleveId(eleve.id);
-  const items = getDemandesByEleveId(eleve.id);
-  const enCours = items.filter((d) => d.statut === 'en_cours').length;
-  return {
-    id: eleve.id,
-    matricule: eleve.matricule ?? '',
-    nom: eleve.nom ?? '',
-    prenom: eleve.prenom ?? '',
-    photoUrl: eleve.photoUrl ?? null,
-    departement,
-    niveau,
-    nbDemandes: countDemandesByEleveId(eleve.id),
-    enCours,
-    derniereDate: last?.dateDepot ?? null,
-    derniereNature: last ? demandeNatureLabel(last.nature) : '',
-    derniereDescription: last?.description ?? '',
-  };
 }
 
 export const demandeService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list({ q: filters.q });
-    return filterStudentRows(eleves.map((e) => toListRow(e)), filters);
+    const eleves = await eleveService.listAllPages({ q: filters.q });
+    const all = (await apiList(apiPaths.demandes.list)).map(mapDemande);
+    const byEleve = {};
+    all.forEach((d) => {
+      const id = String(d.eleveId);
+      if (!byEleve[id]) byEleve[id] = [];
+      byEleve[id].push(d);
+    });
+    const enriched = eleves.map((eleve) => {
+      const { departement, niveau } = scolariteFields(eleve);
+      const items = byEleve[String(eleve.id)] ?? [];
+      const last = items[0] ?? null;
+      return {
+        id: eleve.id,
+        matricule: eleve.matricule ?? '',
+        nom: eleve.nom ?? '',
+        prenom: eleve.prenom ?? '',
+        photoUrl: eleve.photoUrl ?? null,
+        departement,
+        niveau,
+        nbDemandes: items.length,
+        enCours: items.filter((d) => d.statut === 'en_cours').length,
+        derniereDate: last?.dateDepot ?? null,
+        derniereNature: last?.nature ?? '',
+        derniereDescription: last?.description ?? '',
+        derniereLabel: last
+          ? `${last.dateDepot ?? ''} · ${last.nature ?? ''}`.trim()
+          : '',
+      };
+    });
+    return filterStudentRows(enriched, filters);
   },
 
   async getStudent(eleveId, listRow = null) {
-    let eleve = null;
-    try {
-      eleve = await eleveService.get(eleveId);
-    } catch {
-      eleve = null;
-    }
-
-    if (!eleve && listRow && String(listRow.id) === String(eleveId)) {
+    let eleve = await eleveService.get(eleveId).catch(() => null);
+    if (!eleve && listRow) {
       eleve = {
         id: listRow.id,
         matricule: listRow.matricule,
@@ -115,47 +103,62 @@ export const demandeService = {
         scolarite: { departement: listRow.departement, niveau: listRow.niveau },
       };
     }
-
     if (!eleve) return null;
-
+    const demandes = (await apiList(apiPaths.demandes.list, { eleve: eleveId })).map(mapDemande);
     const { departement, niveau } = scolariteFields(eleve);
-    return {
-      ...eleve,
-      departement,
-      niveau,
-      demandes: getDemandesByEleveId(eleveId),
-    };
+    return { ...eleve, departement, niveau, demandes, nbDemandes: demandes.length };
   },
 
-  async addDemande(eleveId, payload, { demandeFile = null, pjFile = null } = {}) {
-    let demandePdf = null;
-    let pjPdf = null;
-    if (demandeFile instanceof File) demandePdf = await fileToAttachment(demandeFile);
-    if (pjFile instanceof File) pjPdf = await fileToAttachment(pjFile);
-    return addDemande({ ...payload, eleveId, demandePdf, pjPdf });
+  async addDemande(eleveId, payload, files = {}) {
+    const body = toFormData({
+      eleve: eleveId,
+      code: payload.code ?? '',
+      description: payload.description ?? '',
+      nature: payload.nature ?? 'divers',
+      date_depot: payload.dateDepot ?? '',
+      statut: payload.statut ?? 'en_cours',
+      demande_pdf: files.demandePdf instanceof File ? files.demandePdf : undefined,
+      pj_pdf: files.pjPdf instanceof File ? files.pjPdf : undefined,
+    });
+    const raw = await apiPost(apiPaths.demandes.list, body, { headers: { 'Content-Type': 'multipart/form-data' } });
+    notifyChanged(DEMANDES_CHANGED);
+    return mapDemande(raw);
   },
 
-  async updateDemande(demandeId, payload, { demandeFile, pjFile } = {}) {
-    const patch = { ...payload };
-    if (demandeFile instanceof File) patch.demandePdf = await fileToAttachment(demandeFile);
-    if (pjFile instanceof File) patch.pjPdf = await fileToAttachment(pjFile);
-    return updateDemande(demandeId, patch);
+  async updateDemande(itemId, payload, files = {}) {
+    const body = withExpectedVersion(
+      toFormData({
+        code: payload.code,
+        description: payload.description,
+        nature: payload.nature,
+        date_depot: payload.dateDepot,
+        statut: payload.statut,
+        demande_pdf: files.demandePdf instanceof File ? files.demandePdf : undefined,
+        pj_pdf: files.pjPdf instanceof File ? files.pjPdf : undefined,
+      }),
+      payload.rowVersion,
+    );
+    const raw = await apiPatch(apiPaths.demandes.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(DEMANDES_CHANGED);
+    return mapDemande(raw);
   },
 
-  async updateDemandePdf(demandeId, field, file) {
-    if (field !== 'demandePdf' && field !== 'pjPdf') return null;
-    if (!(file instanceof File)) {
-      return updateDemande(demandeId, { [field]: null });
-    }
-    const attachment = await fileToAttachment(file);
-    return updateDemande(demandeId, { [field]: attachment });
+  async deleteDemande(itemId, rowVersion) {
+    await apiDelete(apiPaths.demandes.detail(itemId), {
+      data: withExpectedVersion({}, rowVersion),
+    });
+    notifyChanged(DEMANDES_CHANGED);
   },
 
-  deleteDemande(demandeId) {
-    return deleteDemande(demandeId);
-  },
-
-  findDemande(demandeId) {
-    return findDemandeById(demandeId);
+  async updateDemandePdf(itemId, field, file, rowVersion) {
+    const key = field === 'demandePdf' || field === 'demande_pdf' ? 'demande_pdf' : 'pj_pdf';
+    const body = withExpectedVersion(toFormData({ [key]: file }), rowVersion);
+    const raw = await apiPatch(apiPaths.demandes.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(DEMANDES_CHANGED);
+    return mapDemande(raw);
   },
 };

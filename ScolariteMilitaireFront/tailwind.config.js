@@ -48,7 +48,7 @@ export default {
         'light-gray': '#E2E6EC',
         text: '#1E293B',
         'text-light': '#64748B',
-        'text-muted': '#94A3B8',
+        'text-muted': '#64748B',
         'brand-red': '#C53030',
         'brand-green': '#276749',
         /** ESP / Groupe Polytechnique (reconnaissance) */
@@ -59,9 +59,25 @@ export default {
         },
       },
       fontFamily: {
-        /** Interface institutionnelle — une seule famille lisible (titres = même sans-serif) */
-        sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-        serif: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        /** Interface institutionnelle — Latin + Arabic */
+        sans: [
+          '"IBM Plex Sans"',
+          '"IBM Plex Sans Arabic"',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif',
+        ],
+        serif: [
+          '"IBM Plex Sans"',
+          '"IBM Plex Sans Arabic"',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif',
+        ],
       },
       fontSize: {
         '2xs': ['0.75rem', { lineHeight: '1rem' }],

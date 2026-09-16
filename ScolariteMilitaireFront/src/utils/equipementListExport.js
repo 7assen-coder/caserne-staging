@@ -5,7 +5,8 @@ import { equipementEtatLabel } from '../data/equipementCatalog';
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { APP_NAME } from '../data/institution';
 import { buildDetailExportRows } from './equipementStats';
-import { loadEquipementItems } from './equipementStore';
+import { apiList } from './opsApi';
+import { apiPaths } from '../services/apiPaths';
 
 const SYNTHESIS_COLUMNS = [
   { key: 'matricule', label: 'Matricule' },
@@ -16,28 +17,41 @@ const SYNTHESIS_COLUMNS = [
   { key: 'rendu', label: 'Rendu' },
 ];
 
+
+async function fetchEquipementMapped() {
+  const rawItems = await apiList(apiPaths.equipements.list);
+  return rawItems.map((raw) => ({
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    type: raw.nature ?? '',
+    description: raw.description ?? '',
+    quantite: raw.quantite ?? 1,
+    dateRemise: raw.date_remise ?? '',
+    etat: raw.etat === 'rendu' ? 'rendu' : 'en_usage',
+    dateRetour: raw.date_retour ?? null,
+    pdfAttachment: raw.pdf ? { name: 'piece.pdf' } : null,
+  }));
+}
+
 function dateSuffix() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function synthesisRows(students) {
-  const items = loadEquipementItems();
-  return students.map((s) => {
-    const studentItems = items.filter((i) => String(i.eleveId) === String(s.id));
-    return {
-      matricule: sanitizeExportText(s.matricule),
-      nomComplet: sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
-      section: sanitizeExportText(s.section),
-      nbItems: String(s.nbItems ?? studentItems.length),
-      enUsage: String(studentItems.filter((i) => i.etat !== 'rendu').length),
-      rendu: String(studentItems.filter((i) => i.etat === 'rendu').length),
-    };
-  });
+  return students.map((s) => ({
+    matricule: sanitizeExportText(s.matricule),
+    nomComplet: sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
+    section: sanitizeExportText(s.section),
+    nbItems: String(s.nbItems ?? 0),
+    enUsage: String(s.nbItems ?? 0),
+    rendu: '0',
+  }));
 }
 
 /** Synthèse par étudiant — Excel */
 export async function exportEquipementSynthesisExcel(students, filenameBase = 'synthese-equipement-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = SYNTHESIS_COLUMNS.map((c) => c.label);
   const body = synthesisRows(students).map((row) =>
     SYNTHESIS_COLUMNS.map((c) => row[c.key] ?? ''),
@@ -56,7 +70,7 @@ export async function exportEquipementSynthesisExcel(students, filenameBase = 's
 
 /** Registre détaillé — une ligne par pièce d'équipement */
 export async function exportEquipementDetailExcel(students, filenameBase = 'registre-equipement-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule',
     'Nom et prénom',
@@ -70,7 +84,8 @@ export async function exportEquipementDetailExcel(students, filenameBase = 'regi
     'Date retour',
     'Pièce jointe',
   ];
-  const body = buildDetailExportRows(students).map(({ item, student: s }) => [
+  const items = await fetchEquipementMapped();
+  const body = buildDetailExportRows(students, items).map(({ item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.section),
@@ -159,7 +174,8 @@ export async function exportEquipementDetailPdf(
   }
 
   const headers = ['Matricule', 'Nom', 'Section', 'Code', 'Type', 'Description', 'Qté', 'Remise', 'État', 'Retour'];
-  const body = buildDetailExportRows(students).map(({ item, student: s }) => [
+  const items = await fetchEquipementMapped();
+  const body = buildDetailExportRows(students, items).map(({ item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.section),

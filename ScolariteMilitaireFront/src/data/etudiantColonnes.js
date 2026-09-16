@@ -1,5 +1,7 @@
 /** Registre central des colonnes liste / export étudiants. */
 
+import { normalizeSectionLabel } from '../utils/eleveScolariteAuto';
+
 export const COLONNE_GROUPES = {
   identite: 'Identité',
   scolarite: 'Scolarité',
@@ -53,14 +55,24 @@ export const ETUDIANT_COLONNES = [
   },
   {
     id: 'nom',
-    label: 'Nom & prénom',
+    label: 'Prénom & nom',
     group: 'identite',
     defaultVisible: true,
     simpleExport: true,
     sortable: true,
-    getValue: (e) => `${e.nom ?? ''} ${e.prenom ?? ''}`.trim(),
-    accessor: (e) => `${e.nom ?? ''} ${e.prenom ?? ''}`.trim(),
+    getValue: (e) => `${e.prenom ?? ''} ${e.nom ?? ''}`.trim(),
+    accessor: (e) => `${e.prenom ?? ''} ${e.nom ?? ''}`.trim(),
     tableOnly: true,
+  },
+  {
+    id: 'nomArabe',
+    label: 'Nom arabe',
+    group: 'identite',
+    defaultVisible: false,
+    simpleExport: true,
+    sortable: true,
+    getValue: (e) => `${e.prenomAr ?? ''} ${e.nomAr ?? ''}`.trim(),
+    accessor: (e) => `${e.prenomAr ?? ''} ${e.nomAr ?? ''}`.trim(),
   },
   {
     id: 'sexe',
@@ -201,8 +213,14 @@ export const ETUDIANT_COLONNES = [
     group: 'militaire',
     defaultVisible: true,
     sortable: true,
-    getValue: (e) => e.dossierMilitaire?.section ?? e.section ?? '',
-    accessor: (e) => e.dossierMilitaire?.section ?? e.section ?? '',
+    getValue: (e) => normalizeSectionLabel(
+      e.dossierMilitaire?.section ?? e.section ?? '',
+      e.dossierMilitaire?.compagnie ?? e.compagnie,
+    ),
+    accessor: (e) => normalizeSectionLabel(
+      e.dossierMilitaire?.section ?? e.section ?? '',
+      e.dossierMilitaire?.compagnie ?? e.compagnie,
+    ),
   },
   {
     id: 'sport',
@@ -422,7 +440,7 @@ export function buildTransposedExportMatrix(eleves, colonneIds) {
 
   const studentHeaders = eleves.map((e) => {
     const m = e.matricule ?? '';
-    const n = `${e.nom ?? ''} ${e.prenom ?? ''}`.trim();
+    const n = `${e.prenom ?? ''} ${e.nom ?? ''}`.trim();
     return n ? `${n} (${m})` : String(m || 'Étudiant');
   });
 

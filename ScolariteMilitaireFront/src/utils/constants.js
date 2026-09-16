@@ -11,22 +11,38 @@ export const COLORS = {
 };
 
 export const FONCTIONS = {
-  TERRAIN: 'terrain',
-  ENCADREMENT: 'encadrement',
-  COMMANDEMENT: 'commandement',
+  ETUDIANT: 'etudiant',
+  SUPERVISEUR: 'superviseur',
+  CHEF_SECTION: 'chef_section',
+  COMMANDANT_COMPAGNIE: 'commandant_compagnie',
+  COMMANDANT_GROUPEMENT: 'commandant_groupement',
+  COMMANDANT_UNITE: 'commandant_unite',
+  ADMINISTRATEUR: 'administrateur',
+  // legacy aliases (compat)
+  TERRAIN: 'chef_section',
+  ENCADREMENT: 'superviseur',
+  COMMANDEMENT: 'administrateur',
 };
 
 export const FONCTION_LABEL = {
-  [FONCTIONS.TERRAIN]: 'Superviseur Militaire — Terrain',
-  [FONCTIONS.ENCADREMENT]: 'Superviseur Militaire — Encadrement',
-  [FONCTIONS.COMMANDEMENT]: 'Superviseur Militaire — Commandement',
+  [FONCTIONS.ETUDIANT]: 'Étudiant',
+  [FONCTIONS.SUPERVISEUR]: 'Superviseur',
+  [FONCTIONS.CHEF_SECTION]: 'Chef de section',
+  [FONCTIONS.COMMANDANT_COMPAGNIE]: 'Commandant de compagnie',
+  [FONCTIONS.COMMANDANT_GROUPEMENT]: 'Commandant de groupement',
+  [FONCTIONS.COMMANDANT_UNITE]: "Commandant d'unité",
+  [FONCTIONS.ADMINISTRATEUR]: 'Administrateur',
 };
 
-/** Options rôle à la création utilisateur (Terrain, Encadrement, Commandement). */
+/** Options rôle à la création utilisateur (7 rôles). */
 export const FONCTION_ROLE_OPTIONS = [
-  { value: FONCTIONS.TERRAIN, label: 'Terrain' },
-  { value: FONCTIONS.ENCADREMENT, label: 'Encadrement' },
-  { value: FONCTIONS.COMMANDEMENT, label: 'Commandement' },
+  { value: FONCTIONS.ETUDIANT, label: 'Étudiant' },
+  { value: FONCTIONS.SUPERVISEUR, label: 'Superviseur' },
+  { value: FONCTIONS.CHEF_SECTION, label: 'Chef de section' },
+  { value: FONCTIONS.COMMANDANT_COMPAGNIE, label: 'Commandant de compagnie' },
+  { value: FONCTIONS.COMMANDANT_GROUPEMENT, label: 'Commandant de groupement' },
+  { value: FONCTIONS.COMMANDANT_UNITE, label: "Commandant d'unité" },
+  { value: FONCTIONS.ADMINISTRATEUR, label: 'Administrateur' },
 ];
 
 export const STATUT_PRESENCE = {
@@ -101,7 +117,7 @@ export function normalizeDepartementForApi(raw) {
   return DEPARTEMENTS[0].value;
 }
 
-export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '5e année', '4e DD', '5e E', '5e DD'];
+export const NIVEAUX_SCOLARITE = ['3e année', '4e année', '4e DD', '5e E', '5e DD'];
 
 /** Valeurs alignées avec `Eleve.CHOIX_VOIE_ACCES` côté Django (`'1'` … `'4'`). */
 export const VOIES_ACCES_ETUDIANT = [

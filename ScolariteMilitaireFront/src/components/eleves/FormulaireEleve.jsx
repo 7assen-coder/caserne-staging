@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, FileText, Upload as UploadIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Button from '../common/Button';
 import SelectField from '../common/SelectField';
 import CloudUploadZone from './CloudUploadZone';
 import { DEPARTEMENTS } from '../../utils/constants';
-import { formatApiError } from '../../utils/apiErrors';
+import { formatApiError, isVersionConflict } from '../../utils/apiErrors';
+import VersionConflictModal from '../common/VersionConflictModal';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -15,13 +17,15 @@ import {
   sanitizeNni,
   sanitizeNumBac,
   sanitizeDecimal,
+  formatMoyenneFr,
+  getLiveFieldError,
 } from '../../utils/eleveFormValidation';
+import { sanitizeDateFrInput, formatIsoToFr, parseFrToIso } from '../../utils/dateFr';
 import { sanitizeMrPhoneDigits, blockNonDigitKey } from '../../utils/mrPhone';
 import {
   VOIES_ACCES_OPTIONS,
   DIPLOMES_ACCES_OPTIONS,
   GROUPES_SANGUINS_OPTIONS,
-  PARCOURS_MOBILITE_OPTIONS,
   ROLE_STEPS_VISIBLES,
 } from '../../data/etudiantOptions';
 import {
@@ -29,35 +33,46 @@ import {
   STATUT_ACADEMIQUE_OPTIONS,
   applyAutoMilitaire,
   isNiveauMobiliteEligible,
+  mobiliteTypeFromNiveau,
   normalizeStatutFormValue,
   statutAcademiqueToParcours,
+  normalizeSectionLabel,
+  formatSectionLabel,
 } from '../../utils/eleveScolariteAuto';
 import { PAYS_OPTIONS } from '../../data/pays';
 import { WILAYAS_OPTIONS, getCommuneOptionsForWilaya, COMMUNE_AUTRE_VALUE } from '../../data/wilayasMauritanie';
 import { computeIMC, classifyIMC, formatIMC } from '../../utils/imc';
+import { formatListField } from '../../utils/listField';
 import { getCurrentAcademicYear, getAcademicYearOptions, todayIso, deriveMobiliteAnneeFin } from '../../utils/anneeUniversitaire';
-import { generateFicheTaillesPdf, parseFicheTaillesText } from '../../utils/ficheTaillesPdf';
+import {
+  generateFicheTaillesPdf,
+  importFicheMesures,
+  mesuresToFormEntries,
+} from '../../utils/ficheTaillesPdf';
 import { loadNouvelEtudiantDraft, saveNouvelEtudiantDraft } from '../../utils/nouvelEtudiantPersistence';
+import { useAuth } from '../../hooks/useAuth';
+import { getSensitiveCaps } from '../../utils/userRole';
 
 const ALL_STEPS = [
-  { key: 'etat-civil', label: 'État civil' },
-  { key: 'scolarite', label: 'Scolarité' },
-  { key: 'mobilite', label: 'Mobilité' },
-  { key: 'pieces', label: 'Pièces' },
-  { key: 'contacts', label: 'Informations de contact' },
-  { key: 'sante', label: 'Santé' },
-  { key: 'militaire', label: 'Dossier militaire' },
-  { key: 'hebergement', label: 'Hébergement' },
+  { key: 'etat-civil', label: 'État civil', labelKey: 'stepEtatCivil' },
+  { key: 'scolarite', label: 'Scolarité', labelKey: 'scolarite' },
+  { key: 'mobilite', label: 'Mobilité', labelKey: 'stepMobilite' },
+  { key: 'pieces', label: 'Pièces', labelKey: 'stepPieces' },
+  { key: 'contacts', label: 'Informations de contact', labelKey: 'stepContacts' },
+  { key: 'sante', label: 'Santé', labelKey: 'stepSante' },
+  { key: 'militaire', label: 'Dossier militaire', labelKey: 'stepMilitaire' },
+  { key: 'hebergement', label: 'Hébergement', labelKey: 'stepHebergement' },
 ];
 
-function buildSteps({ role, mode, values, eleve }) {
+function buildSteps({ role, mode, values, sensitiveCaps }) {
   const allowed = new Set(ROLE_STEPS_VISIBLES[role] || ROLE_STEPS_VISIBLES.superviseur);
   const showMobilite =
     mode === 'mobilite'
-    || isNiveauMobiliteEligible(values?.scolarite?.niveau)
-    || Boolean(eleve && (values?.mobilite?.type || values?.mobilite?.etablissement));
+    || isNiveauMobiliteEligible(values?.scolarite?.niveau);
   return ALL_STEPS.filter((s) => {
     if (s.key === 'mobilite') return showMobilite;
+    if (s.key === 'sante' && sensitiveCaps?.sante === 'none') return false;
+    if (s.key === 'contacts' && sensitiveCaps?.parents === 'none') return false;
     return allowed.has(s.key);
   });
 }
@@ -72,6 +87,8 @@ function buildDefaults() {
     matricule: '',
     nom: '',
     prenom: '',
+    nomAr: '',
+    prenomAr: '',
     nni: '',
     numeroBac: '',
     dateNaissance: '',
@@ -90,6 +107,7 @@ function buildDefaults() {
     compteBankily: '',
     sexe: 'M',
     statut: 'normal',
+    profilIncomplet: false,
     filiere,
     scolarite: {
       departement: filiere,
@@ -217,6 +235,48 @@ function normalizePieces(pieces) {
   };
 }
 
+/** Map API `documents` URLs into form `pieces` slots for edit prefills. */
+function piecesFromDocuments(documents) {
+  const d = documents && typeof documents === 'object' ? documents : {};
+  const civil = d.photo_identite_civile || null;
+  return {
+    photoIdentite: civil,
+    photoIdentiteCivile: civil,
+    photoIdentiteMilitaire: d.photo_identite_militaire || null,
+    photoMilitaireIntegrale: d.photo_militaire_integrale || null,
+    acteNaissance: d.acte_naissance || null,
+    diplomeAcces: d.diplome_acces || null,
+    diplomeBac: d.diplome_bac || null,
+    cin: d.cin || null,
+  };
+}
+
+function coalescePiece(...candidates) {
+  for (const v of candidates) {
+    if (v instanceof File) return v;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (v && typeof v === 'object' && typeof v.url === 'string' && v.url.trim()) {
+      return v.url.trim();
+    }
+  }
+  return null;
+}
+
+function hydratePieces(eleve, mergedPieces) {
+  const docs = piecesFromDocuments(eleve?.documents);
+  const p = mergedPieces && typeof mergedPieces === 'object' ? mergedPieces : {};
+  return normalizePieces({
+    photoIdentite: coalescePiece(p.photoIdentite, p.photoIdentiteCivile, docs.photoIdentite, eleve?.photoUrl),
+    photoIdentiteCivile: coalescePiece(p.photoIdentiteCivile, p.photoIdentite, docs.photoIdentiteCivile, eleve?.photoUrl),
+    photoIdentiteMilitaire: coalescePiece(p.photoIdentiteMilitaire, docs.photoIdentiteMilitaire),
+    photoMilitaireIntegrale: coalescePiece(p.photoMilitaireIntegrale, docs.photoMilitaireIntegrale),
+    acteNaissance: coalescePiece(p.acteNaissance, docs.acteNaissance),
+    diplomeAcces: coalescePiece(p.diplomeAcces, docs.diplomeAcces),
+    diplomeBac: coalescePiece(p.diplomeBac, docs.diplomeBac),
+    cin: coalescePiece(p.cin, docs.cin),
+  });
+}
+
 function formatEmailInstitutionnel(matricule) {
   const d = String(matricule ?? '').replace(/\D/g, '');
   return d ? `${d}@esp.mr` : '';
@@ -225,11 +285,19 @@ function formatEmailInstitutionnel(matricule) {
 function FormPanel({ children, className = '' }) {
   return (
     <div
-      className={`rounded-xl border border-light-gray bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5 md:p-6 ${className}`}
+      className={`min-w-0 max-w-full overflow-x-hidden rounded-xl border border-light-gray bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5 md:p-6 ${className}`}
     >
       {children}
     </div>
   );
+}
+
+function formatAffectation(compagnie, section) {
+  const parts = [
+    String(compagnie ?? '').trim(),
+    formatSectionLabel(section, compagnie),
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : '';
 }
 
 export default function FormulaireEleve({
@@ -241,8 +309,14 @@ export default function FormulaireEleve({
   mode = 'standard',
   persistKey = '',
 }) {
+  const { t } = useTranslation('eleves');
   const confirm = useConfirm();
   const toast = useToast();
+  const { user } = useAuth();
+  const sensitiveCaps = useMemo(
+    () => getSensitiveCaps(user, role),
+    [user, role],
+  );
   const draftRef = useRef(null);
   if (!draftRef.current && persistKey && !eleve) {
     draftRef.current = loadNouvelEtudiantDraft();
@@ -253,7 +327,7 @@ export default function FormulaireEleve({
     if (!eleve && draftRef.current?.values) {
       base = deepMerge(base, draftRef.current.values);
     }
-    base.pieces = normalizePieces(base.pieces);
+    base.pieces = hydratePieces(eleve, base.pieces);
     base.statut = normalizeStatutFormValue(base.statut);
     base.scolarite = {
       ...base.scolarite,
@@ -269,8 +343,8 @@ export default function FormulaireEleve({
   });
 
   const STEPS = useMemo(
-    () => buildSteps({ role, mode, values, eleve }),
-    [role, mode, values.scolarite?.niveau, values.mobilite?.type, values.mobilite?.etablissement, eleve],
+    () => buildSteps({ role, mode, values, sensitiveCaps }),
+    [role, mode, values.scolarite?.niveau, sensitiveCaps],
   );
   const stepKeys = useMemo(() => STEPS.map((s) => s.key), [STEPS]);
   const [submitting, setSubmitting] = useState(false);
@@ -280,17 +354,9 @@ export default function FormulaireEleve({
   });
   const [stepError, setStepError] = useState('');
   const [submitErr, setSubmitErr] = useState('');
+  const [versionConflict, setVersionConflict] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [scanInfo, setScanInfo] = useState('');
-  const draftRestoredRef = useRef(false);
-
-  useEffect(() => {
-    if (!persistKey || eleve || draftRestoredRef.current) return;
-    if (draftRef.current?.values) {
-      draftRestoredRef.current = true;
-      toast.info('Brouillon du formulaire restauré. Les pièces jointes doivent être téléversées à nouveau.');
-    }
-  }, [persistKey, eleve, toast]);
 
   useEffect(() => {
     if (!persistKey || eleve) return;
@@ -326,12 +392,72 @@ export default function FormulaireEleve({
     });
   }, [values.scolarite?.filiere, values.scolarite?.niveau]);
 
+  // Sync / clear mobilité when niveau changes (strict eligibility).
+  useEffect(() => {
+    const niveau = values.scolarite?.niveau;
+    const eligible = isNiveauMobiliteEligible(niveau);
+    const lockedType = mobiliteTypeFromNiveau(niveau);
+    setValues((prev) => {
+      const m = prev.mobilite || {};
+      if (eligible) {
+        if (m.type === lockedType) return prev;
+        return {
+          ...prev,
+          mobilite: { ...m, type: lockedType },
+        };
+      }
+      if (!m.type && !m.anneeDebut && !m.anneeFin && !m.etablissement && !m.specialite) {
+        return prev;
+      }
+      return {
+        ...prev,
+        mobilite: {
+          type: '',
+          etablissement: '',
+          specialite: '',
+          anneeDebut: '',
+          anneeFin: '',
+        },
+      };
+    });
+  }, [values.scolarite?.niveau]);
+
+  useEffect(() => {
+    const main = document.getElementById('main-content');
+    if (main) {
+      main.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [step]);
+
+  const validationOptions = useMemo(
+    () => ({
+      stepKeys,
+      mode,
+      isCreate: !eleve,
+      isEdit: Boolean(eleve),
+      eleve: eleve || null,
+      previousMatricule: eleve?.matricule ?? null,
+      allowIncomplete: Boolean(eleve?.profilIncomplet || values.profilIncomplet),
+    }),
+    [stepKeys, mode, eleve, values.profilIncomplet],
+  );
+
   const update = (path, v) => {
-    setValues((prev) => setPath(prev, path.split('.'), v));
-    setFieldErrors((prev) => {
-      const next = { ...prev };
-      delete next[path];
-      return next;
+    setValues((prev) => {
+      const nextVals = setPath(prev, path.split('.'), v);
+      const liveErr = getLiveFieldError(path, nextVals, {
+        isCreate: !eleve,
+        previousMatricule: eleve?.matricule ?? null,
+      });
+      setFieldErrors((prevErr) => {
+        const next = { ...prevErr };
+        if (liveErr) next[path] = liveErr;
+        else delete next[path];
+        return next;
+      });
+      return nextVals;
     });
   };
 
@@ -341,12 +467,19 @@ export default function FormulaireEleve({
       for (const [path, v] of entries) {
         out = setPath(out, path.split('.'), v);
       }
+      setFieldErrors((prevErr) => {
+        const next = { ...prevErr };
+        for (const [path] of entries) {
+          const liveErr = getLiveFieldError(path, out, {
+            isCreate: !eleve,
+            previousMatricule: eleve?.matricule ?? null,
+          });
+          if (liveErr) next[path] = liveErr;
+          else delete next[path];
+        }
+        return next;
+      });
       return out;
-    });
-    setFieldErrors((prev) => {
-      const next = { ...prev };
-      for (const [path] of entries) delete next[path];
-      return next;
     });
   };
 
@@ -374,20 +507,26 @@ export default function FormulaireEleve({
     values.lieuNaissance,
   ]);
 
+  const lockedMobiliteType = mobiliteTypeFromNiveau(values.scolarite?.niveau);
+
   const augmentMobiliteAnneesFin = (v) => {
-    const fin = deriveMobiliteAnneeFin(v.mobilite?.anneeDebut, v.mobilite?.type);
-    return { ...v, mobilite: { ...v.mobilite, anneeFin: fin || '' } };
+    const type = mobiliteTypeFromNiveau(v.scolarite?.niveau) || v.mobilite?.type;
+    const fin = deriveMobiliteAnneeFin(v.mobilite?.anneeDebut, type);
+    return {
+      ...v,
+      mobilite: { ...v.mobilite, type: type || '', anneeFin: fin || '' },
+    };
   };
 
   const mobiliteAnneeFinDerived = deriveMobiliteAnneeFin(
     values.mobilite?.anneeDebut,
-    values.mobilite?.type,
+    lockedMobiliteType || values.mobilite?.type,
   );
 
   const submit = async (e) => {
     e.preventDefault();
     setSubmitErr('');
-    const fin = validateSubmitSteps(values, { stepKeys, mode });
+    const fin = validateSubmitSteps(values, validationOptions);
     if (!fin.ok) {
       setStep(fin.firstStep);
       setFieldErrors(fin.errors);
@@ -428,9 +567,14 @@ export default function FormulaireEleve({
       });
       toast.success(eleve ? 'Dossier enregistré avec succès.' : 'Étudiant créé avec succès.');
     } catch (err) {
-      const msg = formatApiError(err);
-      setSubmitErr(msg);
-      toast.error(msg);
+      if (isVersionConflict(err)) {
+        setVersionConflict(err.response?.data || { detail: formatApiError(err) });
+        toast.error(formatApiError(err));
+      } else {
+        const msg = formatApiError(err);
+        setSubmitErr(msg);
+        toast.error(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -440,7 +584,7 @@ export default function FormulaireEleve({
     if (step >= STEPS.length - 1) return;
     setStepError('');
     setSubmitErr('');
-    const cur = validateEleveStep(step, values, { stepKeys, mode });
+    const cur = validateEleveStep(step, values, validationOptions);
     if (!cur.ok) {
       setFieldErrors(cur.errors);
       const msg = Object.values(cur.errors)[0] || 'Vérifiez les champs en rouge.';
@@ -489,40 +633,25 @@ export default function FormulaireEleve({
     update('dossierMilitaire.ficheTaillesScan', file);
     setScanInfo('');
     if (!file || !(file instanceof File)) return;
-    if (!/text|csv/i.test(file.type) && !/\.txt$|\.csv$/i.test(file.name)) {
-      setScanInfo(
-        'Fichier joint. Pour la pré-saisie automatique, importer un fichier .txt/.csv avec une mensuration par ligne.',
-      );
-      return;
-    }
     try {
-      const text = await file.text();
-      const parsed = parseFicheTaillesText(text);
-      const entries = [];
-      const map = {
-        tourPoitrine: 'dossierMilitaire.tourPoitrine',
-        tourCeinture: 'dossierMilitaire.tourCeinture',
-        tourTaille: 'dossierMilitaire.tourTaille',
-        tourBassin: 'dossierMilitaire.tourBassin',
-        tourCou: 'dossierMilitaire.tourCou',
-        longueurManche: 'dossierMilitaire.longueurManche',
-        longueurDos: 'dossierMilitaire.longueurDos',
-        longueurCote: 'dossierMilitaire.longueurCote',
-        pointure: 'dossierMilitaire.pointure',
-        poids: 'sante.poids',
-        tailleCm: 'sante.tailleCm',
-      };
-      for (const [k, v] of Object.entries(parsed)) {
-        if (map[k]) entries.push([map[k], v]);
-      }
+      const { values, method } = await importFicheMesures(file);
+      const entries = mesuresToFormEntries(values);
       if (entries.length > 0) {
         updateMany(entries);
-        setScanInfo(`Pré-saisie automatique : ${entries.length} champ(s) renseigné(s).`);
+        const methodKey =
+          method === 'payload'
+            ? 'scanFilledPayload'
+            : method === 'ocr'
+              ? 'scanFilledOcr'
+              : 'scanFilledText';
+        setScanInfo(t(methodKey, { count: entries.length }));
+      } else if (/\.pdf$/i.test(file.name) || /pdf/i.test(file.type)) {
+        setScanInfo(t('scanAttachedNoParse'));
       } else {
-        setScanInfo('Aucune mensuration reconnue dans le fichier.');
+        setScanInfo(t('scanNoMeasures'));
       }
     } catch {
-      setScanInfo('Lecture du fichier impossible.');
+      setScanInfo(t('scanReadError'));
     }
   };
 
@@ -543,38 +672,61 @@ export default function FormulaireEleve({
   const stepKey = stepKeys[step];
 
   return (
-    <form onSubmit={submit} className="flex min-h-0 flex-col gap-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-5">
-      <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
-        <div className="relative flex w-full min-w-0 items-start justify-between gap-1 border-b border-light-gray pb-4 sm:gap-2">
+    <form onSubmit={submit} className="flex min-h-0 w-full min-w-0 max-w-full flex-col gap-4 pb-[max(5.5rem,env(safe-area-inset-bottom))] sm:gap-5 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <VersionConflictModal
+        open={!!versionConflict}
+        message={versionConflict?.detail}
+        onReload={() => {
+          setVersionConflict(null);
+          window.location.reload();
+        }}
+        onClose={() => setVersionConflict(null)}
+      />
+      <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] sm:overflow-visible sm:pb-0 [&::-webkit-scrollbar]:hidden">
+        <div className="relative flex w-max min-w-full items-start justify-between gap-1 border-b border-light-gray pb-4 sm:w-full sm:gap-2">
           <div
             className="pointer-events-none absolute left-[10%] right-[10%] top-[15px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:block"
             aria-hidden
           />
           {STEPS.map((s, i) => {
+            const isEdit = Boolean(eleve);
             const done = i < step;
             const act = i === step;
+            const clickable = isEdit || i <= step;
             return (
               <button
                 key={s.key}
                 type="button"
-                onClick={() => i < step && setStep(i)}
-                className="relative z-[1] flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                disabled={!clickable}
+                onClick={() => {
+                  if (!clickable) return;
+                  if (isEdit) {
+                    setStep(i);
+                    setStepError('');
+                    setFieldErrors({});
+                    return;
+                  }
+                  if (i < step) setStep(i);
+                }}
+                className={`relative z-[1] flex w-[4.5rem] min-w-0 flex-col items-center gap-1.5 sm:w-auto sm:flex-1 ${
+                  clickable ? 'cursor-pointer' : 'cursor-default'
+                }`}
               >
                 <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold shadow-lg transition sm:h-10 sm:w-10 ${act
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold shadow-lg transition sm:h-10 sm:w-10 ${act
                       ? 'border-gold bg-amber-50 text-gold-700 ring-2 ring-gold/20'
-                      : done
+                      : done || isEdit
                         ? 'border-esp-green/50 bg-emerald-50 text-emerald-700'
                         : 'border-light-gray bg-off-white text-slate-600'
                     }`}
                 >
-                  {done ? <Check size={17} strokeWidth={2.5} /> : i + 1}
+                  {done && !act ? <Check size={17} strokeWidth={2.5} /> : i + 1}
                 </span>
                 <span
-                  className={`text-center text-[10px] leading-tight sm:text-xs ${act ? 'font-semibold text-slate-900' : done ? 'text-slate-700' : 'text-slate-500'
+                  className={`max-w-full truncate text-center text-[10px] leading-tight sm:whitespace-normal sm:text-xs ${act ? 'font-semibold text-slate-900' : done || isEdit ? 'text-slate-700' : 'text-slate-500'
                     }`}
                 >
-                  {s.label}
+                  {s.labelKey ? t(s.labelKey) : s.label}
                 </span>
               </button>
             );
@@ -593,53 +745,66 @@ export default function FormulaireEleve({
           <>
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Identité
+                {t('identity')}
               </h4>
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3">
                 <Field
-                  label="Matricule"
+                  label={t('matricule')}
                   value={values.matricule}
                   onChange={(v) => update('matricule', sanitizeMatricule(v))}
                   required
                   error={fieldErrors.matricule}
                   inputMode="numeric"
                   autoComplete="off"
-                  maxLength={5}
+                  maxLength={6}
                   onKeyDown={blockNonDigitKey}
-                  placeholder="12345"
+                  placeholder="251280"
                 />
-                <Field label="Nom" value={values.nom} onChange={(v) => update('nom', v)} required error={fieldErrors.nom} />
-                <Field label="Prénom" value={values.prenom} onChange={(v) => update('prenom', v)} required error={fieldErrors.prenom} />
+                <Field label={t('nom')} value={values.nom} onChange={(v) => update('nom', v)} required error={fieldErrors.nom} />
+                <Field label={t('prenom')} value={values.prenom} onChange={(v) => update('prenom', v)} required error={fieldErrors.prenom} />
                 <Field
-                  label="N° NNI"
+                  label={t('nni')}
                   value={values.nni}
                   onChange={(v) => update('nni', sanitizeNni(v))}
-                  required
+                  required={sensitiveCaps.edit_nni}
                   error={fieldErrors.nni}
                   inputMode="numeric"
                   maxLength={10}
                   onKeyDown={blockNonDigitKey}
-                  placeholder="10 chiffres"
+                  placeholder={sensitiveCaps.nni === 'masked' ? t('nniMasked') : '0123456789'}
+                  disabled={!sensitiveCaps.edit_nni}
                 />
                 <SelectField
-                  label="Sexe"
+                  label={t('sexe')}
                   value={values.sexe}
                   onChange={(v) => update('sexe', v)}
+                  required
+                  error={fieldErrors.sexe}
                   options={[
-                    { value: 'M', label: 'Masculin' },
-                    { value: 'F', label: 'Féminin' },
+                    { value: 'M', label: 'M' },
+                    { value: 'F', label: 'F' },
                   ]}
                 />
-                <Field
-                  label="Date de naissance"
-                  type="date"
+                <DateNaissanceField
+                  label={t('dateNaissance')}
                   value={values.dateNaissance}
-                  onChange={(v) => update('dateNaissance', v)}
+                  onChange={(iso) => update('dateNaissance', iso)}
+                  onPartialChange={(fr) => {
+                    const err = fr && !parseFrToIso(fr)
+                      ? (fr.length >= 10 ? 'Indiquez une date valide (JJ/MM/AAAA).' : '')
+                      : '';
+                    setFieldErrors((prev) => {
+                      const next = { ...prev };
+                      if (err) next.dateNaissance = err;
+                      else delete next.dateNaissance;
+                      return next;
+                    });
+                  }}
                   required
                   error={fieldErrors.dateNaissance}
                 />
                 <SelectField
-                  label="Nationalité"
+                  label={t('nationalite')}
                   value={values.nationalite}
                   onChange={(v) => update('nationalite', v)}
                   options={PAYS_OPTIONS}
@@ -649,7 +814,7 @@ export default function FormulaireEleve({
                 {isMauritanien ? (
                   <>
                     <SelectField
-                      label="Wilaya de naissance"
+                      label={t('wilayaNaissance')}
                       value={values.wilayaNaissance}
                       onChange={(v) => updateMany([
                         ['wilayaNaissance', v],
@@ -660,7 +825,7 @@ export default function FormulaireEleve({
                       error={fieldErrors.wilayaNaissance}
                     />
                     <SelectField
-                      label="Commune / moughataa"
+                      label={t('communeNaissance')}
                       value={values.communeNaissance}
                       onChange={(v) => updateMany([
                         ['communeNaissance', v],
@@ -672,7 +837,7 @@ export default function FormulaireEleve({
                     />
                     {values.communeNaissance === COMMUNE_AUTRE_VALUE ? (
                       <Field
-                        label="Autre commune (préciser)"
+                        label={t('autreCommune')}
                         value={values.communeNaissanceLibre}
                         onChange={(v) => update('communeNaissanceLibre', v)}
                         required
@@ -682,7 +847,7 @@ export default function FormulaireEleve({
                   </>
                 ) : (
                   <Field
-                    label="Lieu de naissance (ville, pays)"
+                    label={t('lieuNaissance')}
                     value={values.lieuNaissance}
                     onChange={(v) => update('lieuNaissance', v)}
                     required
@@ -694,11 +859,11 @@ export default function FormulaireEleve({
 
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Baccalauréat
+                {t('baccalaureat')}
               </h4>
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3">
                 <Field
-                  label="N° Bac"
+                  label={t('numeroBac')}
                   value={values.numeroBac}
                   onChange={(v) => update('numeroBac', sanitizeNumBac(v))}
                   required
@@ -709,7 +874,7 @@ export default function FormulaireEleve({
                   placeholder="1 à 5 chiffres"
                 />
                 <SelectField
-                  label="Catégorie Bac"
+                  label={t('categorieBac')}
                   value={values.categorieBac}
                   onChange={(v) => update('categorieBac', v)}
                   options={[
@@ -718,7 +883,7 @@ export default function FormulaireEleve({
                   ]}
                 />
                 <SelectField
-                  label="Série du Bac"
+                  label={t('serieBac')}
                   value={values.serieBac ?? ''}
                   onChange={(v) => update('serieBac', v)}
                   options={SERIE_BAC_OPTIONS}
@@ -726,15 +891,22 @@ export default function FormulaireEleve({
                   error={fieldErrors.serieBac}
                 />
                 <Field
-                  label="Moyenne au Bac"
+                  label={t('moyenneBac')}
                   value={values.moyenneBac}
-                  onChange={(v) => update('moyenneBac', v)}
+                  onChange={(v) => update('moyenneBac', sanitizeDecimal(v).replace('.', ','))}
+                  onBlur={() => {
+                    setValues((prev) => {
+                      const formatted = formatMoyenneFr(prev.moyenneBac);
+                      if (!formatted || formatted === prev.moyenneBac) return prev;
+                      return { ...prev, moyenneBac: formatted };
+                    });
+                  }}
                   required
                   error={fieldErrors.moyenneBac}
                   placeholder="12,50"
                   inputMode="decimal"
                 />
-                <Field label="École du Bac" value={values.ecoleBac} onChange={(v) => update('ecoleBac', v)} required error={fieldErrors.ecoleBac} />
+                <Field label={t('ecoleBac')} value={values.ecoleBac} onChange={(v) => update('ecoleBac', v)} required error={fieldErrors.ecoleBac} />
               </div>
             </FormPanel>
           </>
@@ -743,11 +915,11 @@ export default function FormulaireEleve({
         {stepKey === 'scolarite' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Scolarité
+              {t('scolarite')}
             </h4>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3">
               <SelectField
-                label="Département"
+                label={t('departement')}
                 value={values.scolarite.filiere}
                 onChange={(v) => updateMany([
                   ['scolarite.filiere', v],
@@ -759,7 +931,7 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.filiere']}
               />
               <SelectField
-                label="Niveau actuel"
+                label={t('niveauActuel')}
                 value={values.scolarite.niveau}
                 onChange={(v) => update('scolarite.niveau', v)}
                 options={niveauOptions}
@@ -767,7 +939,7 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.niveau']}
               />
               <SelectField
-                label="Statut académique"
+                label={t('statutAcademique')}
                 value={values.statut}
                 onChange={(v) => updateMany([
                   ['statut', v],
@@ -778,7 +950,7 @@ export default function FormulaireEleve({
                 error={fieldErrors.statut}
               />
               <SelectField
-                label="Année universitaire de 1ʳᵉ inscription"
+                label={t('anneeUni1ere')}
                 value={values.scolarite.anneeUni1ere}
                 onChange={(v) => updateMany([
                   ['scolarite.anneeUni1ere', v],
@@ -789,7 +961,7 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.anneeUni1ere']}
               />
               <Field
-                label="Date de 1ʳᵉ inscription"
+                label={t('datePremiereInscription')}
                 type="date"
                 value={values.datePremiereInscription}
                 onChange={(v) => update('datePremiereInscription', v)}
@@ -797,7 +969,7 @@ export default function FormulaireEleve({
                 error={fieldErrors.datePremiereInscription}
               />
               <SelectField
-                label="Voie d’accès"
+                label={t('voieAcces')}
                 value={values.scolarite.voieAcces}
                 onChange={(v) => update('scolarite.voieAcces', v)}
                 options={VOIES_ACCES_OPTIONS}
@@ -805,7 +977,7 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.voieAcces']}
               />
               <SelectField
-                label="Diplôme d’accès"
+                label={t('diplomeAcces')}
                 value={values.scolarite.diplomeAcces}
                 onChange={(v) => update('scolarite.diplomeAcces', v)}
                 options={DIPLOMES_ACCES_OPTIONS}
@@ -813,19 +985,16 @@ export default function FormulaireEleve({
                 error={fieldErrors['scolarite.diplomeAcces']}
               />
               <Field
-                label="Établissement (diplôme d’accès)"
+                label={t('etablissement')}
                 value={values.scolarite.etablissementPremierCycle}
                 onChange={(v) => update('scolarite.etablissementPremierCycle', v)}
               />
               <ReadOnlyField
-                label="Compagnie (automatique)"
-                value={values.dossierMilitaire.compagnie}
-                hint="Déduite du niveau : 3e → 1ʳᵉ, 4e → 2ᵉ, 5e → 3ᵉ"
-              />
-              <ReadOnlyField
-                label="Section (automatique)"
-                value={values.dossierMilitaire.section}
-                hint="Déduite du département et du niveau"
+                label={t('affectation')}
+                value={formatAffectation(
+                  values.dossierMilitaire.compagnie,
+                  values.dossierMilitaire.section,
+                )}
               />
             </div>
           </FormPanel>
@@ -834,44 +1003,47 @@ export default function FormulaireEleve({
         {stepKey === 'mobilite' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Mobilité internationale
+              {t('mobiliteInternationale')}
             </h4>
-            <p className="mb-4 max-w-2xl text-xs leading-relaxed text-slate-500">
-              Renseigner ici les informations spécifiques aux étudiants en double diplôme ou en semestre d’échange.
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <SelectField
-                label="Type de mobilité"
-                value={values.mobilite.type}
-                onChange={(v) => update('mobilite.type', v)}
-                options={PARCOURS_MOBILITE_OPTIONS}
-                required
-                error={fieldErrors['mobilite.type']}
-              />
-              <Field
-                label="Établissement d’accueil"
-                value={values.mobilite.etablissement}
-                onChange={(v) => update('mobilite.etablissement', v)}
-                required
-                error={fieldErrors['mobilite.etablissement']}
-              />
-              <Field
-                label="Spécialité de mobilité"
-                value={values.mobilite.specialite}
-                onChange={(v) => update('mobilite.specialite', v)}
-                required
-                error={fieldErrors['mobilite.specialite']}
-              />
-              <SelectField
-                label="Année universitaire de début"
-                value={values.mobilite.anneeDebut}
-                onChange={(v) => update('mobilite.anneeDebut', v)}
-                options={anneeMobiliteOptions}
-              />
-              <div className="md:col-span-2">
-                <span className="label">Année de fin</span>
-                <div className="input min-h-[44px] flex items-center tabular-nums text-slate-900 sm:min-h-[2.5rem]">
-                  {mobiliteAnneeFinDerived || '—'}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="min-w-0">
+                <ReadOnlyField
+                  label={t('typeMobilite')}
+                  value={lockedMobiliteType || values.mobilite.type}
+                />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('etablissementAccueil')}
+                  value={values.mobilite.etablissement}
+                  onChange={(v) => update('mobilite.etablissement', v)}
+                  required
+                  error={fieldErrors['mobilite.etablissement']}
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('specialiteMobilite')}
+                  value={values.mobilite.specialite}
+                  onChange={(v) => update('mobilite.specialite', v)}
+                  required
+                  error={fieldErrors['mobilite.specialite']}
+                />
+              </div>
+              <div className="col-span-full grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="min-w-0">
+                  <SelectField
+                    label={t('anneeUnivDebut')}
+                    value={values.mobilite.anneeDebut}
+                    onChange={(v) => update('mobilite.anneeDebut', v)}
+                    options={anneeMobiliteOptions}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <ReadOnlyField
+                    label={t('anneeFin')}
+                    value={mobiliteAnneeFinDerived}
+                  />
                 </div>
               </div>
             </div>
@@ -881,17 +1053,16 @@ export default function FormulaireEleve({
         {stepKey === 'pieces' && (
           <FormPanel className="!p-4 sm:!p-6">
             <h4 className="mb-1 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Pièces & diplômes
+              {t('piecesTitre')}
             </h4>
             <p className="mb-5 max-w-2xl text-xs leading-relaxed text-text-light">
-              Pièces demandées pour le dossier. Formats :{' '}
-              <span className="font-semibold text-navy">PDF, JPG, PNG</span> — taille indicative max. 5&nbsp;Mo par fichier.
+              {t('piecesIntro')}
             </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <CloudUploadZone
                 variant="light"
-                label="Photo d’identité (portrait du candidat)"
-                hint="Image ≤ 500×500 px"
+                label={t('photoIdentite')}
+                hint={t('hintPhotoAuto')}
                 value={values.pieces.photoIdentite}
                 onChange={(f) => update('pieces.photoIdentite', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
@@ -899,54 +1070,46 @@ export default function FormulaireEleve({
               />
               <CloudUploadZone
                 variant="light"
-                label="CIN (carte d’identité nationale)"
-                hint="PDF ou image ≤ 1 Mo"
+                label={t('cin')}
+                hint={t('hintDocAuto')}
                 value={values.pieces.cin}
                 onChange={(f) => update('pieces.cin', f)}
               />
               <CloudUploadZone
                 variant="light"
-                label="Acte de naissance"
-                hint="PDF ou image ≤ 1 Mo"
+                label={t('acteNaissance')}
+                hint={t('hintDocAuto')}
                 value={values.pieces.acteNaissance}
                 onChange={(f) => update('pieces.acteNaissance', f)}
               />
               <CloudUploadZone
                 variant="light"
-                label="Diplôme d'accès"
-                hint="PDF ou image ≤ 1 Mo"
+                label={t('diplomeAccesPiece')}
+                hint={t('hintDocAuto')}
                 value={values.pieces.diplomeAcces}
                 onChange={(f) => update('pieces.diplomeAcces', f)}
               />
               <CloudUploadZone
                 variant="light"
-                label="Diplôme du Bac"
-                hint="PDF ou image ≤ 1 Mo"
+                label={t('diplomeBac')}
+                hint={t('hintDocAuto')}
                 value={values.pieces.diplomeBac}
                 onChange={(f) => update('pieces.diplomeBac', f)}
               />
               <CloudUploadZone
                 variant="light"
-                label="Photo d'identité militaire"
-                hint="Image ≤ 500×500 px"
+                label={t('photoIdentiteMilitaire')}
+                hint={t('hintPhotoAuto')}
                 value={values.pieces.photoIdentiteMilitaire}
                 onChange={(f) => update('pieces.photoIdentiteMilitaire', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
                 kind="photo"
               />
               <CloudUploadZone
+                className="sm:col-span-2"
                 variant="light"
-                label="Photo d'identité civile"
-                hint="Image ≤ 500×500 px"
-                value={values.pieces.photoIdentiteCivile}
-                onChange={(f) => update('pieces.photoIdentiteCivile', f)}
-                accept="image/jpeg,image/png,image/webp,image/*"
-                kind="photo"
-              />
-              <CloudUploadZone
-                variant="light"
-                label="Photo militaire intégrale"
-                hint="Image ≤ 500×500 px"
+                label={t('photoMilitaireIntegrale')}
+                hint={t('hintPhotoAuto')}
                 value={values.pieces.photoMilitaireIntegrale}
                 onChange={(f) => update('pieces.photoMilitaireIntegrale', f)}
                 accept="image/jpeg,image/png,image/webp,image/*"
@@ -960,186 +1123,222 @@ export default function FormulaireEleve({
           <>
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Informations de contact
+                {t('informationsContact')}
               </h4>
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-                <Field
-                  label="Adresse primaire"
-                  value={values.contact.adresse}
-                  onChange={(v) => update('contact.adresse', v)}
-                  required
-                  error={fieldErrors['contact.adresse']}
-                />
-                <Field
-                  label="Adresse secondaire"
-                  value={values.contact.adresseSecondaire}
-                  onChange={(v) => update('contact.adresseSecondaire', v)}
-                />
-                <Field
-                  label="Téléphone principal (tel1)"
-                  value={values.contact.telephone}
-                  onChange={(v) => update('contact.telephone', sanitizeMrPhoneDigits(v))}
-                  required
-                  error={fieldErrors['contact.telephone']}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                  placeholder="31234567"
-                />
-                <Field
-                  label="N° tél. 2 WhatsApp"
-                  value={values.contact.tel2}
-                  onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
-                  error={fieldErrors['contact.tel2']}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                />
-                <Field
-                  label="E-mail personnel"
-                  value={values.contact.emailPerso}
-                  onChange={(v) => update('contact.emailPerso', v)}
-                  required
-                  error={fieldErrors['contact.emailPerso']}
-                  inputMode="email"
-                  autoComplete="email"
-                />
-                <Field
-                  label="E-mail institutionnel"
-                  value={formatEmailInstitutionnel(values.matricule)}
-                  onChange={() => {}}
-                  disabled
-                />
-                <SelectField
-                  label="Résident avec les parents"
-                  value={values.residentAvecParents}
-                  onChange={(v) => update('residentAvecParents', v)}
-                  options={[
-                    { value: '', label: '—' },
-                    { value: 'Oui', label: 'Oui' },
-                    { value: 'Non', label: 'Non' },
-                  ]}
-                  required
-                  error={fieldErrors.residentAvecParents}
-                />
-                <Field
-                  label="Compte Bankily"
-                  value={values.compteBankily}
-                  onChange={(v) => update('compteBankily', sanitizeMrPhoneDigits(v))}
-                  error={fieldErrors.compteBankily}
-                  inputMode="numeric"
-                  maxLength={8}
-                  onKeyDown={blockNonDigitKey}
-                  placeholder="Optionnel · 8 chiffres"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="min-w-0 sm:col-span-2">
+                  <Field
+                    label={t('adressePrimaire')}
+                    value={values.contact.adresse}
+                    onChange={(v) => update('contact.adresse', v)}
+                    required
+                    error={fieldErrors['contact.adresse']}
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <Field
+                    label={t('adresseSecondaire')}
+                    value={values.contact.adresseSecondaire}
+                    onChange={(v) => update('contact.adresseSecondaire', v)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('telephonePrincipal')}
+                    value={values.contact.telephone}
+                    onChange={(v) => update('contact.telephone', sanitizeMrPhoneDigits(v))}
+                    required
+                    error={fieldErrors['contact.telephone']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                    placeholder="31234567"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('tel2Whatsapp')}
+                    value={values.contact.tel2}
+                    onChange={(v) => update('contact.tel2', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.tel2']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('emailPersonnel')}
+                    value={values.contact.emailPerso}
+                    onChange={(v) => update('contact.emailPerso', v)}
+                    required
+                    error={fieldErrors['contact.emailPerso']}
+                    inputMode="email"
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('emailInstitutionnel')}
+                    value={formatEmailInstitutionnel(values.matricule)}
+                    onChange={() => {}}
+                    disabled
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <SelectField
+                    label={t('residentAvecParents')}
+                    value={values.residentAvecParents}
+                    onChange={(v) => update('residentAvecParents', v)}
+                    options={[
+                      { value: '', label: '—' },
+                      { value: 'Oui', label: t('oui') },
+                      { value: 'Non', label: t('non') },
+                    ]}
+                    required
+                    error={fieldErrors.residentAvecParents}
+                  />
+                </div>
               </div>
             </FormPanel>
 
             <FormPanel>
               <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-                Contacts parents & personne à prévenir
+                {t('contactsParentsUrgence')}
               </h4>
 
-            <h5 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">Parents</h5>
-            <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field
-                label="Prénom du père"
-                value={values.parents.prenomPere}
-                onChange={(v) => update('parents.prenomPere', v)}
-                required
-                error={fieldErrors['parents.prenomPere']}
-              />
-              <Field
-                label="Nom de famille du père"
-                value={values.parents.nomFamillePere}
-                onChange={(v) => update('parents.nomFamillePere', v)}
-                required
-                error={fieldErrors['parents.nomFamillePere']}
-              />
-              <Field
-                label="Fonction / profession (père)"
-                value={values.parents.fonctionPere}
-                onChange={(v) => update('parents.fonctionPere', v)}
-              />
-              <Field
-                label="Prénom de la mère"
-                value={values.parents.prenomMere}
-                onChange={(v) => update('parents.prenomMere', v)}
-              />
-              <Field
-                label="Nom de famille de la mère"
-                value={values.parents.nomMere}
-                onChange={(v) => update('parents.nomMere', v)}
-                error={fieldErrors['parents.nomMere']}
-              />
-              <Field
-                label="Fonction / profession (mère)"
-                value={values.parents.fonctionMere}
-                onChange={(v) => update('parents.fonctionMere', v)}
-              />
-            </div>
+              <h5 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+                {t('parents')}
+              </h5>
+              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="min-w-0">
+                  <Field
+                    label={t('prenomPere')}
+                    value={values.parents.prenomPere}
+                    onChange={(v) => update('parents.prenomPere', v)}
+                    required
+                    error={fieldErrors['parents.prenomPere']}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('nomFamillePere')}
+                    value={values.parents.nomFamillePere}
+                    onChange={(v) => update('parents.nomFamillePere', v)}
+                    required
+                    error={fieldErrors['parents.nomFamillePere']}
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <Field
+                    label={t('fonctionPere')}
+                    value={values.parents.fonctionPere}
+                    onChange={(v) => update('parents.fonctionPere', v)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('prenomMere')}
+                    value={values.parents.prenomMere}
+                    onChange={(v) => update('parents.prenomMere', v)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('nomFamilleMere')}
+                    value={values.parents.nomMere}
+                    onChange={(v) => update('parents.nomMere', v)}
+                    error={fieldErrors['parents.nomMere']}
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <Field
+                    label={t('fonctionMere')}
+                    value={values.parents.fonctionMere}
+                    onChange={(v) => update('parents.fonctionMere', v)}
+                  />
+                </div>
+              </div>
 
-            <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Téléphones parents & personne à prévenir
-            </h5>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field
-                label="Tél. père"
-                value={values.contact.telPere}
-                onChange={(v) => update('contact.telPere', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telPere']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-              <Field
-                label="Tél. père WhatsApp"
-                value={values.contact.telPereWhatsapp}
-                onChange={(v) => update('contact.telPereWhatsapp', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telPereWhatsapp']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-              <Field
-                label="Tél. mère"
-                value={values.contact.telMere}
-                onChange={(v) => update('contact.telMere', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telMere']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-              <Field
-                label="Tél. mère WhatsApp"
-                value={values.contact.telMereWhatsapp}
-                onChange={(v) => update('contact.telMereWhatsapp', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telMereWhatsapp']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-              <Field label="Nom urgence" value={values.contact.nomUrgence} onChange={(v) => update('contact.nomUrgence', v)} />
-              <Field
-                label="Tél. urgence"
-                value={values.contact.telUrgence}
-                onChange={(v) => update('contact.telUrgence', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telUrgence']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-                placeholder="Optionnel · 8 chiffres"
-              />
-              <Field
-                label="WhatsApp urgence"
-                value={values.contact.telUrgenceWhatsapp}
-                onChange={(v) => update('contact.telUrgenceWhatsapp', sanitizeMrPhoneDigits(v))}
-                error={fieldErrors['contact.telUrgenceWhatsapp']}
-                inputMode="numeric"
-                maxLength={8}
-                onKeyDown={blockNonDigitKey}
-              />
-            </div>
+              <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                {t('telephonesParentsUrgence')}
+              </h5>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="min-w-0">
+                  <Field
+                    label={t('telPere')}
+                    value={values.contact.telPere}
+                    onChange={(v) => update('contact.telPere', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telPere']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('telPereWhatsapp')}
+                    value={values.contact.telPereWhatsapp}
+                    onChange={(v) => update('contact.telPereWhatsapp', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telPereWhatsapp']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('telMere')}
+                    value={values.contact.telMere}
+                    onChange={(v) => update('contact.telMere', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telMere']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('telMereWhatsapp')}
+                    value={values.contact.telMereWhatsapp}
+                    onChange={(v) => update('contact.telMereWhatsapp', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telMereWhatsapp']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2">
+                  <Field
+                    label={t('nomUrgence')}
+                    value={values.contact.nomUrgence}
+                    onChange={(v) => update('contact.nomUrgence', v)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('telUrgence')}
+                    value={values.contact.telUrgence}
+                    onChange={(v) => update('contact.telUrgence', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telUrgence']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                    placeholder={t('optionnel8Chiffres')}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Field
+                    label={t('whatsappUrgence')}
+                    value={values.contact.telUrgenceWhatsapp}
+                    onChange={(v) => update('contact.telUrgenceWhatsapp', sanitizeMrPhoneDigits(v))}
+                    error={fieldErrors['contact.telUrgenceWhatsapp']}
+                    inputMode="numeric"
+                    maxLength={8}
+                    onKeyDown={blockNonDigitKey}
+                  />
+                </div>
+              </div>
             </FormPanel>
           </>
         )}
@@ -1147,45 +1346,87 @@ export default function FormulaireEleve({
         {stepKey === 'sante' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Dossier santé
+              {t('dossierSante')}
             </h4>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <SelectField
-                label="Groupe sanguin"
-                value={values.sante.groupeSanguin}
-                onChange={(v) => update('sante.groupeSanguin', v)}
-                options={GROUPES_SANGUINS_OPTIONS}
-                required
-                error={fieldErrors['sante.groupeSanguin']}
-              />
-              <Field label="Assureur" value={values.sante.assureur} onChange={(v) => update('sante.assureur', v)} />
-              <Field
-                label="N° assuré"
-                value={values.sante.numeroAssure}
-                onChange={(v) => update('sante.numeroAssure', v)}
-                error={fieldErrors['sante.numeroAssure']}
-                inputMode="numeric"
-              />
-              <Field label="Antécédents" value={values.sante.antecedents} onChange={(v) => update('sante.antecedents', v)} />
-              <Field label="Maladies chroniques" value={values.sante.maladiesChroniques} onChange={(v) => update('sante.maladiesChroniques', v)} />
-              <Field label="Médicaments à vie" value={values.sante.medicaments} onChange={(v) => update('sante.medicaments', v)} />
-              <Field
-                label="Poids (kg)"
-                value={values.sante.poids}
-                onChange={(v) => update('sante.poids', sanitizeDecimal(v))}
-                error={fieldErrors['sante.poids']}
-                inputMode="decimal"
-                placeholder="72,5"
-              />
-              <Field
-                label="Taille (cm)"
-                value={values.sante.tailleCm}
-                onChange={(v) => update('sante.tailleCm', sanitizeDecimal(v))}
-                error={fieldErrors['sante.tailleCm']}
-                inputMode="decimal"
-                placeholder="178"
-              />
-              <ImcDisplay imc={imc} klass={imcKlass} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="min-w-0">
+                <SelectField
+                  label={t('groupeSanguin')}
+                  value={values.sante.groupeSanguin}
+                  onChange={(v) => update('sante.groupeSanguin', v)}
+                  options={GROUPES_SANGUINS_OPTIONS}
+                  required
+                  error={fieldErrors['sante.groupeSanguin']}
+                />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('numeroAssure')}
+                  value={values.sante.numeroAssure}
+                  onChange={(v) => update('sante.numeroAssure', v)}
+                  error={fieldErrors['sante.numeroAssure']}
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('assureur')}
+                  value={values.sante.assureur}
+                  onChange={(v) => update('sante.assureur', v)}
+                  onBlur={() => update('sante.assureur', formatListField(values.sante.assureur))}
+                  placeholder={t('hintListeVirgule')}
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('antecedents')}
+                  value={values.sante.antecedents}
+                  onChange={(v) => update('sante.antecedents', v)}
+                  onBlur={() => update('sante.antecedents', formatListField(values.sante.antecedents))}
+                  placeholder={t('hintListeVirgule')}
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('maladiesChroniques')}
+                  value={values.sante.maladiesChroniques}
+                  onChange={(v) => update('sante.maladiesChroniques', v)}
+                  onBlur={() => update('sante.maladiesChroniques', formatListField(values.sante.maladiesChroniques))}
+                  placeholder={t('hintListeVirgule')}
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('medicamentsAVie')}
+                  value={values.sante.medicaments}
+                  onChange={(v) => update('sante.medicaments', v)}
+                  onBlur={() => update('sante.medicaments', formatListField(values.sante.medicaments))}
+                  placeholder={t('hintListeVirgule')}
+                />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('poidsKg')}
+                  value={values.sante.poids}
+                  onChange={(v) => update('sante.poids', sanitizeDecimal(v))}
+                  error={fieldErrors['sante.poids']}
+                  inputMode="decimal"
+                  placeholder="72,5"
+                />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('tailleCm')}
+                  value={values.sante.tailleCm}
+                  onChange={(v) => update('sante.tailleCm', sanitizeDecimal(v))}
+                  error={fieldErrors['sante.tailleCm']}
+                  inputMode="decimal"
+                  placeholder="178"
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <ImcDisplay imc={imc} klass={imcKlass} t={t} />
+              </div>
             </div>
           </FormPanel>
         )}
@@ -1193,28 +1434,50 @@ export default function FormulaireEleve({
         {stepKey === 'militaire' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Dossier militaire
+              {t('dossierMilitaire')}
             </h4>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <ReadOnlyField
-                label="Compagnie (automatique)"
-                value={values.dossierMilitaire.compagnie}
-                hint="Déduite du niveau scolaire"
-              />
-              <ReadOnlyField
-                label="Section (automatique)"
-                value={values.dossierMilitaire.section}
-                hint="Déduite du département et du niveau"
-              />
-              <Field label="Sport pratiqué" value={values.dossierMilitaire.sportPratique} onChange={(v) => update('dossierMilitaire.sportPratique', v)} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="min-w-0">
+                <ReadOnlyField
+                  label={t('affectation')}
+                  value={formatAffectation(
+                    values.dossierMilitaire.compagnie,
+                    values.dossierMilitaire.section,
+                  )}
+                />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('compteBankily')}
+                  value={values.compteBankily}
+                  onChange={(v) => update('compteBankily', sanitizeMrPhoneDigits(v))}
+                  error={fieldErrors.compteBankily}
+                  inputMode="numeric"
+                  maxLength={8}
+                  onKeyDown={blockNonDigitKey}
+                  placeholder={t('optionnel8Chiffres')}
+                />
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <Field
+                  label={t('sportPratique')}
+                  value={values.dossierMilitaire.sportPratique}
+                  onChange={(v) => update('dossierMilitaire.sportPratique', v)}
+                  onBlur={() => update(
+                    'dossierMilitaire.sportPratique',
+                    formatListField(values.dossierMilitaire.sportPratique),
+                  )}
+                  placeholder={t('hintListeVirgule')}
+                />
+              </div>
             </div>
 
             <div className="mt-5 rounded-xl border border-dashed border-light-gray bg-off-white/60 p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <h5 className="font-serif text-sm font-semibold text-slate-900">Fiche de tailles</h5>
+                  <h5 className="font-serif text-sm font-semibold text-slate-900">{t('ficheTailles')}</h5>
                   <p className="mt-1 text-xs text-text-light">
-                    Importer un scan ou générer une fiche PDF à partir des mensurations saisies ci-dessous.
+                    {t('ficheTaillesHint')}
                   </p>
                   {scanInfo ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">{scanInfo}</p>
@@ -1227,34 +1490,54 @@ export default function FormulaireEleve({
                   className="shrink-0"
                 >
                   <FileText size={16} aria-hidden />
-                  Générer la fiche PDF
+                  {t('genererFichePdf')}
                 </Button>
               </div>
               <div className="mt-3">
                 <ScanFicheUpload
                   value={values.dossierMilitaire.ficheTaillesScan}
                   onChange={handleScanFiche}
+                  importLabel={t('importerScan')}
+                  removeLabel={t('retirer')}
                 />
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field label="Tour poitrine" value={values.dossierMilitaire.tourPoitrine} onChange={(v) => update('dossierMilitaire.tourPoitrine', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourPoitrine']} inputMode="decimal" />
-              <Field label="Tour ceinture" value={values.dossierMilitaire.tourCeinture} onChange={(v) => update('dossierMilitaire.tourCeinture', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourCeinture']} inputMode="decimal" />
-              <Field label="Tour taille" value={values.dossierMilitaire.tourTaille} onChange={(v) => update('dossierMilitaire.tourTaille', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourTaille']} inputMode="decimal" />
-              <Field label="Tour bassin" value={values.dossierMilitaire.tourBassin} onChange={(v) => update('dossierMilitaire.tourBassin', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourBassin']} inputMode="decimal" />
-              <Field label="Tour cou" value={values.dossierMilitaire.tourCou} onChange={(v) => update('dossierMilitaire.tourCou', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourCou']} inputMode="decimal" />
-              <Field label="Longueur manche" value={values.dossierMilitaire.longueurManche} onChange={(v) => update('dossierMilitaire.longueurManche', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurManche']} inputMode="decimal" />
-              <Field label="Longueur dos" value={values.dossierMilitaire.longueurDos} onChange={(v) => update('dossierMilitaire.longueurDos', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurDos']} inputMode="decimal" />
-              <Field label="Longueur côté" value={values.dossierMilitaire.longueurCote} onChange={(v) => update('dossierMilitaire.longueurCote', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurCote']} inputMode="decimal" />
-              <Field
-                label="Pointure"
-                value={values.dossierMilitaire.pointure}
-                onChange={(v) => update('dossierMilitaire.pointure', String(v ?? '').replace(/\D/g, '').slice(0, 3))}
-                error={fieldErrors['dossierMilitaire.pointure']}
-                inputMode="numeric"
-                onKeyDown={blockNonDigitKey}
-              />
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="min-w-0">
+                <Field label={t('tourPoitrine')} value={values.dossierMilitaire.tourPoitrine} onChange={(v) => update('dossierMilitaire.tourPoitrine', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourPoitrine']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('tourCeinture')} value={values.dossierMilitaire.tourCeinture} onChange={(v) => update('dossierMilitaire.tourCeinture', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourCeinture']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('tourTaille')} value={values.dossierMilitaire.tourTaille} onChange={(v) => update('dossierMilitaire.tourTaille', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourTaille']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('tourBassin')} value={values.dossierMilitaire.tourBassin} onChange={(v) => update('dossierMilitaire.tourBassin', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourBassin']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('tourCou')} value={values.dossierMilitaire.tourCou} onChange={(v) => update('dossierMilitaire.tourCou', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.tourCou']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('longueurManche')} value={values.dossierMilitaire.longueurManche} onChange={(v) => update('dossierMilitaire.longueurManche', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurManche']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('longueurDos')} value={values.dossierMilitaire.longueurDos} onChange={(v) => update('dossierMilitaire.longueurDos', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurDos']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('longueurCote')} value={values.dossierMilitaire.longueurCote} onChange={(v) => update('dossierMilitaire.longueurCote', sanitizeDecimal(v))} error={fieldErrors['dossierMilitaire.longueurCote']} inputMode="decimal" />
+              </div>
+              <div className="min-w-0">
+                <Field
+                  label={t('pointure')}
+                  value={values.dossierMilitaire.pointure}
+                  onChange={(v) => update('dossierMilitaire.pointure', String(v ?? '').replace(/\D/g, '').slice(0, 3))}
+                  error={fieldErrors['dossierMilitaire.pointure']}
+                  inputMode="numeric"
+                  onKeyDown={blockNonDigitKey}
+                />
+              </div>
             </div>
           </FormPanel>
         )}
@@ -1262,43 +1545,52 @@ export default function FormulaireEleve({
         {stepKey === 'hebergement' && (
           <FormPanel>
             <h4 className="mb-4 border-b border-light-gray pb-2 font-serif text-sm font-semibold tracking-wide text-slate-900">
-              Hébergement
+              {t('hebergement')}
             </h4>
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-              <Field label="Bâtiment" value={values.hebergement.batiment} onChange={(v) => update('hebergement.batiment', v)} />
-              <Field label="Étage" value={values.hebergement.etage} onChange={(v) => update('hebergement.etage', v)} />
-              <Field label="Aile" value={values.hebergement.aile} onChange={(v) => update('hebergement.aile', v)} />
-              <Field label="Chambre" value={values.hebergement.chambre} onChange={(v) => update('hebergement.chambre', v)} />
-              <Field label="Lit" value={values.hebergement.lit} onChange={(v) => update('hebergement.lit', v)} />
-              <SelectField
-                label="Responsable chambre"
-                value={values.hebergement.responsableChambre ? 'Oui' : 'Non'}
-                onChange={(v) => update('hebergement.responsableChambre', v === 'Oui')}
-                options={[{ value: 'Oui', label: 'Oui' }, { value: 'Non', label: 'Non' }]}
-              />
-              <SelectField
-                label="Responsable aile"
-                value={values.hebergement.responsableAile ? 'Oui' : 'Non'}
-                onChange={(v) => update('hebergement.responsableAile', v === 'Oui')}
-                options={[{ value: 'Oui', label: 'Oui' }, { value: 'Non', label: 'Non' }]}
-              />
-              <SelectField
-                label="Responsable étage"
-                value={values.hebergement.responsableEtage ? 'Oui' : 'Non'}
-                onChange={(v) => update('hebergement.responsableEtage', v === 'Oui')}
-                options={[{ value: 'Oui', label: 'Oui' }, { value: 'Non', label: 'Non' }]}
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="min-w-0">
+                <Field label={t('batiment')} value={values.hebergement.batiment} onChange={(v) => update('hebergement.batiment', v)} />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('etage')} value={values.hebergement.etage} onChange={(v) => update('hebergement.etage', v)} />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('aile')} value={values.hebergement.aile} onChange={(v) => update('hebergement.aile', v)} />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('chambre')} value={values.hebergement.chambre} onChange={(v) => update('hebergement.chambre', v)} />
+              </div>
+              <div className="min-w-0">
+                <Field label={t('lit')} value={values.hebergement.lit} onChange={(v) => update('hebergement.lit', v)} />
+              </div>
+              <div className="min-w-0">
+                <SelectField
+                  label={t('responsableChambre')}
+                  value={values.hebergement.responsableChambre ? 'Oui' : 'Non'}
+                  onChange={(v) => update('hebergement.responsableChambre', v === 'Oui')}
+                  options={[{ value: 'Oui', label: t('oui') }, { value: 'Non', label: t('non') }]}
+                />
+              </div>
+              <div className="min-w-0">
+                <SelectField
+                  label={t('responsableAile')}
+                  value={values.hebergement.responsableAile ? 'Oui' : 'Non'}
+                  onChange={(v) => update('hebergement.responsableAile', v === 'Oui')}
+                  options={[{ value: 'Oui', label: t('oui') }, { value: 'Non', label: t('non') }]}
+                />
+              </div>
+              <div className="min-w-0">
+                <SelectField
+                  label={t('responsableEtage')}
+                  value={values.hebergement.responsableEtage ? 'Oui' : 'Non'}
+                  onChange={(v) => update('hebergement.responsableEtage', v === 'Oui')}
+                  options={[{ value: 'Oui', label: t('oui') }, { value: 'Non', label: t('non') }]}
+                />
+              </div>
             </div>
           </FormPanel>
         )}
       </div>
-
-      {eleve && !onStepSubmit ? (
-        <p className="mx-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-snug text-slate-600 sm:mx-0">
-          Modification : « Suivant » fait défiler les étapes sans appeler le serveur. Les données restent dans le formulaire jusqu&apos;à
-          « Enregistrer » sur la dernière étape. La création depuis « Nouvel étudiant » enregistre à chaque étape automatiquement.
-        </p>
-      ) : null}
 
       <div className="sticky bottom-0 z-[5] mt-auto flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-light-gray bg-off-white/95 px-1 py-3 backdrop-blur-sm supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:bg-transparent sm:px-0 sm:py-4 sm:backdrop-blur-none">
         <Button type="button" variant="secondary" onClick={onCancel}>
@@ -1319,11 +1611,11 @@ export default function FormulaireEleve({
           </Button>
         )}
         {step < STEPS.length - 1 && (
-          <Button type="button" variant="primary" onClick={handleNext} disabled={submitting}>
+          <Button type="button" variant={eleve ? 'secondary' : 'primary'} onClick={handleNext} disabled={submitting}>
             {submitting ? 'Envoi…' : 'Suivant'}
           </Button>
         )}
-        {step === STEPS.length - 1 && (
+        {(eleve || step === STEPS.length - 1) && (
           <Button type="submit" variant="primary" disabled={submitting}>
             {submitting ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
@@ -1333,7 +1625,7 @@ export default function FormulaireEleve({
   );
 }
 
-function ImcDisplay({ imc, klass }) {
+function ImcDisplay({ imc, klass, t }) {
   const value = imc != null ? formatIMC(imc) : '';
   const tone =
     klass?.tone === 'green'
@@ -1343,20 +1635,38 @@ function ImcDisplay({ imc, klass }) {
         : klass?.tone === 'red'
           ? 'border-red-300 bg-red-50 text-red-800'
           : 'border-light-gray bg-off-white text-text-light';
+  const IMC_I18N = {
+    maigreurSevere: 'imcMaigreurSevere',
+    maigreurModeree: 'imcMaigreurModeree',
+    maigreurLegere: 'imcMaigreurLegere',
+    normale: 'imcNormale',
+    surpoids: 'imcSurpoids',
+    obesite1: 'imcObesite1',
+    obesite2: 'imcObesite2',
+    obesite3: 'imcObesite3',
+  };
+  const classLabel = klass?.code && t
+    ? t(IMC_I18N[klass.code] || '')
+    : '';
   return (
-    <label className="form-field-contained">
-      <span className="label">IMC (auto)</span>
-      <div className={`flex min-h-[44px] items-center gap-3 rounded-lg border px-3 py-2 ${tone}`}>
+    <label className="form-field-contained min-w-0">
+      <span className="label">{t ? t('imc') : 'IMC'}</span>
+      <div className={`flex min-h-[44px] min-w-0 flex-wrap items-center gap-2 rounded-lg border px-3 py-2 sm:gap-3 ${tone}`}>
         <span className="font-serif text-lg font-semibold">{value || '—'}</span>
-        <span className="text-xs font-semibold uppercase tracking-wide">
-          {klass?.label || 'Renseigner poids et taille'}
+        <span className="break-words text-xs font-semibold uppercase tracking-wide">
+          {classLabel || (t ? t('renseignerPoidsTaille') : 'Renseigner poids et taille')}
         </span>
       </div>
     </label>
   );
 }
 
-function ScanFicheUpload({ value, onChange }) {
+function ScanFicheUpload({
+  value,
+  onChange,
+  importLabel = 'Importer un scan',
+  removeLabel = 'Retirer',
+}) {
   const ref = useRef(null);
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-light-gray bg-white px-3 py-2">
@@ -1373,7 +1683,7 @@ function ScanFicheUpload({ value, onChange }) {
         className="inline-flex items-center gap-1.5 rounded-lg border border-light-gray bg-off-white px-3 py-1.5 text-sm font-semibold text-navy transition hover:bg-slate-50"
       >
         <UploadIcon size={16} aria-hidden />
-        Importer un scan
+        {importLabel}
       </button>
       <span className="min-w-0 truncate text-xs text-text-light">
         {value instanceof File ? value.name : value || 'Aucun fichier sélectionné'}
@@ -1387,21 +1697,72 @@ function ScanFicheUpload({ value, onChange }) {
           }}
           className="text-xs font-semibold text-red-700 hover:underline"
         >
-          Retirer
+          {removeLabel}
         </button>
       ) : null}
     </div>
   );
 }
 
+function DateNaissanceField({ label, value, onChange, onPartialChange, required, error }) {
+  const [text, setText] = useState(() => formatIsoToFr(value) || '');
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setText(formatIsoToFr(value) || '');
+    }
+  }, [value]);
+
+  return (
+    <Field
+      label={label || 'Date de naissance'}
+      value={text}
+      onChange={(v) => {
+        const next = sanitizeDateFrInput(v);
+        setText(next);
+        const iso = parseFrToIso(next);
+        if (iso) {
+          onChange(iso);
+          onPartialChange?.('');
+        } else if (!next) {
+          onChange('');
+          onPartialChange?.('');
+        } else {
+          onPartialChange?.(next);
+        }
+      }}
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
+      onBlur={() => {
+        focusedRef.current = false;
+        const iso = parseFrToIso(text);
+        if (iso) {
+          setText(formatIsoToFr(iso));
+          onChange(iso);
+        } else if (!text.trim()) {
+          onChange('');
+        }
+      }}
+      required={required}
+      error={error}
+      inputMode="numeric"
+      placeholder="JJ/MM/AAAA"
+      maxLength={10}
+      autoComplete="bday"
+    />
+  );
+}
+
 function ReadOnlyField({ label, value, hint }) {
   return (
-    <label className="form-field-contained">
-      <span className="label">{label}</span>
-      <div className="input min-h-[44px] flex items-center bg-slate-50 text-slate-800 sm:min-h-[2.5rem]">
+    <label className="form-field-contained min-w-0 max-w-full">
+      <span className="label text-sm leading-tight break-words">{label}</span>
+      <div className="input flex min-h-[44px] min-w-0 max-w-full items-center break-words bg-slate-50 text-slate-800 sm:min-h-[2.5rem]">
         {value || '—'}
       </div>
-      {hint ? <p className="mt-1 text-xs text-text-light">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xs leading-tight text-text-light">{hint}</p> : null}
     </label>
   );
 }
@@ -1419,14 +1780,21 @@ function Field({
   placeholder,
   autoComplete,
   disabled,
+  dir,
+  lang,
+  onBlur,
+  onFocus,
 }) {
+  const id = `field-${label}`.replace(/\s+/g, '-').toLowerCase();
+  const errId = `${id}-error`;
   return (
-    <label className="form-field-contained">
-      <span className="label">
+    <div className="form-field-contained min-w-0 max-w-full">
+      <label htmlFor={id} className="label text-sm leading-tight break-words">
         {label}
         {required && <span className="text-brand-red"> *</span>}
-      </span>
+      </label>
       <input
+        id={id}
         type={type}
         className={`input min-h-[44px] w-full max-w-full min-w-0 sm:min-h-[2.5rem] ${error ? 'ring-2 ring-brand-red/40' : ''} ${disabled ? 'bg-slate-50 text-slate-600' : ''}`}
         required={required}
@@ -1438,9 +1806,19 @@ function Field({
         onKeyDown={onKeyDown}
         disabled={disabled}
         readOnly={disabled}
+        dir={dir}
+        lang={lang}
+        aria-invalid={!!error}
+        aria-describedby={error ? errId : undefined}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        onFocus={onFocus}
       />
-      {error ? <p className="mt-1.5 text-sm font-medium leading-snug text-brand-red">{error}</p> : null}
-    </label>
+      {error ? (
+        <p id={errId} className="mt-1.5 text-sm font-medium leading-snug text-brand-red" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

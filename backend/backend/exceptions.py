@@ -7,6 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
+    from accounts.optimistic_lock import VersionConflict
+
+    if isinstance(exc, VersionConflict):
+        return Response(exc.payload, status=VersionConflict.status_code)
+
     response = drf_default_handler(exc, context)
     if response is not None:
         return response

@@ -1,17 +1,16 @@
 import { api } from './api';
+import { apiPaths } from './apiPaths';
 import {
   authenticateLocal,
   createLocalUser,
   findLocalUserByEmail,
   findLocalUserById,
-  INITIAL_USER_PASSWORD,
   localTokenForUserId,
   toPublicUser,
   updateLocalUserPassword,
   userIdFromLocalToken,
 } from '../utils/localUserStore';
-
-export { INITIAL_USER_PASSWORD };
+import { sanitizeMrPhoneDigits } from '../utils/mrPhone';
 
 const LOCAL_KEY = 'esp_local_users_v1';
 
@@ -23,27 +22,29 @@ function isMissingEndpoint(err) {
 export const userService = {
   async createUser(payload) {
     const email = String(payload.email || '').trim().toLowerCase();
+    const phone = sanitizeMrPhoneDigits(payload.telephone || payload.phone || '');
     const body = {
       email,
-      password: INITIAL_USER_PASSWORD,
+      password: phone,
       first_name: payload.prenom || '',
       last_name: payload.nom || '',
-      phone: payload.telephone || '',
-      matricule: payload.matricule || '',
+      phone,
       grade: payload.grade || '',
       fonction: payload.fonction || '',
+      scope_compagnie: payload.scope_compagnie || '',
+      scope_section: payload.scope_section || '',
     };
 
     try {
-      const { data } = await api.post('/auth/register/', body);
+      const { data } = await api.post(apiPaths.auth.users, body);
       createLocalUser({
         email,
         prenom: body.first_name,
         nom: body.last_name,
         telephone: body.phone,
-        matricule: body.matricule,
         grade: body.grade,
         fonction: body.fonction,
+        password: phone,
       });
       return { user: data, persistence: 'backend' };
     } catch (err) {
@@ -53,9 +54,9 @@ export const userService = {
           prenom: body.first_name,
           nom: body.last_name,
           telephone: body.phone,
-          matricule: body.matricule,
           grade: body.grade,
           fonction: body.fonction,
+          password: phone,
         });
         return { user: entry, persistence: 'local' };
       }
@@ -67,9 +68,9 @@ export const userService = {
         prenom: body.first_name,
         nom: body.last_name,
         telephone: body.phone,
-        matricule: body.matricule,
         grade: body.grade,
         fonction: body.fonction,
+        password: phone,
       });
       return { user: entry, persistence: 'local-fallback' };
     }
@@ -77,7 +78,7 @@ export const userService = {
 
   async listUsers() {
     try {
-      const { data } = await api.get('/auth/users/');
+      const { data } = await api.get(apiPaths.auth.users);
       return { users: Array.isArray(data) ? data : [], persistence: 'backend' };
     } catch (err) {
       if (isMissingEndpoint(err)) {
@@ -87,6 +88,20 @@ export const userService = {
       }
       throw err;
     }
+  },
+
+  async updateUser(id, payload = {}) {
+    const body = {};
+    if (payload.fonction != null) body.fonction = payload.fonction;
+    if (payload.is_active_access != null) body.is_active_access = payload.is_active_access;
+    if (payload.prenom != null) body.first_name = payload.prenom;
+    if (payload.nom != null) body.last_name = payload.nom;
+    if (payload.telephone != null) body.phone = payload.telephone;
+    if (payload.grade != null) body.grade = payload.grade;
+    if (payload.scope_compagnie != null) body.scope_compagnie = payload.scope_compagnie;
+    if (payload.scope_section != null) body.scope_section = payload.scope_section;
+    const { data } = await api.patch(apiPaths.auth.user(id), body);
+    return data;
   },
 
   findLocalByEmail: findLocalUserByEmail,

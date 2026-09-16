@@ -1,164 +1,120 @@
 import { eleveService } from './eleveService';
+import { apiPaths } from './apiPaths';
 import {
-  addJournalEntry,
-  countJournalByEleveId,
-  deleteJournalEntry,
-  findJournalEntryById,
-  getJournalByEleveId,
-  getLastJournalByEleveId,
-  updateJournalEntry,
-} from '../utils/journalStore';
-import { journalTypeLabel } from '../data/journalCatalog';
+  apiDelete,
+  apiList,
+  apiPatch,
+  apiPost,
+  notifyChanged,
+  toFormData,
+  withExpectedVersion,
+} from '../utils/opsApi';
 
-function fileToAttachment(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        name: file.name,
-        mimeType: file.type || 'application/pdf',
-        dataUrl: reader.result,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier PDF.'));
-    reader.readAsDataURL(file);
-  });
-}
+export const JOURNAL_CHANGED = 'esp-journal-changed';
 
-function scolariteFields(eleve) {
-  const s = eleve.scolarite ?? {};
+function mapEntry(raw) {
   return {
-    departement: s.departement ?? s.filiere ?? eleve.filiere ?? eleve.departement ?? '',
-    niveau: s.niveau ?? eleve.cycle ?? eleve.niveau ?? '',
-  };
-}
-
-function filterStudentRows(rows, filters = {}) {
-  let list = rows ?? [];
-  const q = (filters.q ?? '').toLowerCase().trim();
-  if (q) {
-    list = list.filter(
-      (e) =>
-        e.nom?.toLowerCase().includes(q) ||
-        e.prenom?.toLowerCase().includes(q) ||
-        String(e.matricule ?? '').toLowerCase().includes(q),
-    );
-  }
-  if (filters.departement) {
-    const d = filters.departement;
-    list = list.filter(
-      (e) =>
-        e.departement === d
-        || e.departement?.startsWith(`${d} `)
-        || e.departement?.startsWith(d),
-    );
-  }
-  if (filters.niveau) {
-    list = list.filter((e) => e.niveau === filters.niveau);
-  }
-  if (filters.journal === 'with') {
-    list = list.filter((e) => (e.nbEntrees ?? 0) > 0);
-  }
-  if (filters.journal === 'without') {
-    list = list.filter((e) => (e.nbEntrees ?? 0) === 0);
-  }
-  if (filters.type) {
-    list = list.filter((e) => e.dernierTypeValue === filters.type);
-  }
-  return list;
-}
-
-function toListRow(eleve) {
-  const { departement, niveau } = scolariteFields(eleve);
-  const last = getLastJournalByEleveId(eleve.id);
-  return {
-    id: eleve.id,
-    matricule: eleve.matricule ?? '',
-    nom: eleve.nom ?? '',
-    prenom: eleve.prenom ?? '',
-    photoUrl: eleve.photoUrl ?? null,
-    departement,
-    niveau,
-    nbEntrees: countJournalByEleveId(eleve.id),
-    derniereDate: last?.date ?? null,
-    dernierTypeValue: last?.type ?? '',
-    dernierType: last ? journalTypeLabel(last.type) : '',
-    dernierTitre: last?.titre ?? '',
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    type: raw.type ?? 'observation',
+    date: raw.date ?? '',
+    titre: raw.titre ?? '',
+    contenu: raw.contenu ?? '',
+    auteur: raw.auteur ?? '',
+    pjPdf: raw.pj_pdf ? { url: raw.pj_pdf } : null,
+    rowVersion: raw.row_version ?? 1,
   };
 }
 
 export const journalService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list({ q: filters.q });
-    const enriched = eleves.map((e) => toListRow(e));
-    return filterStudentRows(enriched, filters);
-  },
-
-  async getStudent(eleveId, listRow = null) {
-    let eleve = null;
-    try {
-      eleve = await eleveService.get(eleveId);
-    } catch {
-      eleve = null;
-    }
-
-    if (!eleve && listRow && String(listRow.id) === String(eleveId)) {
-      eleve = {
-        id: listRow.id,
-        matricule: listRow.matricule,
-        nom: listRow.nom,
-        prenom: listRow.prenom,
-        photoUrl: listRow.photoUrl,
-        scolarite: {
-          departement: listRow.departement,
-          niveau: listRow.niveau,
-        },
+    const eleves = await eleveService.listAllPages({ q: filters.q });
+    const all = (await apiList(apiPaths.journal.list)).map(mapEntry);
+    const byEleve = {};
+    all.forEach((e) => {
+      const id = String(e.eleveId);
+      if (!byEleve[id]) byEleve[id] = [];
+      byEleve[id].push(e);
+    });
+    return eleves.map((el) => {
+      const items = byEleve[String(el.id)] ?? [];
+      return {
+        id: el.id,
+        matricule: el.matricule ?? '',
+        nom: el.nom ?? '',
+        prenom: el.prenom ?? '',
+        photoUrl: el.photoUrl ?? null,
+        departement: el.scolarite?.departement ?? '',
+        niveau: el.scolarite?.niveau ?? '',
+        nbEvenements: items.length,
+        derniereDate: items[0]?.date ?? null,
+        derniereTitre: items[0]?.titre ?? '',
       };
-    }
+    });
+  },
 
+  async getStudent(eleveId) {
+    const eleve = await eleveService.get(eleveId);
     if (!eleve) return null;
-
-    const { departement, niveau } = scolariteFields(eleve);
-    return {
-      ...eleve,
-      departement,
-      niveau,
-      entrees: getJournalByEleveId(eleveId),
-    };
+    const evenements = (await apiList(apiPaths.journal.list, { eleve: eleveId })).map(mapEntry);
+    return { ...eleve, evenements };
   },
 
-  getEntries(eleveId) {
-    return getJournalByEleveId(eleveId);
+  async addEntry(eleveId, payload, files = {}) {
+    const pdfFile = files?.pjPdf instanceof File ? files.pjPdf : files instanceof File ? files : null;
+    const body = toFormData({
+      eleve: eleveId,
+      code: payload.code ?? '',
+      type: payload.type ?? 'observation',
+      date: payload.date || new Date().toISOString(),
+      titre: payload.titre ?? '',
+      contenu: payload.contenu ?? '',
+      auteur: payload.auteur ?? '',
+      source: 'manuel',
+      pj_pdf: pdfFile || undefined,
+    });
+    const raw = await apiPost(apiPaths.journal.list, body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(JOURNAL_CHANGED);
+    return mapEntry(raw);
   },
 
-  async addEntry(eleveId, payload, { pjFile = null } = {}) {
-    let pjPdf = null;
-    if (pjFile instanceof File) pjPdf = await fileToAttachment(pjFile);
-    return addJournalEntry({ ...payload, eleveId, pjPdf });
+  async updateEntry(itemId, payload, files = {}) {
+    const pdfFile = files?.pjPdf instanceof File ? files.pjPdf : files instanceof File ? files : null;
+    const body = withExpectedVersion(
+      toFormData({
+        code: payload.code,
+        type: payload.type,
+        date: payload.date,
+        titre: payload.titre,
+        contenu: payload.contenu,
+        auteur: payload.auteur,
+        pj_pdf: pdfFile || undefined,
+      }),
+      payload.rowVersion,
+    );
+    const raw = await apiPatch(apiPaths.journal.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(JOURNAL_CHANGED);
+    return mapEntry(raw);
   },
 
-  async updateEntry(entryId, payload, { pjFile, clearPj = false } = {}) {
-    const patch = { ...payload };
-    if (clearPj) patch.pjPdf = null;
-    else if (pjFile instanceof File) patch.pjPdf = await fileToAttachment(pjFile);
-    return updateJournalEntry(entryId, patch);
+  async deleteEntry(itemId, rowVersion) {
+    await apiDelete(apiPaths.journal.detail(itemId), {
+      data: withExpectedVersion({}, rowVersion),
+    });
+    notifyChanged(JOURNAL_CHANGED);
   },
 
-  async updateEntryPdf(entryId, file) {
-    if (!(file instanceof File)) {
-      return updateJournalEntry(entryId, { pjPdf: null });
-    }
-    const attachment = await fileToAttachment(file);
-    return updateJournalEntry(entryId, { pjPdf: attachment });
-  },
-
-  deleteEntry(entryId) {
-    return deleteJournalEntry(entryId);
-  },
-
-  findEntry(entryId) {
-    return findJournalEntryById(entryId);
+  async updateEntryPdf(itemId, file, rowVersion) {
+    const body = withExpectedVersion(toFormData({ pj_pdf: file }), rowVersion);
+    const raw = await apiPatch(apiPaths.journal.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(JOURNAL_CHANGED);
+    return mapEntry(raw);
   },
 };

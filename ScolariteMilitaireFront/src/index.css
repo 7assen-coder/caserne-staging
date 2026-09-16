@@ -19,8 +19,33 @@
 
   body {
     @apply bg-white text-slate-900 antialiased font-medium;
-    font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'IBM Plex Sans', 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     letter-spacing: -0.01em;
+  }
+
+  html[dir='rtl'] body,
+  html[dir='rtl'] h1,
+  html[dir='rtl'] h2,
+  html[dir='rtl'] h3,
+  html[dir='rtl'] h4 {
+    font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+
+  .skip-link {
+    position: absolute;
+    inset-inline-start: 1rem;
+    top: -100px;
+    z-index: 100;
+    border-radius: 0.5rem;
+    background: #27412a;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+  }
+
+  .skip-link:focus {
+    top: 1rem;
   }
 
   h1,
@@ -120,7 +145,7 @@
   }
 
   .label {
-    @apply mb-2 block text-sm font-semibold uppercase tracking-wide text-slate-600;
+    @apply mb-2 block text-sm font-semibold uppercase leading-tight tracking-wide text-slate-600 break-words;
   }
 
   .login-input {
@@ -154,13 +179,37 @@
   }
 
   .login-card-input {
-    @apply w-full min-h-[3.5rem] sm:min-h-[4rem] px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl border border-light-gray bg-white
-      text-lg sm:text-xl text-navy-900 placeholder:text-text-muted
+    @apply w-full min-h-[3rem] sm:min-h-[3.25rem] px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-light-gray bg-white
+      text-base sm:text-lg text-navy-900 placeholder:text-text-muted
       focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold transition-colors;
   }
 
   .login-card-field-label {
-    @apply block text-sm sm:text-base font-semibold uppercase tracking-wide text-text-light mb-2;
+    @apply block text-xs sm:text-sm font-semibold uppercase tracking-wide text-text-light mb-1.5;
+  }
+
+  /* Login split shell — keep one viewport; shrink fields on short screens */
+  .login-shell {
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  @media (max-height: 760px) {
+    .login-card-input {
+      @apply min-h-[2.75rem] py-2 text-[0.9375rem] sm:min-h-[2.85rem] sm:text-base;
+    }
+    .login-card-field-label {
+      @apply text-[0.7rem] mb-1;
+    }
+    .login-form-compact {
+      @apply gap-3 sm:gap-3.5;
+    }
+  }
+
+  @media (max-height: 640px) {
+    .login-card-input {
+      @apply min-h-[2.5rem] text-sm;
+    }
   }
 
   .chip {

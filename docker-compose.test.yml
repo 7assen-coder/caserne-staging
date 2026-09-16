@@ -1,22 +1,43 @@
+# Parity with .github/workflows/ci.yml backend job — update both together.
+# Local: make test-docker
+# See docs/ops-testing.md
+
 services:
   db_test:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
-      - POSTGRES_DB=esp_test
-      - POSTGRES_USER=esp
-      - POSTGRES_PASSWORD=esp
-    # No volume needed for testing, we want a clean slate or transient data
+      POSTGRES_DB: esp
+      POSTGRES_USER: esp
+      POSTGRES_PASSWORD: esp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esp -d esp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No volume — ephemeral test DB
 
   backend_test:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: "python manage.py test"
+    entrypoint: ["/code/docker/test-entrypoint.sh"]
+    command: ["python", "manage.py", "test", "accounts", "etudiants", "operations", "backend.tests", "-v", "1"]
     environment:
-      - DB_HOST=db_test
-      - DB_PORT=5432
-      - DB_NAME=esp_test
-      - DB_USER=esp
-      - DB_PASSWORD=esp
+      DEBUG: "False"
+      DJANGO_ENV: local
+      SECRET_KEY: "ci-test-key-polyspace-phase33-xxxxxxxxxxxxxxxxxxxxxxxxxx"
+      USE_LOCMEM_CACHE: "True"
+      HEALTHZ_REQUIRE_REDIS: "False"
+      SECURE_SSL_REDIRECT: "False"
+      DB_HOST: db_test
+      DB_PORT: "5432"
+      DB_NAME: esp
+      DB_USER: esp
+      DB_PASSWORD: esp
+      DB_SSLMODE: disable
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      CELERY_TASK_ALWAYS_EAGER: "True"
+      EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
     depends_on:
-      - db_test
+      db_test:
+        condition: service_healthy

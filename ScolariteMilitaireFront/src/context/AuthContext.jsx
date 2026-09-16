@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AuthContext, DEMO_USERS } from './authStore';
 import {
+  changePasswordRequest,
   fetchCurrentUser,
   loginRequest,
   logoutRequest,
-  refreshAccessToken,
 } from '../services/authService';
-import {
-  findLocalUserById,
-  isLocalSessionToken,
-  toPublicUser,
-  updateLocalUserPassword,
-  userIdFromLocalToken,
-} from '../utils/localUserStore';
 import { isFrontendOnly } from '../utils/frontendMode';
-import { clearAccessToken, getAccessToken } from '../utils/authStorage';
+import { clearAccessToken, clearLegacyTokens } from '../utils/authStorage';
+import { ensureCsrfToken } from '../utils/csrf';
+import { api, refreshSession } from '../services/api';
+import {
+  AUTH_BOOTSTRAP_HARD_FALLBACK_MS,
+  AUTH_BOOTSTRAP_TIMEOUT_MS,
+  AUTH_EXPIRED_EVENT,
+} from '../services/apiConstants';
+import { queryClient } from '../lib/queryClient';
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 4000;
+const LOCAL_USERS_KEY = 'esp_local_users_v1';
 
 function withBootstrapTimeout(promise) {
   return Promise.race([
@@ -27,57 +28,50 @@ function withBootstrapTimeout(promise) {
   ]);
 }
 
-function initialBootstrapped() {
-  const token = getAccessToken();
-  if (!token) return true;
-  if (isLocalSessionToken(token)) return true;
-  return false;
+function clearLegacyLocalAuth() {
+  try {
+    clearLegacyTokens();
+    localStorage.removeItem(LOCAL_USERS_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const token = getAccessToken();
-    if (isLocalSessionToken(token)) {
-      const record = findLocalUserById(userIdFromLocalToken(token));
-      return record ? toPublicUser(record) : null;
-    }
-    return null;
-  });
-  const [mustChangePassword, setMustChangePassword] = useState(() => {
-    const token = getAccessToken();
-    if (isLocalSessionToken(token)) {
-      const record = findLocalUserById(userIdFromLocalToken(token));
-      return !!record?.mustChangePassword;
-    }
-    return false;
-  });
-  const [bootstrapped, setBootstrapped] = useState(initialBootstrapped);
+  const [user, setUser] = useState(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
-    const id = window.setTimeout(() => setBootstrapped(true), 5000);
+    clearLegacyLocalAuth();
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setBootstrapped(true), AUTH_BOOTSTRAP_HARD_FALLBACK_MS);
     return () => window.clearTimeout(id);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const token = getAccessToken();
-
-    if (!token) {
+    const onExpired = () => {
       setUser(null);
       setMustChangePassword(false);
-      setBootstrapped(true);
-      return undefined;
-    }
-
-    if (isLocalSessionToken(token)) {
-      const record = findLocalUserById(userIdFromLocalToken(token));
-      if (!cancelled) {
-        setUser(record ? toPublicUser(record) : null);
-        setMustChangePassword(!!record?.mustChangePassword);
-        setBootstrapped(true);
+      clearAccessToken();
+      queryClient.clear();
+      try {
+        if (window.location.pathname !== '/login' && !window.location.pathname.startsWith('/login/')) {
+          window.location.assign('/login');
+        }
+      } catch {
+        /* ignore */
       }
-      return undefined;
-    }
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    clearLegacyLocalAuth();
 
     if (isFrontendOnly()) {
       clearAccessToken();
@@ -93,13 +87,18 @@ export function AuthProvider({ children }) {
       try {
         await withBootstrapTimeout((async () => {
           try {
+            await ensureCsrfToken(api);
+          } catch {
+            /* CSRF optional until first mutating call */
+          }
+          try {
             const me = await fetchCurrentUser();
             if (!cancelled) {
               setUser(me);
               setMustChangePassword(!!me?.mustChangePassword);
             }
           } catch {
-            await refreshAccessToken();
+            await refreshSession();
             const me = await fetchCurrentUser();
             if (!cancelled) {
               setUser(me);
@@ -134,9 +133,11 @@ export function AuthProvider({ children }) {
     return nextUser;
   };
 
-  const completePasswordChange = async (newPassword) => {
-    if (!user?.email) throw new Error('Session invalide.');
-    const updated = updateLocalUserPassword(user.email, newPassword);
+  const completePasswordChange = async (newPassword, currentPassword = '') => {
+    const updated = await changePasswordRequest({
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
     setUser(updated);
     setMustChangePassword(false);
     return updated;
@@ -146,6 +147,7 @@ export function AuthProvider({ children }) {
     await logoutRequest();
     setUser(null);
     setMustChangePassword(false);
+    queryClient.clear();
   };
 
   const value = useMemo(
@@ -155,6 +157,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       mustChangePassword,
       fonction: user?.fonction,
+      sensitiveCaps: user?.sensitive_caps || null,
       login,
       logout,
       completePasswordChange,

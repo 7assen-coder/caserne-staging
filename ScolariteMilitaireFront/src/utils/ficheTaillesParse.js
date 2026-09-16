@@ -1,7 +1,6 @@
 const FICHE_KEYWORDS = [
   { re: /poitrine/i, key: 'tourPoitrine' },
   { re: /ceinture/i, key: 'tourCeinture' },
-  { re: /taille(?!.*manche)/i, key: 'tourTaille' },
   { re: /bassin/i, key: 'tourBassin' },
   { re: /cou(?!turi)/i, key: 'tourCou' },
   { re: /manche/i, key: 'longueurManche' },
@@ -9,7 +8,9 @@ const FICHE_KEYWORDS = [
   { re: /côt[eé]|cote/i, key: 'longueurCote' },
   { re: /pointure/i, key: 'pointure' },
   { re: /poids/i, key: 'poids' },
-  { re: /taille\s*\(?cm\)?|stature/i, key: 'tailleCm' },
+  // tour de taille before bare "taille" / stature
+  { re: /tour\s*(de\s*)?taille/i, key: 'tourTaille' },
+  { re: /stature|taille\s*\(?\s*cm\s*\)?|^taille\b/i, key: 'tailleCm' },
 ];
 
 export function parseFicheTaillesText(rawText) {

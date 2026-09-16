@@ -1,0 +1,23 @@
+{
+  "loading": "Chargement…",
+  "close": "Fermer",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "search": "Rechercher…",
+  "searchLabel": "Recherche",
+  "previous": "Précédent",
+  "next": "Suivant",
+  "results": "{{count}} résultat",
+  "results_plural": "{{count}} résultats",
+  "pageOf": "Page {{current}} / {{total}}",
+  "noData": "Aucune donnée",
+  "emptyField": "—",
+  "confirm": "Confirmer",
+  "openMenu": "Ouvrir le menu de navigation",
+  "skipToContent": "Aller au contenu",
+  "appName": "Polyspace",
+  "tagline": "Commandement & contrôle ESP",
+  "logout": "Déconnexion",
+  "selectPage": "Sélectionner tous les étudiants de cette page",
+  "selectRow": "Sélectionner {{name}}"
+}

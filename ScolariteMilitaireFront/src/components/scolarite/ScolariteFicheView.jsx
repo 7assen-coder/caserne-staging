@@ -9,6 +9,8 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import Button from '../common/Button';
+import LoadingBlock from '../common/LoadingBlock';
+import QueryErrorPanel from '../common/QueryErrorPanel';
 import SelectField from '../common/SelectField';
 import SemestreBadge from './SemestreBadge';
 import {
@@ -22,6 +24,7 @@ import { downloadScolariteFichePdf } from '../../utils/scolariteFichePdf';
 import { initials } from '../../utils/formatters';
 import { useToast } from '../../context/ToastContext';
 import { humanizeError } from '../../utils/apiErrors';
+import { useVersionConflict } from '../../hooks/useVersionConflict';
 
 function MiniStat({ label, value, icon: Icon }) {
   return (
@@ -40,11 +43,13 @@ function MiniStat({ label, value, icon: Icon }) {
 export default function ScolariteFicheView({
   dossier,
   loading,
+  error = null,
   onBack,
   onRefresh,
   canEdit = true,
 }) {
   const toast = useToast();
+  const { capture, modal: versionModal } = useVersionConflict({ onReload: onRefresh });
   const [busy, setBusy] = useState(null);
   const [mobiliteDraft, setMobiliteDraft] = useState(null);
 
@@ -74,28 +79,28 @@ export default function ScolariteFicheView({
       if (!dossier?.id) return;
       setBusy(key);
       try {
-        scolariteService.updateSemestre(dossier.id, key, value);
+        await scolariteService.updateSemestre(dossier.id, key, value, dossier.rowVersion);
         toast.success(`${key} mis à jour.`);
         await onRefresh?.();
       } catch (err) {
-        toast.error(humanizeError(err));
+        if (!capture(err)) toast.error(humanizeError(err));
       } finally {
         setBusy(null);
       }
     },
-    [dossier?.id, toast, onRefresh],
+    [dossier?.id, dossier?.rowVersion, toast, onRefresh, capture],
   );
 
   const saveMobilite = async () => {
     if (!dossier?.id) return;
     setBusy('mobilite');
     try {
-      scolariteService.updateMobilite(dossier.id, mobilite);
+      await scolariteService.updateMobilite(dossier.id, mobilite, dossier.rowVersion);
       setMobiliteDraft(null);
       toast.success('Mobilité enregistrée.');
       await onRefresh?.();
     } catch (err) {
-      toast.error(humanizeError(err));
+      if (!capture(err)) toast.error(humanizeError(err));
     } finally {
       setBusy(null);
     }
@@ -115,14 +120,43 @@ export default function ScolariteFicheView({
 
   if (loading && !dossier?.id) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-slate-500">
-        Chargement du suivi scolarité…
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-navy"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Retour au registre
+        </button>
+        <LoadingBlock label="Chargement du suivi scolarité…" />
+      </div>
+    );
+  }
+
+  if (error || (!loading && !dossier?.id)) {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-navy"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Retour au registre
+        </button>
+        <QueryErrorPanel
+          error={error ?? new Error('Fiche introuvable')}
+          title="Impossible de charger la fiche scolarité."
+          onRetry={onRefresh}
+        />
       </div>
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-8">
+      {versionModal}
       <button
         type="button"
         onClick={onBack}

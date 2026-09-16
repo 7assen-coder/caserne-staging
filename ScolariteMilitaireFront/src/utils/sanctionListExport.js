@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { saveAs } from './saveAsFile.js';
+import { apiPaths } from '../services/apiPaths';
 import {
   sanctionNatureLabel,
   sanctionStatutLabel,
@@ -8,7 +9,7 @@ import {
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { APP_NAME } from '../data/institution';
 import { buildSanctionDetailExportRows } from './sanctionStats';
-import { loadSanctions } from './sanctionStore';
+import { apiList } from './opsApi';
 
 const SYNTHESIS_COLUMNS = [
   { key: 'matricule', label: 'Matricule' },
@@ -34,30 +35,40 @@ function formatDateFr(iso) {
 }
 
 function synthesisRows(students) {
-  const all = loadSanctions();
   return students.map((s) => {
-    const items = all.filter((i) => String(i.eleveId) === String(s.id));
-    const enCours = items.filter((i) => i.statut === 'en_cours').length;
-    const last = items.sort((a, b) =>
-      String(b.dateDebut).localeCompare(String(a.dateDebut)),
-    )[0];
-    const derniere = last
-      ? `${formatDateFr(last.dateDebut)} · ${sanctionNatureLabel(last.nature)}`
+    const derniere = s.derniereDate
+      ? `${formatDateFr(s.derniereDate)} · ${s.derniereNature || ''}`.trim()
       : '—';
     return {
       matricule: sanitizeExportText(s.matricule),
       nomComplet: sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
       departement: sanitizeExportText(s.departement),
       niveau: sanitizeExportText(s.niveau),
-      nbSanctions: String(s.nbSanctions ?? items.length),
-      enCours: String(enCours),
+      nbSanctions: String(s.nbSanctions ?? 0),
+      enCours: String(s.enCours ?? 0),
       derniere: sanitizeExportText(derniere),
     };
   });
 }
 
+async function fetchSanctionsMapped() {
+  const raw = await apiList(apiPaths.sanctions.list);
+  return raw.map((r) => ({
+    id: r.id,
+    eleveId: String(r.eleve),
+    code: r.code ?? '',
+    motif: r.motif ?? '',
+    nature: r.nature ?? '',
+    dateDebut: r.date_debut ?? '',
+    dateFin: r.date_fin ?? '',
+    statut: r.statut ?? 'en_cours',
+    crPdf: r.cr_pdf ? { name: 'cr.pdf' } : null,
+    pjPdf: r.pj_pdf ? { name: 'pj.pdf' } : null,
+  }));
+}
+
 export async function exportSanctionSynthesisExcel(students, filenameBase = 'synthese-sanctions-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = SYNTHESIS_COLUMNS.map((c) => c.label);
   const body = synthesisRows(students).map((row) =>
     SYNTHESIS_COLUMNS.map((c) => row[c.key] ?? ''),
@@ -75,7 +86,7 @@ export async function exportSanctionSynthesisExcel(students, filenameBase = 'syn
 }
 
 export async function exportSanctionDetailExcel(students, filenameBase = 'registre-sanctions-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule',
     'Nom et prénom',
@@ -90,7 +101,8 @@ export async function exportSanctionDetailExcel(students, filenameBase = 'regist
     'CR PDF',
     'PJ PDF',
   ];
-  const body = buildSanctionDetailExportRows(students).map(({ item, student: s }) => [
+  const sanctions = await fetchSanctionsMapped();
+  const body = buildSanctionDetailExportRows(students, sanctions).map(({ sanction: item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.departement),
@@ -182,7 +194,8 @@ export async function exportSanctionDetailPdf(
     'Fin',
     'Statut',
   ];
-  const body = buildSanctionDetailExportRows(students).map(({ item, student: s }) => [
+  const sanctions = await fetchSanctionsMapped();
+  const body = buildSanctionDetailExportRows(students, sanctions).map(({ sanction: item, student: s }) => [
     sanitizeExportText(s.matricule),
     sanitizeExportText(`${s.prenom ?? ''} ${s.nom ?? ''}`.trim()),
     sanitizeExportText(s.departement),

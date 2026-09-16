@@ -41,40 +41,33 @@ export const STATUT_ETUDIANT_VALUES = ['normal', 'normal-mnv', 'repeat', 'exclud
 export const STATUT_ETUDIANT_OPTIONS = [
   { value: 'normal', label: 'Normal' },
   { value: 'normal-mnv', label: 'Normal-MNV' },
-  { value: 'repeat', label: 'Redoublement' },
+  { value: 'repeat', label: 'Redoublant' },
   { value: 'excluded', label: 'Exclu' },
   { value: 'graduated', label: 'Diplômé' },
 ];
 
-export const NIVEAUX_STANDARD = ['3e année', '4e année', '5e année', '4e DD', '5e E', '5e DD'];
+export const NIVEAUX_STANDARD = ['3e année', '4e année', '4e DD', '5e E', '5e DD'];
 
-export const NIVEAUX_MOBILITE = ['4e DD', '5e année', '5e E', '5e DD'];
+export const NIVEAUX_MOBILITE = ['4e DD', '5e E', '5e DD'];
 
 export const COMPAGNIES_OPTIONS = [
   { value: '', label: '— Automatique —' },
   { value: '1re Compagnie', label: '1re Compagnie (3e année)' },
   { value: '2e Compagnie', label: '2e Compagnie (4e année)' },
-  { value: '3e Compagnie', label: '3e Compagnie (5e année)' },
+  { value: '3e Compagnie', label: '3e Compagnie (5e E / DD)' },
 ];
 
 export const SECTIONS_OPTIONS = [
   { value: '', label: '— Automatique —' },
-  { value: 'Section 11', label: 'Section 11 (IRT/SID · 3e)' },
-  { value: 'Section 12', label: 'Section 12 (GM/GE · 3e)' },
-  { value: 'Section 13', label: 'Section 13 (GC/MPG · 3e)' },
-  { value: 'Section 21', label: 'Section 21 (IRT/SID · 4e)' },
-  { value: 'Section 22', label: 'Section 22 (GM/GE · 4e)' },
-  { value: 'Section 23', label: 'Section 23 (GC/MPG · 4e)' },
-  { value: 'Section 31', label: 'Section 31 (IRT/SID · 5e)' },
-  { value: 'Section 32', label: 'Section 32 (GM/GE · 5e)' },
-  { value: 'Section 33', label: 'Section 33 (GC/MPG · 5e)' },
+  { value: 'Section 1', label: 'Section 1 (IRT/SID)' },
+  { value: 'Section 2', label: 'Section 2 (GM/GE)' },
+  { value: 'Section 3', label: 'Section 3 (GC/MPG)' },
 ];
 
 export const COMPAGNIE_PAR_NIVEAU = {
   '3e année': '1re Compagnie',
   '4e année': '2e Compagnie',
   '4e DD': '2e Compagnie',
-  '5e année': '3e Compagnie',
   '5e E': '3e Compagnie',
   '5e DD': '3e Compagnie',
 };

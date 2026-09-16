@@ -1,31 +1,19 @@
-import { loadEquipementItems } from './equipementStore';
-
 export function computeEquipementStats(studentRows = []) {
-  const allItems = loadEquipementItems();
-  const studentIds = new Set(studentRows.map((r) => String(r.id)));
-  const relevantItems = allItems.filter((i) => studentIds.has(String(i.eleveId)));
-
-  const totalItems = relevantItems.length;
-  const enUsage = relevantItems.filter((i) => i.etat !== 'rendu').length;
-  const rendu = relevantItems.filter((i) => i.etat === 'rendu').length;
   const withItems = studentRows.filter((r) => (r.nbItems ?? 0) > 0).length;
-
+  const totalItems = studentRows.reduce((sum, r) => sum + (r.nbItems ?? 0), 0);
   return {
     totalStudents: studentRows.length,
     withItems,
     withoutItems: studentRows.length - withItems,
     totalItems,
-    enUsage,
-    rendu,
+    enUsage: totalItems,
+    rendu: 0,
   };
 }
 
-export function buildDetailExportRows(students = []) {
+export function buildDetailExportRows(students = [], items = []) {
   const byStudent = Object.fromEntries(students.map((s) => [String(s.id), s]));
-  return loadEquipementItems()
+  return (items ?? [])
     .filter((item) => byStudent[String(item.eleveId)])
-    .map((item) => {
-      const s = byStudent[String(item.eleveId)];
-      return { item, student: s };
-    });
+    .map((item) => ({ item, student: byStudent[String(item.eleveId)] }));
 }

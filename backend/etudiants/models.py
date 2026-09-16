@@ -1,3 +1,6 @@
+import uuid
+
+from django.conf import settings
 from django.db import models
 from django.db.models import Case, F, Value, When
 from django.db.models.functions import Cast, Concat, ExtractYear
@@ -31,21 +34,50 @@ class Eleve(models.Model):
     ]
 
     matricule = models.IntegerField(unique=True)
-    num_bac = models.CharField(max_length=50, verbose_name="N° de Bac")
-    nni = models.CharField(max_length=10, unique=True, verbose_name="NNI")
+    num_bac = models.CharField(max_length=50, blank=True, default='', verbose_name="N° de Bac")
+    nni = models.CharField(
+        max_length=10, unique=True, blank=True, null=True, verbose_name="NNI",
+    )
     sexe = models.CharField(max_length=1, choices=CHOIX_SEXE, verbose_name="Sexe")
     prenom = models.CharField(max_length=100, verbose_name="Prénom")
-    nom_famille = models.CharField(max_length=100, verbose_name="Nom de famille")
-    date_naissance = models.DateField(verbose_name="Date de naissance")
-    lieu_naissance = models.CharField(max_length=100, verbose_name="Lieu de naissance")
-    nationalite = models.CharField(max_length=100, verbose_name="Nationalité")
+    nom_famille = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Nom de famille",
+    )
+    prenom_ar = models.CharField(
+        max_length=100, blank=True, null=True, verbose_name='Prénom (arabe)',
+    )
+    nom_famille_ar = models.CharField(
+        max_length=100, blank=True, null=True, verbose_name='Nom de famille (arabe)',
+    )
+    date_naissance = models.DateField(
+        blank=True, null=True, verbose_name="Date de naissance",
+    )
+    lieu_naissance = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Lieu de naissance",
+    )
+    nationalite = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Nationalité",
+    )
 
-    categorie_bac = models.CharField(max_length=50, choices=CHOIX_CATEGORIE_BAC, verbose_name="Catégorie Bac")
-    serie_bac = models.CharField(max_length=50, choices=CHOIX_SERIE_BAC, verbose_name="Série Bac")
-    moyenne_bac = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="Moyenne Bac")
-    ecole_bac = models.CharField(max_length=150, verbose_name="École d'obtention du Bac")
+    categorie_bac = models.CharField(
+        max_length=50, choices=CHOIX_CATEGORIE_BAC, blank=True, default='',
+        verbose_name="Catégorie Bac",
+    )
+    serie_bac = models.CharField(
+        max_length=50, choices=CHOIX_SERIE_BAC, blank=True, default='',
+        verbose_name="Série Bac",
+    )
+    moyenne_bac = models.DecimalField(
+        max_digits=5, decimal_places=2, blank=True, null=True,
+        verbose_name="Moyenne Bac",
+    )
+    ecole_bac = models.CharField(
+        max_length=150, blank=True, default='', verbose_name="École d'obtention du Bac",
+    )
 
-    date_premiere_inscription = models.DateField(verbose_name="Date de 1ère inscription")
+    date_premiere_inscription = models.DateField(
+        blank=True, null=True, verbose_name="Date de 1ère inscription",
+    )
 
     annee_premiere_inscription = models.GeneratedField(
         expression=Case(
@@ -67,11 +99,18 @@ class Eleve(models.Model):
         db_persist=True,
     )
 
-    voie_acces = models.CharField(max_length=20, choices=CHOIX_VOIE_ACCES, verbose_name="Voie d'accès")
-    diplome_acces = models.CharField(max_length=100, verbose_name="Diplôme d'accès")
+    voie_acces = models.CharField(
+        max_length=20, choices=CHOIX_VOIE_ACCES, blank=True, default='',
+        verbose_name="Voie d'accès",
+    )
+    diplome_acces = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Diplôme d'accès",
+    )
     etablissement_diplome = models.CharField(max_length=150, blank=True, null=True, verbose_name='Établissement du diplôme')
 
-    adresse_primaire = models.TextField(verbose_name='Adresse principale')
+    adresse_primaire = models.TextField(
+        blank=True, default='', verbose_name='Adresse principale',
+    )
     adresse_secondaire = models.TextField(blank=True, null=True, verbose_name='Adresse secondaire')
     resident_avec_parents = models.BooleanField(default=True, verbose_name='Réside avec ses parents')
     compte_bankily = models.CharField(max_length=50, blank=True, null=True, verbose_name='Compte Bankily')
@@ -85,18 +124,36 @@ class Eleve(models.Model):
         db_persist=True,
     )
 
-    email_perso = models.EmailField(verbose_name='Email personnel')
-    tel1 = models.CharField(max_length=8, verbose_name='Téléphone 1')
+    email_perso = models.EmailField(
+        blank=True, null=True, verbose_name='Email personnel',
+    )
+    tel1 = models.CharField(max_length=8, blank=True, default='', verbose_name='Téléphone 1')
     tel2_whatsapp = models.CharField(max_length=8, blank=True, null=True, verbose_name='WhatsApp')
     facebook = models.CharField(max_length=150, blank=True, null=True)
     linkedin = models.CharField(max_length=150, blank=True, null=True)
 
+    # Set True only by liste-définitive bulk import; cleared when dossier is completed.
+    profil_incomplet = models.BooleanField(default=False, verbose_name='Profil incomplet')
+
+    row_version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
     class Meta:
         constraints = [
             models.CheckConstraint(
-                check=models.Q(moyenne_bac__gte=0) & models.Q(moyenne_bac__lte=20),
+                check=(
+                    models.Q(moyenne_bac__isnull=True)
+                    | (models.Q(moyenne_bac__gte=0) & models.Q(moyenne_bac__lte=20))
+                ),
                 name='check_moyenne_bac_range',
             ),
+        ]
+        indexes = [
+            models.Index(fields=['nom_famille', 'prenom'], name='eleve_nom_prenom_idx'),
+            models.Index(fields=['date_naissance'], name='eleve_date_naissance_idx'),
+            models.Index(fields=['-updated_at'], name='eleve_updated_at_idx'),
+            models.Index(fields=['created_at'], name='eleve_created_at_idx'),
         ]
 
     def __str__(self):
@@ -119,7 +176,7 @@ class ContactParent(models.Model):
     tel_mere_whatsapp = models.CharField(max_length=8, blank=True, null=True)
 
     nom_urgence = models.CharField(max_length=150, blank=True, null=True)
-    tel_urgence = models.CharField(max_length=8)
+    tel_urgence = models.CharField(max_length=8, blank=True, null=True)
     tel_urgence_whatsapp = models.CharField(max_length=8, blank=True, null=True)
 
     def __str__(self):
@@ -144,6 +201,16 @@ class DossierSante(models.Model):
     antecedents_medicaux = models.TextField(blank=True, null=True)
     maladies_chroniques = models.TextField(blank=True, null=True)
     medicaments_a_vie = models.TextField(blank=True, null=True)
+    dossier_medical_pdf = models.FileField(
+        upload_to='dossiers_sante/%Y/%m/',
+        blank=True,
+        null=True,
+    )
+    photo_medicale = models.FileField(
+        upload_to='dossiers_sante/photos/%Y/%m/',
+        blank=True,
+        null=True,
+    )
     poids_kg = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     taille_cm = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
 
@@ -176,11 +243,11 @@ class DossierAcademique(models.Model):
     ]
 
     CHOIX_ANNEE = [
-        ('3', '3e Année'),
-        ('4', '4e Année'),
-        ('4-DD', '4e Année Double Diplôme'),
-        ('4-E', '4e Année Échange'),
-        ('5-DD', '5e Année Double Diplôme'),
+        ('3', '3e année'),
+        ('4', '4e année'),
+        ('4-DD', '4e DD'),
+        ('4-E', '5e E'),
+        ('5-DD', '5e DD'),
     ]
 
     CHOIX_SEMESTRE = [
@@ -208,6 +275,20 @@ class DossierAcademique(models.Model):
     etablissement_double_diplome = models.CharField(max_length=150, blank=True, null=True)
     specialite_mobilite = models.CharField(max_length=150, blank=True, null=True)
     parcours = models.CharField(max_length=100)  # En cours normal, redoublant, renvoyé
+    type_mobilite = models.CharField(max_length=80, blank=True, null=True)
+    raison_mobilite = models.TextField(blank=True, null=True)
+    annee_debut_mobilite = models.CharField(max_length=20, blank=True, null=True)
+    annee_fin_mobilite = models.CharField(max_length=20, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['departement'], name='acad_departement_idx'),
+            models.Index(fields=['niveau_actuel'], name='acad_niveau_actuel_idx'),
+            models.Index(
+                fields=['departement', 'niveau_actuel'],
+                name='acad_dept_niveau_idx',
+            ),
+        ]
 
 
 class DossierMilitaire(models.Model):
@@ -226,6 +307,13 @@ class DossierMilitaire(models.Model):
     longueur_dos = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     longueur_cote = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     pointure = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['compagnie'], name='mil_compagnie_idx'),
+            models.Index(fields=['section'], name='mil_section_idx'),
+            models.Index(fields=['compagnie', 'section'], name='mil_compagnie_section_idx'),
+        ]
 
 
 class Hebergement(models.Model):
@@ -250,3 +338,86 @@ class DocumentEleve(models.Model):
     photo_identite_militaire = models.ImageField(upload_to='documents/photos/militaire/', blank=True, null=True, validators=[validate_image_resolution])
     photo_identite_civile = models.ImageField(upload_to='documents/photos/civile/', blank=True, null=True, validators=[validate_image_resolution])
     photo_militaire_integrale = models.ImageField(upload_to='documents/photos/integrale/', blank=True, null=True, validators=[validate_image_resolution])
+    # Phase 21 — relative MEDIA paths for WebP thumbs (filled by Celery)
+    photo_identite_militaire_thumb_128 = models.CharField(max_length=512, blank=True, default='')
+    photo_identite_militaire_thumb_320 = models.CharField(max_length=512, blank=True, default='')
+    photo_identite_civile_thumb_128 = models.CharField(max_length=512, blank=True, default='')
+    photo_identite_civile_thumb_320 = models.CharField(max_length=512, blank=True, default='')
+    photo_militaire_integrale_thumb_128 = models.CharField(max_length=512, blank=True, default='')
+    photo_militaire_integrale_thumb_320 = models.CharField(max_length=512, blank=True, default='')
+
+
+class JobStatus(models.TextChoices):
+    PENDING = 'pending', 'En attente'
+    RUNNING = 'running', 'En cours'
+    SUCCEEDED = 'succeeded', 'Réussi'
+    FAILED = 'failed', 'Échoué'
+
+
+def import_job_upload_to(instance, filename):
+    return f"imports/%Y/%m/{instance.id}_{filename}"
+
+
+def export_job_upload_to(instance, filename):
+    return f"exports/%Y/%m/{instance.id}_{filename}"
+
+
+class ImportJob(models.Model):
+    """Phase 21 — async Excel/CSV bulk import."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='import_jobs',
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=JobStatus.choices,
+        default=JobStatus.PENDING,
+        db_index=True,
+    )
+    source_file = models.FileField(upload_to='imports/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True, default='')
+    report = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class ExportJob(models.Model):
+    """Phase 21 — async server-side Excel export of élèves."""
+
+    FORMAT_XLSX = 'xlsx'
+    FORMAT_CHOICES = [(FORMAT_XLSX, 'Excel')]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='export_jobs',
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=JobStatus.choices,
+        default=JobStatus.PENDING,
+        db_index=True,
+    )
+    format = models.CharField(max_length=8, choices=FORMAT_CHOICES, default=FORMAT_XLSX)
+    filters = models.JSONField(default=dict, blank=True)
+    columns = models.JSONField(default=list, blank=True)
+    result_file = models.FileField(upload_to='exports/%Y/%m/', blank=True, null=True)
+    error_message = models.TextField(blank=True, default='')
+    row_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']

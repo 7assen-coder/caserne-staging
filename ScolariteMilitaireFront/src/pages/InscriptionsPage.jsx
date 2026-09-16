@@ -8,7 +8,9 @@ import SelectField from '../components/common/SelectField';
 import DataTable from '../components/common/DataTable';
 import DemandeReviewView from '../components/inscriptions/DemandeReviewView';
 import FullScreenLayer from '../components/common/FullScreenLayer';
-import { useFetch } from '../hooks/useFetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryKeys';
+import { useAuth } from '../hooks/useAuth';
 import { inscriptionDemandeService } from '../services/inscriptionDemandeService';
 import { statsInscriptionsFromDemandes } from '../data/inscriptionDemandesMock';
 import { FILIERES, NIVEAUX_SCOLARITE } from '../utils/constants';
@@ -30,24 +32,26 @@ export default function InscriptionsPage() {
     annee: '',
     type: 'tous',
   });
-  const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState(null);
   const [banner, setBanner] = useState(null);
 
-  const { data: demandes, loading } = useFetch(
-    () => inscriptionDemandeService.list(filters),
-    [filters, refreshKey],
-  );
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: demandes, isPending: loading } = useQuery({
+    queryKey: queryKeys.inscriptions.list(filters),
+    queryFn: () => inscriptionDemandeService.list(filters),
+    enabled: bootstrapped && isAuthenticated,
+  });
 
   const stats = useMemo(
     () => statsInscriptionsFromDemandes(inscriptionDemandeService.getAllSync()),
-    [refreshKey],
+    [demandes],
   );
 
   const selectedSync = useMemo(() => {
     if (!selected?.id) return null;
     return inscriptionDemandeService.getById(selected.id) ?? selected;
-  }, [selected?.id, refreshKey]);
+  }, [selected?.id, demandes]);
 
   useEffect(() => {
     if (!banner) return;
@@ -179,7 +183,7 @@ export default function InscriptionsPage() {
 
   const pendingCount = useMemo(
     () => inscriptionDemandeService.getAllSync().filter((d) => d.decision === 'en_attente').length,
-    [refreshKey],
+    [demandes],
   );
 
   return (
@@ -195,14 +199,6 @@ export default function InscriptionsPage() {
           {banner.text}
         </div>
       )}
-
-      <nav className="text-sm text-slate-500">
-        <Link to="/dashboard" className="hover:text-navy">
-          Tableau de bord
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="font-medium text-slate-900">Inscriptions (mobile)</span>
-      </nav>
 
       <div className="flex flex-col gap-4 border-b border-light-gray pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -361,7 +357,7 @@ export default function InscriptionsPage() {
         open={!!selectedSync}
         onClose={() => {
           setSelected(null);
-          setRefreshKey((k) => k + 1);
+          queryClient.invalidateQueries({ queryKey: queryKeys.inscriptions.all });
         }}
         chrome={false}
         className="bg-transparent ring-0 shadow-none"
@@ -372,11 +368,11 @@ export default function InscriptionsPage() {
             demande={selectedSync}
             onBack={() => {
               setSelected(null);
-              setRefreshKey((k) => k + 1);
+              queryClient.invalidateQueries({ queryKey: queryKeys.inscriptions.all });
             }}
             onAfterMutation={() => {
               setSelected((s) => (s ? inscriptionDemandeService.getById(s.id) : null));
-              setRefreshKey((k) => k + 1);
+              queryClient.invalidateQueries({ queryKey: queryKeys.inscriptions.all });
             }}
             onAccepter={async () => {
               const res = await inscriptionDemandeService.accepter(selectedSync.id);
@@ -389,7 +385,7 @@ export default function InscriptionsPage() {
               } else {
                 setBanner({ type: 'err', text: res.error || 'Action impossible.' });
               }
-              setRefreshKey((k) => k + 1);
+              queryClient.invalidateQueries({ queryKey: queryKeys.inscriptions.all });
             }}
             onRefuser={async (payload) => {
               const res = await inscriptionDemandeService.refuser(selectedSync.id, payload);
@@ -397,7 +393,7 @@ export default function InscriptionsPage() {
                 setBanner({ type: 'ok', text: 'Refus enregistré. Message transmis (simulation) sur les canaux indiqués.' });
                 setSelected(null);
               }
-              setRefreshKey((k) => k + 1);
+              queryClient.invalidateQueries({ queryKey: queryKeys.inscriptions.all });
             }}
           />
         </div>

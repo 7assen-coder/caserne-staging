@@ -1,11 +1,18 @@
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import DataTable from '../common/DataTable';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 import { stockService } from '../../services/stockService';
 
 export default function Inventaire() {
-  const { data } = useFetch(() => stockService.list(), []);
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const { data } = useQuery({
+    queryKey: queryKeys.stock.list(),
+    queryFn: () => stockService.list(),
+    enabled: bootstrapped && isAuthenticated,
+  });
 
   const columns = [
     { key: 'article', label: 'Article', sortable: true },

@@ -1,73 +1,77 @@
 import { api } from './api';
-import { clearAccessToken, getAccessToken, isRememberMeSession, setAccessToken } from '../utils/authStorage';
-import {
-  authenticateLocal,
-  findLocalUserByEmail,
-  findLocalUserById,
-  INITIAL_USER_PASSWORD,
-  isLocalSessionToken,
-  localTokenForUserId,
-  toPublicUser,
-  userIdFromLocalToken,
-} from '../utils/localUserStore';
+import { apiPaths } from './apiPaths';
+import { clearAccessToken, setRememberMePreference } from '../utils/authStorage';
+import { ensureCsrfToken } from '../utils/csrf';
 
-export { INITIAL_USER_PASSWORD };
-
-function mergeMustChangePassword(user) {
-  const local = findLocalUserByEmail(user?.email);
-  return { ...user, mustChangePassword: !!local?.mustChangePassword };
+function normalizeUser(user) {
+  if (!user) return user;
+  const mustChangePassword = !!(user.must_change_password ?? user.mustChangePassword);
+  return { ...user, mustChangePassword, must_change_password: mustChangePassword };
 }
 
 export async function loginRequest({ email, password, remember_me }) {
   const normalizedEmail = String(email).trim().toLowerCase();
-
-  try {
-    const body = { email: normalizedEmail, password, remember_me: !!remember_me };
-    const { data } = await api.post('/auth/login/', body);
-    if (data.access) setAccessToken(data.access, !!remember_me);
-    const user = mergeMustChangePassword(data.user);
-    return { user, mustChangePassword: !!user.mustChangePassword };
-  } catch (err) {
-    const localAuth = authenticateLocal(normalizedEmail, password);
-    if (localAuth) {
-      setAccessToken(localTokenForUserId(localAuth.user.id), !!remember_me);
-      return localAuth;
-    }
-    throw err;
-  }
+  await ensureCsrfToken(api);
+  const body = { email: normalizedEmail, password, remember_me: !!remember_me };
+  const { data } = await api.post(apiPaths.auth.login, body);
+  setRememberMePreference(!!remember_me);
+  const user = normalizeUser(data.user);
+  return { user, mustChangePassword: !!user.mustChangePassword };
 }
 
 export async function logoutRequest() {
   try {
-    const token = getAccessToken();
-    if (!isLocalSessionToken(token)) {
-      await api.post('/auth/logout/', {});
-    }
+    await ensureCsrfToken(api);
+    await api.post(apiPaths.auth.logout, {});
   } finally {
     clearAccessToken();
   }
 }
 
 export async function fetchCurrentUser() {
-  const token = getAccessToken();
-  if (isLocalSessionToken(token)) {
-    const id = userIdFromLocalToken(token);
-    const record = findLocalUserById(id);
-    if (!record) throw new Error('Session locale expirée.');
-    return toPublicUser(record);
-  }
-  const { data } = await api.get('/auth/me/');
-  const local = findLocalUserByEmail(data.email);
-  return {
-    ...data,
-    mustChangePassword: !!local?.mustChangePassword,
-  };
+  const { data } = await api.get(apiPaths.auth.me);
+  return normalizeUser(data);
 }
 
 export async function refreshAccessToken() {
-  const token = getAccessToken();
-  if (isLocalSessionToken(token)) return token;
-  const { data } = await api.post('/auth/token/refresh/', {});
-  if (data?.access) setAccessToken(data.access, isRememberMeSession());
-  return data?.access ?? null;
+  await ensureCsrfToken(api);
+  await api.post(
+    apiPaths.auth.refresh,
+    {},
+    { _skipAuthRefresh: true, _skipTransientRetry: true },
+  );
+  return true;
+}
+
+export async function changePasswordRequest({ current_password, new_password }) {
+  const body = { new_password };
+  if (current_password) body.current_password = current_password;
+  const { data } = await api.post(apiPaths.auth.password, body);
+  return normalizeUser(data);
+}
+
+export async function requestPasswordReset(email, source = 'login_recovery', lang = 'fr') {
+  const normalizedLang = String(lang || 'fr').toLowerCase().startsWith('ar') ? 'ar' : 'fr';
+  const { data } = await api.post(apiPaths.auth.passwordReset, {
+    email: String(email).trim().toLowerCase(),
+    source,
+    lang: normalizedLang,
+  });
+  return data;
+}
+
+export async function verifyPasswordResetOtp({ email, otp }) {
+  const { data } = await api.post(apiPaths.auth.passwordResetVerify, {
+    email: String(email).trim().toLowerCase(),
+    otp: String(otp).replace(/\s/g, ''),
+  });
+  return data;
+}
+
+export async function confirmPasswordReset({ reset_token, new_password }) {
+  const { data } = await api.post(apiPaths.auth.passwordResetConfirm, {
+    reset_token,
+    new_password,
+  });
+  return data;
 }

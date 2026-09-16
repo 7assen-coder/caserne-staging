@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Card from '../common/Card';
-import { useFetch } from '../../hooks/useFetch';
+import QueryErrorPanel from '../common/QueryErrorPanel';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { presenceService } from '../../services/presenceService';
-import { PRESENCE_CHANGED } from '../../utils/presenceStore';
+import { PRESENCE_CHANGED } from '../../services/presenceService';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
+import EmptyState from '../common/EmptyState';
 
 function Charts({ parSection, trend }) {
   const [Recharts, setRecharts] = useState(null);
@@ -84,17 +88,37 @@ function Charts({ parSection, trend }) {
 }
 
 export default function StatPresence({ embedded = false, refreshKey = 0 }) {
-  const [key, setKey] = useState(0);
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const refresh = () => setKey((k) => k + 1);
+    const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.presence.all });
     window.addEventListener(PRESENCE_CHANGED, refresh);
     return () => window.removeEventListener(PRESENCE_CHANGED, refresh);
-  }, []);
+  }, [queryClient]);
 
-  const { data: parSection } = useFetch(() => presenceService.parSection(), [key, refreshKey]);
-  const { data: trend } = useFetch(() => presenceService.trend(), [key, refreshKey]);
-  const { data: top } = useFetch(() => presenceService.topAbsences(), [key, refreshKey]);
+  const enabled = bootstrapped && isAuthenticated;
+  const {
+    data: parSection,
+    isError,
+    error,
+    refetch,
+    isPending,
+  } = useQuery({
+    queryKey: [...queryKeys.presence.parSection(), refreshKey],
+    queryFn: () => presenceService.parSection(),
+    enabled,
+  });
+  const { data: trend } = useQuery({
+    queryKey: [...queryKeys.presence.trend(), refreshKey],
+    queryFn: () => presenceService.trend(),
+    enabled,
+  });
+  const { data: top } = useQuery({
+    queryKey: [...queryKeys.presence.topAbsences(), refreshKey],
+    queryFn: () => presenceService.topAbsences(),
+    enabled,
+  });
 
   const hasData = (parSection ?? []).length > 0 || (trend ?? []).some((d) => d.presents > 0);
 
@@ -109,14 +133,23 @@ export default function StatPresence({ embedded = false, refreshKey = 0 }) {
         </div>
       ) : null}
 
-      {!hasData ? (
-        <div className="rounded-2xl border border-light-gray bg-white px-6 py-14 text-center shadow-sm">
-          <p className="text-sm font-medium text-slate-700">Aucune statistique disponible</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Enregistrez des appels depuis l&apos;onglet « Lancer un appel » pour alimenter les graphiques.
-          </p>
-        </div>
-      ) : (
+      {isError ? (
+        <QueryErrorPanel
+          error={error}
+          title="Impossible de charger les statistiques de présence."
+          onRetry={() => refetch()}
+        />
+      ) : null}
+
+      {!isError && !isPending && !hasData ? (
+        <EmptyState
+          reason="empty"
+          title="Aucune statistique disponible"
+          description="Enregistrez des appels depuis l’onglet « Lancer un appel » pour alimenter les graphiques."
+        />
+      ) : null}
+
+      {!isError && hasData ? (
         <>
           <Charts parSection={parSection} trend={trend} />
 
@@ -165,7 +198,7 @@ export default function StatPresence({ embedded = false, refreshKey = 0 }) {
             </div>
           </Card>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

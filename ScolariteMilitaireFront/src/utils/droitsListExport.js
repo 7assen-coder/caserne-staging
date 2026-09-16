@@ -25,7 +25,7 @@ async function tryAddLogo(doc) {
 }
 
 export async function exportDroitsExcel(batch, filenameBase = 'droits-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule',
     'Nom et prénom',

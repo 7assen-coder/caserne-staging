@@ -92,7 +92,7 @@ And this is the output
     "photo_militaire_integrale": null,
     "eleve": 1
   },
-  "matricule": 22009,
+  "matricule": 251280,
   "num_bac": "BAC-27504",
   "nni": "5594225886",
   "sexe": "H",
@@ -122,3 +122,24 @@ And this is the output
   "linkedin": null
 }
 ```
+
+
+## Auth OTP / Celery (Resend)
+
+Env: `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_TASK_ALWAYS_EAGER`, `USE_LOCMEM_CACHE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL`.
+Worker: `celery -A backend worker -l info`.
+Endpoints under `/api/v1/auth/password/reset/` and `/api/v1/auth/password/`.
+
+## Cookie JWT session
+
+- Access/refresh live in **httpOnly** cookies (`esp_access`, `esp_refresh`) — not in JSON / localStorage.
+- `GET /api/v1/auth/csrf/` then send `X-CSRFToken` on mutating requests.
+- Refresh rotation + blacklist enabled (`ROTATE_REFRESH_TOKENS`, `token_blacklist`).
+- Env: `JWT_COOKIE_SAMESITE` (`Lax` local, `None` for cross-origin SPA↔API), `JWT_COOKIE_SECURE`, optional `JWT_COOKIE_DOMAIN`.
+- Login lockout: `LOGIN_MAX_FAILURES`, `LOGIN_LOCKOUT_SECONDS`, `LOGIN_IP_MAX_FAILURES`, `LOGIN_THROTTLE_RATE`.
+
+1. `cp .env.example .env`
+2. Set `EMAIL_HOST_USER=resend` / `EMAIL_HOST_PASSWORD` (Resend API key); keep `DEFAULT_FROM_EMAIL=Polyspace <noreply@polyspace.mr>`
+3. Verify domain `polyspace.mr` in Resend (SPF/DKIM)
+4. Restart runserver (and Celery if not eager)
+5. Web: `/login/recovery` and Profil → Sécurité

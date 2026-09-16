@@ -1,30 +1,32 @@
 import { eleveService } from './eleveService';
-import {
-  addSanction,
-  countSanctionsByEleveId,
-  deleteSanction,
-  findSanctionById,
-  getLastSanctionByEleveId,
-  getSanctionsByEleveId,
-  updateSanction,
-} from '../utils/sanctionStore';
 import { sanctionNatureLabel } from '../data/sanctionCatalog';
+import { apiPaths } from './apiPaths';
+import {
+  apiDelete,
+  apiList,
+  apiPatch,
+  apiPost,
+  notifyChanged,
+  toFormData,
+  withExpectedVersion,
+} from '../utils/opsApi';
 
-function fileToAttachment(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve({
-        name: file.name,
-        mimeType: file.type || 'application/pdf',
-        dataUrl: reader.result,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier PDF.'));
-    reader.readAsDataURL(file);
-  });
+export const SANCTIONS_CHANGED = 'esp-sanctions-changed';
+
+function mapSanction(raw) {
+  return {
+    id: raw.id,
+    eleveId: String(raw.eleve),
+    code: raw.code ?? '',
+    motif: raw.motif ?? '',
+    nature: raw.nature ?? 'avertissement',
+    dateDebut: raw.date_debut ?? '',
+    dateFin: raw.date_fin ?? '',
+    statut: raw.statut ?? 'en_cours',
+    crPdf: raw.cr_pdf ? { url: raw.cr_pdf } : null,
+    pjPdf: raw.pj_pdf ? { url: raw.pj_pdf } : null,
+    rowVersion: raw.row_version ?? 1,
+  };
 }
 
 function scolariteFields(eleve) {
@@ -49,52 +51,45 @@ function filterStudentRows(rows, filters = {}) {
   if (filters.departement) {
     const d = filters.departement;
     list = list.filter(
-      (e) =>
-        e.departement === d
-        || e.departement?.startsWith(`${d} `)
-        || e.departement?.startsWith(d),
+      (e) => e.departement === d || e.departement?.startsWith(`${d} `) || e.departement?.startsWith(d),
     );
   }
-  if (filters.niveau) {
-    list = list.filter((e) => e.niveau === filters.niveau);
-  }
-  if (filters.sanction === 'with') {
-    list = list.filter((e) => (e.nbSanctions ?? 0) > 0);
-  }
-  if (filters.sanction === 'without') {
-    list = list.filter((e) => (e.nbSanctions ?? 0) === 0);
-  }
-  if (filters.statut === 'en_cours') {
-    list = list.filter((e) => (e.enCours ?? 0) > 0);
-  }
+  if (filters.niveau) list = list.filter((e) => e.niveau === filters.niveau);
+  if (filters.sanction === 'with') list = list.filter((e) => (e.nbSanctions ?? 0) > 0);
+  if (filters.sanction === 'without') list = list.filter((e) => (e.nbSanctions ?? 0) === 0);
+  if (filters.statut === 'en_cours') list = list.filter((e) => (e.enCours ?? 0) > 0);
   return list;
-}
-
-function toListRow(eleve) {
-  const { departement, niveau } = scolariteFields(eleve);
-  const last = getLastSanctionByEleveId(eleve.id);
-  const items = getSanctionsByEleveId(eleve.id);
-  const enCours = items.filter((s) => s.statut === 'en_cours').length;
-  return {
-    id: eleve.id,
-    matricule: eleve.matricule ?? '',
-    nom: eleve.nom ?? '',
-    prenom: eleve.prenom ?? '',
-    photoUrl: eleve.photoUrl ?? null,
-    departement,
-    niveau,
-    nbSanctions: countSanctionsByEleveId(eleve.id),
-    enCours,
-    derniereDate: last?.dateDebut ?? null,
-    derniereNature: last ? sanctionNatureLabel(last.nature) : '',
-    derniereMotif: last?.motif ?? '',
-  };
 }
 
 export const sanctionService = {
   async listStudents(filters = {}) {
-    const eleves = await eleveService.list({ q: filters.q });
-    const enriched = eleves.map((e) => toListRow(e));
+    const eleves = await eleveService.listAllPages({ q: filters.q });
+    const all = (await apiList(apiPaths.sanctions.list)).map(mapSanction);
+    const byEleve = {};
+    all.forEach((s) => {
+      const id = String(s.eleveId);
+      if (!byEleve[id]) byEleve[id] = [];
+      byEleve[id].push(s);
+    });
+    const enriched = eleves.map((eleve) => {
+      const { departement, niveau } = scolariteFields(eleve);
+      const items = byEleve[String(eleve.id)] ?? [];
+      const last = items[0] ?? null;
+      return {
+        id: eleve.id,
+        matricule: eleve.matricule ?? '',
+        nom: eleve.nom ?? '',
+        prenom: eleve.prenom ?? '',
+        photoUrl: eleve.photoUrl ?? null,
+        departement,
+        niveau,
+        nbSanctions: items.length,
+        enCours: items.filter((s) => s.statut === 'en_cours').length,
+        derniereDate: last?.dateDebut ?? null,
+        derniereNature: last ? sanctionNatureLabel(last.nature) : '',
+        derniereMotif: last?.motif ?? '',
+      };
+    });
     return filterStudentRows(enriched, filters);
   },
 
@@ -105,71 +100,78 @@ export const sanctionService = {
     } catch {
       eleve = null;
     }
-
-    if (!eleve && listRow && String(listRow.id) === String(eleveId)) {
+    if (!eleve && listRow) {
       eleve = {
         id: listRow.id,
         matricule: listRow.matricule,
         nom: listRow.nom,
         prenom: listRow.prenom,
         photoUrl: listRow.photoUrl,
-        scolarite: {
-          departement: listRow.departement,
-          niveau: listRow.niveau,
-        },
+        scolarite: { departement: listRow.departement, niveau: listRow.niveau },
       };
     }
-
     if (!eleve) return null;
-
+    const sanctions = (await apiList(apiPaths.sanctions.list, { eleve: eleveId })).map(mapSanction);
     const { departement, niveau } = scolariteFields(eleve);
-    return {
-      ...eleve,
-      departement,
-      niveau,
-      sanctions: getSanctionsByEleveId(eleveId),
-    };
+    return { ...eleve, departement, niveau, sanctions, nbSanctions: sanctions.length };
   },
 
-  getSanctions(eleveId) {
-    return getSanctionsByEleveId(eleveId);
+  async getSanctions(eleveId) {
+    return (await apiList(apiPaths.sanctions.list, { eleve: eleveId })).map(mapSanction);
   },
 
-  async addSanction(eleveId, payload, { crFile = null, pjFile = null } = {}) {
-    let crPdf = null;
-    let pjPdf = null;
-    if (crFile instanceof File) crPdf = await fileToAttachment(crFile);
-    if (pjFile instanceof File) pjPdf = await fileToAttachment(pjFile);
-    return addSanction({ ...payload, eleveId, crPdf, pjPdf });
+  async addSanction(eleveId, payload, files = {}) {
+    const body = toFormData({
+      eleve: eleveId,
+      code: payload.code ?? '',
+      motif: payload.motif ?? '',
+      nature: payload.nature ?? 'avertissement',
+      date_debut: payload.dateDebut ?? '',
+      date_fin: payload.dateFin ?? '',
+      statut: payload.statut ?? 'en_cours',
+      cr_pdf: files.crPdf instanceof File ? files.crPdf : undefined,
+      pj_pdf: files.pjPdf instanceof File ? files.pjPdf : undefined,
+    });
+    const raw = await apiPost(apiPaths.sanctions.list, body, { headers: { 'Content-Type': 'multipart/form-data' } });
+    notifyChanged(SANCTIONS_CHANGED);
+    return mapSanction(raw);
   },
 
-  async updateSanction(
-    sanctionId,
-    payload,
-    { crFile, pjFile, clearCr = false, clearPj = false } = {},
-  ) {
-    const patch = { ...payload };
-    if (clearCr) patch.crPdf = null;
-    else if (crFile instanceof File) patch.crPdf = await fileToAttachment(crFile);
-    if (clearPj) patch.pjPdf = null;
-    else if (pjFile instanceof File) patch.pjPdf = await fileToAttachment(pjFile);
-    return updateSanction(sanctionId, patch);
+  async updateSanction(itemId, payload, files = {}) {
+    const body = withExpectedVersion(
+      toFormData({
+        code: payload.code,
+        motif: payload.motif,
+        nature: payload.nature,
+        date_debut: payload.dateDebut,
+        date_fin: payload.dateFin,
+        statut: payload.statut,
+        cr_pdf: files.crPdf instanceof File ? files.crPdf : undefined,
+        pj_pdf: files.pjPdf instanceof File ? files.pjPdf : undefined,
+      }),
+      payload.rowVersion,
+    );
+    const raw = await apiPatch(apiPaths.sanctions.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(SANCTIONS_CHANGED);
+    return mapSanction(raw);
   },
 
-  async updateSanctionPdf(sanctionId, field, file) {
-    if (field !== 'crPdf' && field !== 'pjPdf') return null;
-    if (!(file instanceof File)) {
-      return updateSanction(sanctionId, { [field]: null });
-    }
-    const attachment = await fileToAttachment(file);
-    return updateSanction(sanctionId, { [field]: attachment });
+  async deleteSanction(itemId, rowVersion) {
+    await apiDelete(apiPaths.sanctions.detail(itemId), {
+      data: withExpectedVersion({}, rowVersion),
+    });
+    notifyChanged(SANCTIONS_CHANGED);
   },
 
-  deleteSanction(sanctionId) {
-    return deleteSanction(sanctionId);
-  },
-
-  findSanction(sanctionId) {
-    return findSanctionById(sanctionId);
+  async updateSanctionPdf(itemId, field, file, rowVersion) {
+    const key = field === 'crPdf' || field === 'cr_pdf' ? 'cr_pdf' : 'pj_pdf';
+    const body = withExpectedVersion(toFormData({ [key]: file }), rowVersion);
+    const raw = await apiPatch(apiPaths.sanctions.detail(itemId), body, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    notifyChanged(SANCTIONS_CHANGED);
+    return mapSanction(raw);
   },
 };

@@ -1,0 +1,23 @@
+{
+  "loading": "جاري التحميل…",
+  "close": "إغلاق",
+  "save": "حفظ",
+  "cancel": "إلغاء",
+  "search": "بحث…",
+  "searchLabel": "بحث",
+  "previous": "السابق",
+  "next": "التالي",
+  "results": "{{count}} نتيجة",
+  "results_plural": "{{count}} نتائج",
+  "pageOf": "صفحة {{current}} / {{total}}",
+  "noData": "لا توجد بيانات",
+  "emptyField": "—",
+  "confirm": "تأكيد",
+  "openMenu": "فتح قائمة التنقل",
+  "skipToContent": "الانتقال إلى المحتوى",
+  "appName": "Polyspace",
+  "tagline": "القيادة والتحكم ESP",
+  "logout": "تسجيل الخروج",
+  "selectPage": "تحديد كل الطلبة في هذه الصفحة",
+  "selectRow": "تحديد {{name}}"
+}

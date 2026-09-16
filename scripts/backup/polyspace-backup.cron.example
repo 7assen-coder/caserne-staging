@@ -1,0 +1,20 @@
+# Phase 26 — example crontab for VPS (install under /etc/cron.d/polyspace-backup)
+# Adjust paths to the deployed repo and backup root. chmod 700 /var/backups/polyspace
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Daily 02:15 UTC — DB + media
+15 2 * * * root cd /opt/polyspace && \
+  BACKUP_ROOT=/var/backups/polyspace \
+  BACKUP_KEEP_DAYS=14 \
+  PGHOST=127.0.0.1 PGPORT=5434 PGUSER=esp PGDATABASE=esp \
+  PGPASSWORD=REPLACE_ME \
+  USE_S3_MEDIA=true \
+  AWS_ACCESS_KEY_ID=REPLACE_ME AWS_SECRET_ACCESS_KEY=REPLACE_ME \
+  AWS_STORAGE_BUCKET_NAME=polyspace-media \
+  AWS_S3_ENDPOINT_URL=http://127.0.0.1:9000 \
+  /opt/polyspace/scripts/backup/backup_all.sh >> /var/backups/polyspace/logs/cron.log 2>&1
+
+# Prefer loading secrets from a root-only env file instead of inline PGPASSWORD:
+# 15 2 * * * root set -a; . /root/.polyspace-backup.env; set +a; /opt/polyspace/scripts/backup/backup_all.sh

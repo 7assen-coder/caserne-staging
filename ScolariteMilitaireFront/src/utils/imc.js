@@ -18,18 +18,48 @@ export function computeIMC(poidsKg, tailleCm) {
   return Math.round(imc * 10) / 10;
 }
 
+/**
+ * WHO adult BMI classes. Returns { code, tone } — UI maps code → i18n label.
+ * tone: green | amber | red
+ */
 export function classifyIMC(imc) {
   if (imc == null || !Number.isFinite(imc)) return null;
-  if (imc < 16.5) return { label: 'Maigreur sévère', tone: 'red', code: 'maigreur-severe' };
-  if (imc < 18.5) return { label: 'Maigreur', tone: 'amber', code: 'maigreur' };
-  if (imc < 25) return { label: 'Corpulence normale', tone: 'green', code: 'normal' };
-  if (imc < 30) return { label: 'Surpoids', tone: 'amber', code: 'surpoids' };
-  if (imc < 35) return { label: 'Obésité modérée (classe I)', tone: 'red', code: 'obesite-1' };
-  if (imc < 40) return { label: 'Obésité sévère (classe II)', tone: 'red', code: 'obesite-2' };
-  return { label: 'Obésité morbide (classe III)', tone: 'red', code: 'obesite-3' };
+  if (imc < 16) return { code: 'maigreurSevere', tone: 'red' };
+  if (imc < 17) return { code: 'maigreurModeree', tone: 'amber' };
+  if (imc < 18.5) return { code: 'maigreurLegere', tone: 'amber' };
+  if (imc < 25) return { code: 'normale', tone: 'green' };
+  if (imc < 30) return { code: 'surpoids', tone: 'amber' };
+  if (imc < 35) return { code: 'obesite1', tone: 'red' };
+  if (imc < 40) return { code: 'obesite2', tone: 'red' };
+  return { code: 'obesite3', tone: 'red' };
+}
+
+/** Fallback FR labels when i18n is unavailable (fiche/PDF). */
+export const IMC_LABELS_FR = {
+  maigreurSevere: 'Maigreur sévère',
+  maigreurModeree: 'Maigreur modérée',
+  maigreurLegere: 'Maigreur légère',
+  normale: 'Corpulence normale',
+  surpoids: 'Surpoids',
+  obesite1: 'Obésité classe I',
+  obesite2: 'Obésité classe II',
+  obesite3: 'Obésité classe III',
+};
+
+export function imcLabelFr(klass) {
+  if (!klass?.code) return '';
+  return IMC_LABELS_FR[klass.code] || '';
 }
 
 export function formatIMC(imc) {
   if (imc == null || !Number.isFinite(imc)) return '';
   return imc.toFixed(1);
+}
+
+/** e.g. "31.7 · Obésité classe I" */
+export function formatIMCWithClass(imc, klass = classifyIMC(imc)) {
+  const v = formatIMC(imc);
+  if (!v) return '';
+  const label = imcLabelFr(klass);
+  return label ? `${v} · ${label}` : v;
 }
