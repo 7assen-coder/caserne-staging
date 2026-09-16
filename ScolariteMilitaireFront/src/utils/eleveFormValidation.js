@@ -6,13 +6,34 @@ import {
 } from '../data/etudiantOptions';
 import { COMMUNE_AUTRE_VALUE } from '../data/wilayasMauritanie';
 import { isNiveauMobiliteEligible } from './eleveScolariteAuto';
+import { getCurrentAcademicYear } from './anneeUniversitaire';
+import { validateDateNaissanceValue } from './dateFr';
 
 export { SERIE_BAC_VALUES, SERIE_BAC_OPTIONS };
 
-const DIGITS_MATRICULE = /^\d{5}$/;
+const DIGITS_MATRICULE = /^\d{6}$/;
 const DIGITS_NNI = /^\d{10}$/;
 /** N° Bac : 1 à 5 chiffres (maximum 5) */
 const DIGITS_NUM_BAC = /^\d{1,5}$/;
+
+/** Etat-civil fields that get live validation on change. */
+const ETAT_CIVIL_LIVE_PATHS = new Set([
+  'matricule',
+  'nom',
+  'prenom',
+  'nni',
+  'numeroBac',
+  'dateNaissance',
+  'wilayaNaissance',
+  'communeNaissance',
+  'communeNaissanceLibre',
+  'lieuNaissance',
+  'nationalite',
+  'serieBac',
+  'moyenneBac',
+  'ecoleBac',
+  'sexe',
+]);
 
 function reqMsg(label) {
   return `${label} est obligatoire.`;
@@ -22,8 +43,14 @@ function digitsOnly(v, maxLen) {
   return String(v ?? '').replace(/\D/g, '').slice(0, maxLen);
 }
 
+/** Two-digit start year of the current academic year (e.g. 2025-2026 → 25). */
+export function getMaxMatriculeYearPrefix(now = new Date()) {
+  const start = Number(getCurrentAcademicYear(now).split('-')[0]);
+  return Number.isFinite(start) ? start % 100 : 0;
+}
+
 export function sanitizeMatricule(raw) {
-  return digitsOnly(raw, 5);
+  return digitsOnly(raw, 6);
 }
 
 export function sanitizeNni(raw) {
@@ -39,6 +66,65 @@ export function sanitizeDecimal(raw) {
   const parts = s.split('.');
   if (parts.length <= 1) return s;
   return `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`;
+}
+
+/** Display moyenne with French comma (14,25). Accepts , or . input. */
+export function formatMoyenneFr(value) {
+  const s = String(value ?? '').trim().replace(',', '.');
+  if (!s) return '';
+  const n = Number.parseFloat(s);
+  if (!Number.isFinite(n)) return String(value ?? '');
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded).replace('.', ',');
+}
+
+/** Canonical API form with dot (14.25). */
+export function moyenneToApi(value) {
+  const s = sanitizeDecimal(value);
+  if (!s) return '0';
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) ? String(n) : '0';
+}
+
+/**
+ * @param {string|number} raw
+ * @param {{ isCreate?: boolean, previousMatricule?: string|number|null }} [options]
+ * @returns {string} error message or ''
+ */
+export function validateMatriculeValue(raw, options = {}) {
+  const s = String(raw ?? '').trim();
+  if (!s) return reqMsg('Le matricule');
+
+  const prev =
+    options.previousMatricule != null && String(options.previousMatricule).trim() !== ''
+      ? String(options.previousMatricule).trim()
+      : null;
+  const unchangedOnEdit = options.isCreate === false && prev != null && prev === s;
+  if (unchangedOnEdit) return '';
+
+  if (!DIGITS_MATRICULE.test(s)) {
+    return 'Le matricule doit contenir exactement 6 chiffres (ex. 251280).';
+  }
+
+  const yy = Number(s.slice(0, 2));
+  const maxYy = getMaxMatriculeYearPrefix();
+  if (yy > maxYy) {
+    const yyLabel = String(yy).padStart(2, '0');
+    const maxLabel = String(maxYy).padStart(2, '0');
+    return `L’année du matricule (${yyLabel}) ne peut pas dépasser ${maxLabel} (année universitaire en cours).`;
+  }
+  return '';
+}
+
+/**
+ * @param {string} raw
+ * @returns {string} error message or ''
+ */
+export function validateNniValue(raw) {
+  const nni = String(raw ?? '').trim();
+  if (!nni) return reqMsg('Le NNI');
+  if (!DIGITS_NNI.test(nni)) return 'Le NNI doit contenir exactement 10 chiffres.';
+  return '';
 }
 
 function simpleEmailOk(v) {
@@ -85,21 +171,63 @@ const STEP_KEYS = {
 
 export const STEP_KEYS_LIST = STEP_KEYS;
 
-function validatePieces(values, errors) {
-  const p = values.pieces || {};
-  const hasPhoto =
-    p.photoIdentite instanceof File || p.photoIdentiteCivile instanceof File;
-  if (!hasPhoto) errors['pieces.photoIdentite'] = reqMsg('La photo d’identité');
-  if (!(p.cin instanceof File)) errors['pieces.cin'] = reqMsg('La CIN');
-  if (!(p.acteNaissance instanceof File)) errors['pieces.acteNaissance'] = reqMsg("L'acte de naissance");
-  if (!(p.diplomeAcces instanceof File)) errors['pieces.diplomeAcces'] = reqMsg("Le diplôme d'accès");
-  if (!(p.diplomeBac instanceof File)) errors['pieces.diplomeBac'] = reqMsg('Le diplôme du Bac');
+function hasExistingPiece(v) {
+  if (v instanceof File) return true;
+  if (typeof v === 'string' && v.trim() !== '') return true;
+  if (v && typeof v === 'object' && typeof v.url === 'string' && v.url.trim() !== '') return true;
+  return false;
 }
 
-function validateEtatCivil(values, errors) {
-  const m = String(values.matricule ?? '').trim();
-  if (!m) errors.matricule = reqMsg('Le matricule');
-  else if (!DIGITS_MATRICULE.test(m)) errors.matricule = 'Le matricule doit contenir exactement 5 chiffres.';
+function docUrl(documents, key) {
+  const d = documents && typeof documents === 'object' ? documents : {};
+  const v = d[key];
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  if (v && typeof v === 'object' && typeof v.url === 'string' && v.url.trim()) return v.url.trim();
+  return '';
+}
+
+function validatePieces(values, errors, options = {}) {
+  const p = values.pieces || {};
+  const docs = options.eleve?.documents;
+  const photoFallback =
+    docUrl(docs, 'photo_identite_civile')
+    || (typeof options.eleve?.photoUrl === 'string' ? options.eleve.photoUrl.trim() : '');
+
+  const hasPhoto =
+    hasExistingPiece(p.photoIdentite)
+    || hasExistingPiece(p.photoIdentiteCivile)
+    || (options.isEdit && Boolean(photoFallback));
+  if (!hasPhoto) errors['pieces.photoIdentite'] = reqMsg('La photo d’identité');
+
+  if (!(
+    hasExistingPiece(p.cin)
+    || (options.isEdit && Boolean(docUrl(docs, 'cin')))
+  )) {
+    errors['pieces.cin'] = reqMsg('La CIN');
+  }
+  if (!(
+    hasExistingPiece(p.acteNaissance)
+    || (options.isEdit && Boolean(docUrl(docs, 'acte_naissance')))
+  )) {
+    errors['pieces.acteNaissance'] = reqMsg("L'acte de naissance");
+  }
+  if (!(
+    hasExistingPiece(p.diplomeAcces)
+    || (options.isEdit && Boolean(docUrl(docs, 'diplome_acces')))
+  )) {
+    errors['pieces.diplomeAcces'] = reqMsg("Le diplôme d'accès");
+  }
+  if (!(
+    hasExistingPiece(p.diplomeBac)
+    || (options.isEdit && Boolean(docUrl(docs, 'diplome_bac')))
+  )) {
+    errors['pieces.diplomeBac'] = reqMsg('Le diplôme du Bac');
+  }
+}
+
+function validateEtatCivil(values, errors, options = {}) {
+  const matErr = validateMatriculeValue(values.matricule, options);
+  if (matErr) errors.matricule = matErr;
 
   const nom = String(values.nom ?? '').trim();
   if (!nom || nom.length < 2) errors.nom = reqMsg('Le nom');
@@ -107,9 +235,8 @@ function validateEtatCivil(values, errors) {
   const prenom = String(values.prenom ?? '').trim();
   if (!prenom || prenom.length < 2) errors.prenom = reqMsg('Le prénom');
 
-  const nni = String(values.nni ?? '').trim();
-  if (!nni) errors.nni = reqMsg('Le NNI');
-  else if (!DIGITS_NNI.test(nni)) errors.nni = 'Le NNI doit contenir exactement 10 chiffres.';
+  const nniErr = validateNniValue(values.nni);
+  if (nniErr) errors.nni = nniErr;
 
   const nb = String(values.numeroBac ?? '').trim();
   if (!nb) errors.numeroBac = reqMsg('Le numéro de Bac');
@@ -118,6 +245,10 @@ function validateEtatCivil(values, errors) {
   }
 
   if (!String(values.dateNaissance ?? '').trim()) errors.dateNaissance = reqMsg('La date de naissance');
+  else {
+    const dateErr = validateDateNaissanceValue(values.dateNaissance);
+    if (dateErr) errors.dateNaissance = dateErr;
+  }
 
   const wil = String(values.wilayaNaissance ?? '').trim();
   const com = String(values.communeNaissance ?? '').trim();
@@ -131,6 +262,9 @@ function validateEtatCivil(values, errors) {
   }
 
   if (!String(values.nationalite ?? '').trim()) errors.nationalite = reqMsg('La nationalité');
+
+  const sexe = String(values.sexe ?? '').trim();
+  if (sexe !== 'M' && sexe !== 'F') errors.sexe = reqMsg('Le sexe');
 
   const serie = String(values.serieBac ?? '').trim();
   if (!serie) errors.serieBac = reqMsg('La série du Bac');
@@ -153,14 +287,6 @@ function validateContactInfo(values, errors) {
   if (!tel) errors['contact.telephone'] = reqMsg('Le téléphone principal');
   else if (!isValidMrPhone8(tel)) {
     errors['contact.telephone'] = 'Le téléphone doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
-  }
-
-  const bank = String(values.compteBankily ?? '').trim();
-  if (bank) {
-    const b = sanitizeMrPhoneDigits(bank);
-    if (!isValidMrPhone8(b)) {
-      errors.compteBankily = 'Le compte Bankily doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
-    }
   }
 
   if (!String(values.residentAvecParents ?? '').trim()) {
@@ -186,11 +312,11 @@ function validateScolarite(values, errors) {
   else if (!STATUT_ETUDIANT_VALUES.includes(statut)) errors.statut = 'Statut invalide.';
 
   const annUni = String(values.scolarite?.anneeUni1ere ?? '').trim();
-  if (!annUni) errors['scolarite.anneeUni1ere'] = reqMsg("L'année universitaire de 1ʳᵉ inscription");
+  if (!annUni) errors['scolarite.anneeUni1ere'] = reqMsg("L'année universitaire de 1re inscription");
   else if (!annUniOk(annUni)) errors['scolarite.anneeUni1ere'] = 'Format attendu : AAAA-AAAA (ex : 2025-2026).';
 
   if (!String(values.datePremiereInscription ?? '').trim()) {
-    errors.datePremiereInscription = reqMsg('La date de 1ʳᵉ inscription');
+    errors.datePremiereInscription = reqMsg('La date de 1re inscription');
   }
 
   if (!String(values.scolarite?.voieAcces ?? '').trim()) {
@@ -267,6 +393,15 @@ function validateMilitaire(values, errors) {
   if (!String(values.dossierMilitaire?.section ?? '').trim()) {
     errors['dossierMilitaire.section'] = reqMsg('La section');
   }
+
+  const bank = String(values.compteBankily ?? '').trim();
+  if (bank) {
+    const b = sanitizeMrPhoneDigits(bank);
+    if (!isValidMrPhone8(b)) {
+      errors.compteBankily = 'Le compte Bankily doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
+    }
+  }
+
   const nm = ['tourPoitrine', 'tourCeinture', 'tourTaille', 'tourBassin', 'tourCou', 'longueurManche', 'longueurDos', 'longueurCote'];
   for (const k of nm) {
     if (!decimalOk(values.dossierMilitaire?.[k], { min: 0, max: 250 })) {
@@ -277,8 +412,61 @@ function validateMilitaire(values, errors) {
   if (pt && !/^\d{1,3}$/.test(pt)) errors['dossierMilitaire.pointure'] = 'Pointure : chiffres uniquement.';
 }
 
+/**
+ * Live field-level error for état-civil (and clear-only for other paths).
+ * @returns {string} error or ''
+ */
+export function getLiveFieldError(path, values, options = {}) {
+  if (!ETAT_CIVIL_LIVE_PATHS.has(path)) return '';
+  // Don't shout "required" on empty while the user is still typing.
+  if (path === 'dateNaissance' && !String(values.dateNaissance ?? '').trim()) return '';
+  if (path === 'moyenneBac' && !String(values.moyenneBac ?? '').trim()) return '';
+  const errors = {};
+  validateEtatCivil(values, errors, options);
+  return errors[path] || '';
+}
+
 export function validateEleveStepByKey(stepKey, values, options = {}) {
   const errors = {};
+  if (options.allowIncomplete) {
+    // Liste-définitive incomplete dossiers: identity only + format checks on filled fields.
+    if (stepKey === STEP_KEYS.ETAT_CIVIL) {
+      const matErr = validateMatriculeValue(values.matricule, options);
+      if (matErr) errors.matricule = matErr;
+      const prenom = String(values.prenom ?? '').trim();
+      if (!prenom) errors.prenom = reqMsg('Le prénom');
+      const nni = String(values.nni ?? '').trim();
+      if (nni) {
+        const nniErr = validateNniValue(nni);
+        if (nniErr) errors.nni = nniErr;
+      }
+      if (String(values.dateNaissance ?? '').trim()) {
+        const dateErr = validateDateNaissanceValue(values.dateNaissance);
+        if (dateErr) errors.dateNaissance = dateErr;
+      }
+      const moy = String(values.moyenneBac ?? '').trim();
+      if (moy && !moyenneOk(moy)) {
+        errors.moyenneBac = 'Indiquez une moyenne entre 0 et 20 (ex. 14,25).';
+      }
+    } else if (stepKey === STEP_KEYS.SCOLARITE) {
+      if (!String(values.scolarite?.filiere ?? '').trim()) {
+        errors['scolarite.filiere'] = reqMsg('La filière');
+      }
+      if (!String(values.scolarite?.niveau ?? '').trim()) {
+        errors['scolarite.niveau'] = reqMsg('Le niveau');
+      }
+    } else if (stepKey === STEP_KEYS.CONTACTS) {
+      const tel = sanitizeMrPhoneDigits(values.contact?.telephone ?? '');
+      if (tel && !isValidMrPhone8(tel)) {
+        errors['contact.telephone'] = 'Le téléphone doit comporter 8 chiffres et commencer par 2, 3 ou 4.';
+      }
+      const ep = String(values.contact?.emailPerso ?? '').trim();
+      if (ep && !simpleEmailOk(ep)) {
+        errors['contact.emailPerso'] = 'Format e-mail invalide.';
+      }
+    }
+    return { ok: Object.keys(errors).length === 0, errors };
+  }
   switch (stepKey) {
     case STEP_KEYS.ETAT_CIVIL:
       validateEtatCivil(values, errors, options);
@@ -287,7 +475,7 @@ export function validateEleveStepByKey(stepKey, values, options = {}) {
       validateScolarite(values, errors, options);
       break;
     case STEP_KEYS.PIECES:
-      validatePieces(values, errors);
+      validatePieces(values, errors, options);
       break;
     case STEP_KEYS.CONTACTS:
       validateContacts(values, errors);

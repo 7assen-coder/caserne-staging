@@ -20,7 +20,6 @@ import {
   downloadReleveSemestre,
 } from '../../utils/wordExport';
 import { printAttestationParcoursIrt, printReleveSemestreHtml } from '../../utils/printDocuments';
-import * as XLSX from 'xlsx';
 import { saveAs } from '../../utils/saveAsFile.js';
 import { getDecisionCode, getDecisionLabel } from '../../utils/gradeDecision';
 import { enrichirModuleAvecReferenceEsp } from '../../data/espFormationCatalog';
@@ -37,10 +36,11 @@ const FORMATS = [
   { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
 ];
 
-function exportReleveXlsx(eleve, semestreIndex) {
+async function exportReleveXlsx(eleve, semestreIndex) {
   const releves = eleve.relevesSemestres;
   if (!releves?.length) return;
   const block = releves[Math.min(semestreIndex, releves.length - 1)];
+  const XLSX = await import('xlsx-js-style');
   const head = [
     'Code',
     'Intitulé',
@@ -109,7 +109,7 @@ export default function DashboardExportModal({ open, onClose }) {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await eleveService.list({});
+        const rows = await eleveService.listAllPages({});
         if (cancelled) return;
         setEleves(rows);
         setEleveId((prev) => {

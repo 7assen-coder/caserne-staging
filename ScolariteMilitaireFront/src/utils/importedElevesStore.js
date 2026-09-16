@@ -1,15 +1,20 @@
-const STORAGE_KEY = 'esp_imported_eleves_v1';
+import { isFrontendOnly } from './frontendMode';
+import { assertApiSourceOfTruth } from './opsApi';
+
 export const IMPORTED_ELEVES_CHANGED = 'esp-imported-eleves-changed';
 
-function notifyChanged() {
+const KEY = 'esp_imported_eleves_v1';
+
+function notify() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(IMPORTED_ELEVES_CHANGED));
   }
 }
 
+/** Only used when VITE_FRONTEND_ONLY=true. */
 export function loadImportedEleves() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -18,9 +23,8 @@ export function loadImportedEleves() {
   }
 }
 
-function saveImportedEleves(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  notifyChanged();
+export function listImportedEleves() {
+  return loadImportedEleves();
 }
 
 export function findImportedById(id) {
@@ -28,29 +32,22 @@ export function findImportedById(id) {
 }
 
 export function findImportedByMatricule(matricule) {
-  const key = String(matricule ?? '').trim().toLowerCase();
-  if (!key) return null;
-  return loadImportedEleves().find((e) => String(e.matricule ?? '').trim().toLowerCase() === key) ?? null;
+  const m = String(matricule ?? '').trim().toLowerCase();
+  return loadImportedEleves().find((e) => String(e.matricule ?? '').toLowerCase() === m) ?? null;
 }
 
 export function appendImportedEleves(newEleves) {
-  const existing = loadImportedEleves();
-  const seen = new Set(existing.map((e) => String(e.matricule ?? '').trim().toLowerCase()));
-  const toAdd = [];
-  for (const eleve of newEleves) {
-    const matKey = String(eleve.matricule ?? '').trim().toLowerCase();
-    if (!matKey || seen.has(matKey)) continue;
-    seen.add(matKey);
-    toAdd.push(eleve);
-  }
-  if (!toAdd.length) return 0;
-  saveImportedEleves([...toAdd, ...existing]);
-  return toAdd.length;
+  assertApiSourceOfTruth('importedElevesStore');
+  const list = [...loadImportedEleves(), ...(newEleves ?? [])];
+  localStorage.setItem(KEY, JSON.stringify(list));
+  notify();
+  return newEleves?.length ?? 0;
 }
 
 export function removeImportedById(id) {
+  if (!isFrontendOnly()) return false;
   const next = loadImportedEleves().filter((e) => String(e.id) !== String(id));
-  if (next.length === loadImportedEleves().length) return false;
-  saveImportedEleves(next);
+  localStorage.setItem(KEY, JSON.stringify(next));
+  notify();
   return true;
 }

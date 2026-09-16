@@ -7,17 +7,22 @@ import DataTable from '../common/DataTable';
 import Modal from '../common/Modal';
 import DemandePermission from './DemandePermission';
 import ValidationPermission from './ValidationPermission';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 import { permissionService } from '../../services/permissionService';
 import { STATUT_LABEL, FONCTIONS } from '../../utils/constants';
 import { formatDate } from '../../utils/formatters';
-import { useAuth } from '../../hooks/useAuth';
 
 export default function ListePermissions() {
-  const { fonction } = useAuth();
+  const { fonction, bootstrapped, isAuthenticated } = useAuth();
   const [filters, setFilters] = useState({ statut: '' });
-  const [key, setKey] = useState(0);
-  const { data } = useFetch(() => permissionService.list(filters), [filters, key]);
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: queryKeys.permissions.list(filters),
+    queryFn: () => permissionService.list(filters),
+    enabled: bootstrapped && isAuthenticated,
+  });
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
 
@@ -119,7 +124,7 @@ export default function ListePermissions() {
             canValidate={canValidate && selected.statut === 'en_attente'}
             onDone={() => {
               setSelected(null);
-              setKey((k) => k + 1);
+              queryClient.invalidateQueries({ queryKey: queryKeys.permissions.all });
             }}
           />
         )}
@@ -135,7 +140,7 @@ export default function ListePermissions() {
           onSubmit={async (values) => {
             await permissionService.create(values);
             setCreating(false);
-            setKey((k) => k + 1);
+            queryClient.invalidateQueries({ queryKey: queryKeys.permissions.all });
           }}
           onCancel={() => setCreating(false)}
         />

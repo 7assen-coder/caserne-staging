@@ -2,19 +2,18 @@ import { saveAs } from './saveAsFile.js';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { STATUT_LABEL } from './constants';
-import { loadAppels } from './presenceStore';
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { APP_NAME } from '../data/institution';
 import { formatDateTime } from './formatters';
+import { presenceService } from '../services/presenceService';
 
 function dateSuffix() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function filterAppels(filters = {}) {
-  let list = [...loadAppels()].sort((a, b) =>
-    String(b.date ?? '').localeCompare(String(a.date ?? '')),
-  );
+async function filterAppels(filters = {}) {
+  let list = await presenceService.list(filters);
+  list = [...list].sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')));
   const q = (filters.q ?? '').toLowerCase().trim();
   if (q) {
     list = list.filter(
@@ -30,8 +29,8 @@ function filterAppels(filters = {}) {
 }
 
 export async function exportPresenceHistoriqueExcel(filters = {}, filenameBase = 'historique-presence-esp') {
-  const XLSX = await import('xlsx');
-  const appels = filterAppels(filters);
+  const XLSX = await import('xlsx-js-style');
+  const appels = await filterAppels(filters);
   const rows = appels.flatMap((a) =>
     (a.detail ?? []).map((d) => ({
       Date: formatDateTime(a.date),
@@ -73,7 +72,7 @@ export async function exportPresenceHistoriquePdf(filters = {}, filenameBase = '
   doc.setTextColor(80, 80, 80);
   doc.text(`Date d'édition : ${new Date().toLocaleDateString('fr-FR')}`, 40, 32);
 
-  const appels = filterAppels(filters);
+  const appels = await filterAppels(filters);
   const head = ['Date', 'Section', 'Type', 'Superviseur', 'Matricule', 'Nom', 'Statut', 'Motif'];
   const body = appels.flatMap((a) =>
     (a.detail ?? []).map((d) => [

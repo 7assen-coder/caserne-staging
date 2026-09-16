@@ -3,7 +3,7 @@
 from django.core.exceptions import ValidationError
 
 MAX_DOCUMENT_SIZE = 1 * 1024 * 1024  # 1 Mo
-MAX_IMAGE_DIMENSION = 500  # px
+MAX_IMAGE_DIMENSION = 1024  # px — identity master (fiche hero)
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'webp'}
 
 
@@ -13,7 +13,7 @@ def _extension(f):
 
 
 def validate_image_resolution(f):
-    """Photo d'identité : image dont la largeur et la hauteur sont ≤ 500 px."""
+    """Photo d'identité : image dont la largeur et la hauteur sont ≤ 1024 px (après normalisation)."""
     from PIL import Image
 
     try:

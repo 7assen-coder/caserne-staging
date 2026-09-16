@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { equipementEtatLabel } from '../data/equipementCatalog';
 import { APP_NAME } from '../data/institution';
+import { formatSectionLabel } from './eleveScolariteAuto';
 
 function formatDateFr(iso) {
   if (!iso) return '—';
@@ -17,6 +18,11 @@ export async function downloadEquipementFichePdf(eleve, items = []) {
   const logo = await fetchEspLogoDataUrl();
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const nomComplet = sanitizeExportText(`${eleve.prenom ?? ''} ${eleve.nom ?? ''}`.trim());
+  const compagnie = eleve.dossierMilitaire?.compagnie ?? eleve.compagnie ?? '';
+  const section = formatSectionLabel(
+    eleve.dossierMilitaire?.section ?? eleve.section,
+    compagnie,
+  );
 
   doc.addImage(logo, 'PNG', 14, 12, 24, 24);
   doc.setFontSize(14);
@@ -29,7 +35,7 @@ export async function downloadEquipementFichePdf(eleve, items = []) {
   doc.text(`Matricule : ${sanitizeExportText(eleve.matricule)}`, 42, 36);
   doc.text(`Étudiant : ${nomComplet}`, 42, 42);
   doc.text(
-    `Section : ${sanitizeExportText(eleve.dossierMilitaire?.section ?? eleve.section ?? '—')}`,
+    `Section : ${sanitizeExportText(section || '—')}`,
     42,
     48,
   );

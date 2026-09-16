@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import Modal from '../components/common/Modal';
 import Button from '../components/common/Button';
 
 const ConfirmContext = createContext(null);
 
 export function ConfirmProvider({ children }) {
+  const { t } = useTranslation('common');
   const [state, setState] = useState(null);
   const resolverRef = useRef(null);
 
@@ -20,14 +22,14 @@ export function ConfirmProvider({ children }) {
     return new Promise((resolve) => {
       resolverRef.current = resolve;
       setState({
-        title: opts.title ?? 'Confirmer',
+        title: opts.title ?? t('confirm'),
         message: opts.message ?? '',
-        confirmLabel: opts.confirmLabel ?? 'Confirmer',
-        cancelLabel: opts.cancelLabel ?? 'Annuler',
+        confirmLabel: opts.confirmLabel ?? t('confirm'),
+        cancelLabel: opts.cancelLabel ?? t('cancel'),
         variant: opts.variant ?? 'default',
       });
     });
-  }, []);
+  }, [t]);
 
   const value = useMemo(() => ({ confirm }), [confirm]);
 
@@ -42,14 +44,14 @@ export function ConfirmProvider({ children }) {
         footer={
           <>
             <Button type="button" variant="ghost" onClick={() => close(false)}>
-              {state?.cancelLabel ?? 'Annuler'}
+              {state?.cancelLabel ?? t('cancel')}
             </Button>
             <Button
               type="button"
               variant={state?.variant === 'danger' ? 'danger' : 'primary'}
               onClick={() => close(true)}
             >
-              {state?.confirmLabel ?? 'Confirmer'}
+              {state?.confirmLabel ?? t('confirm')}
             </Button>
           </>
         }

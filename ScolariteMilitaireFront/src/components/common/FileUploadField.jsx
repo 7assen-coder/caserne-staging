@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Upload, X, FileCheck } from 'lucide-react';
+import { compressUploadFile } from '../../utils/compressUpload';
 import { validateUploadFile } from '../../utils/fileValidation';
 
 /**
@@ -28,14 +29,24 @@ export default function FileUploadField({
     }
     setChecking(true);
     try {
+      let next = file;
+      if (!validateFn) {
+        const compressed = await compressUploadFile(file, kind);
+        if (!compressed.ok) {
+          setError(compressed.message);
+          if (ref.current) ref.current.value = '';
+          return;
+        }
+        next = compressed.file;
+      }
       const validator = validateFn ?? ((f) => validateUploadFile(f, kind));
-      const result = await validator(file);
+      const result = await validator(next);
       if (!result.ok) {
         setError(result.message);
         if (ref.current) ref.current.value = '';
         return;
       }
-      onChange?.(file);
+      onChange?.(next);
     } finally {
       setChecking(false);
     }

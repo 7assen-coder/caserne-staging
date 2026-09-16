@@ -1,6 +1,33 @@
-import { useRef, useState } from 'react';
-import { CloudUpload, FileCheck, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CloudUpload, FileCheck, Loader2, Upload, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { compressUploadFile } from '../../utils/compressUpload';
 import { validateUploadFile } from '../../utils/fileValidation';
+
+function resolveValueUrl(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'object' && typeof value.url === 'string') return value.url.trim();
+  return '';
+}
+
+function isImageUrl(url, kind) {
+  if (kind === 'photo') return true;
+  return /\.(jpe?g|png|webp|gif|bmp)(\?|$)/i.test(url);
+}
+
+function displayName(value) {
+  if (value instanceof File) return value.name;
+  const url = resolveValueUrl(value);
+  if (!url) return String(value ?? '');
+  try {
+    const path = url.split('?')[0];
+    const part = path.split('/').pop();
+    return decodeURIComponent(part || path);
+  } catch {
+    return url;
+  }
+}
 
 export default function CloudUploadZone({
   label,
@@ -12,9 +39,29 @@ export default function CloudUploadZone({
   kind = 'document',
   variant = 'dark',
 }) {
+  const { t } = useTranslation('eleves');
   const ref = useRef(null);
   const [drag, setDrag] = useState(false);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [objectUrl, setObjectUrl] = useState('');
+
+  const existingUrl = useMemo(() => {
+    if (value instanceof File) return '';
+    return resolveValueUrl(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!(value instanceof File) || !value.type?.startsWith('image/')) {
+      setObjectUrl('');
+      return undefined;
+    }
+    const url = URL.createObjectURL(value);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [value]);
+
+  const previewSrc = objectUrl || (existingUrl && isImageUrl(existingUrl, kind) ? existingUrl : '');
 
   const pick = async (file) => {
     setError('');
@@ -22,13 +69,24 @@ export default function CloudUploadZone({
       onChange(null);
       return;
     }
-    const result = await validateUploadFile(file, kind);
-    if (!result.ok) {
-      setError(result.message);
-      if (ref.current) ref.current.value = '';
-      return;
+    setBusy(true);
+    try {
+      const compressed = await compressUploadFile(file, kind);
+      if (!compressed.ok) {
+        setError(compressed.message);
+        if (ref.current) ref.current.value = '';
+        return;
+      }
+      const result = await validateUploadFile(compressed.file, kind);
+      if (!result.ok) {
+        setError(result.message);
+        if (ref.current) ref.current.value = '';
+        return;
+      }
+      onChange(compressed.file);
+    } finally {
+      setBusy(false);
     }
-    onChange(file);
   };
 
   const isLight = variant === 'light';
@@ -46,36 +104,42 @@ export default function CloudUploadZone({
     : 'scale-[1.01] border-gold/70 bg-gold/[0.12] shadow-[0_0_40px_rgba(253,185,19,0.2)]';
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative min-w-0 ${className}`}>
       <input
         ref={ref}
         type="file"
         accept={accept}
         className="hidden"
+        disabled={busy}
         onChange={(e) => pick(e.target.files?.[0] ?? null)}
       />
       <div
         role="button"
         tabIndex={0}
+        aria-busy={busy || undefined}
         onKeyDown={(e) => {
+          if (busy) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             ref.current?.click();
           }
         }}
-        onClick={() => ref.current?.click()}
+        onClick={() => {
+          if (!busy) ref.current?.click();
+        }}
         onDragOver={(e) => {
           e.preventDefault();
-          setDrag(true);
+          if (!busy) setDrag(true);
         }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          pick(e.dataTransfer.files?.[0]);
+          if (!busy) pick(e.dataTransfer.files?.[0]);
         }}
         className={`
-          group relative flex min-h-[9.5rem] w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border px-3 py-4 text-center transition-all duration-300
+          group relative flex min-h-[9.5rem] w-full min-w-0 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border px-3 py-4 text-center transition-all duration-300
+          ${busy ? 'pointer-events-none opacity-80' : ''}
           ${drag ? dragClasses : ''}
           ${value && !drag ? filledClasses : ''}
           ${!value && !drag ? idleClasses : ''}
@@ -94,19 +158,46 @@ export default function CloudUploadZone({
           </>
         ) : null}
 
-        {value ? (
+        {busy ? (
           <>
-            <FileCheck
-              className={`relative z-10 h-9 w-9 shrink-0 ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}
-              strokeWidth={1.85}
+            <Loader2
+              className={`relative z-10 h-8 w-8 shrink-0 animate-spin ${isLight ? 'text-navy' : 'text-gold'}`}
               aria-hidden
             />
-            <span className={`relative z-10 text-sm font-semibold ${isLight ? 'text-emerald-900' : 'text-emerald-100'}`}>
+            <span className={`relative z-10 break-words px-1 text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>
+              {t('optimisationEnCours')}
+            </span>
+          </>
+        ) : value ? (
+          <>
+            {previewSrc ? (
+              <img
+                src={previewSrc}
+                alt=""
+                className="relative z-10 h-16 w-16 rounded-lg object-cover ring-1 ring-black/10"
+              />
+            ) : (
+              <FileCheck
+                className={`relative z-10 h-9 w-9 shrink-0 ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}
+                strokeWidth={1.85}
+                aria-hidden
+              />
+            )}
+            <span className={`relative z-10 break-words px-1 text-sm font-semibold ${isLight ? 'text-emerald-900' : 'text-emerald-100'}`}>
               {label}
             </span>
             <span className={`relative z-10 max-w-full truncate px-1 text-xs ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
-              {value instanceof File ? value.name : String(value)}
+              {value instanceof File
+                ? value.name
+                : existingUrl
+                  ? t('fichierEnregistre')
+                  : displayName(value)}
             </span>
+            {existingUrl && !(value instanceof File) ? (
+              <span className={`relative z-10 max-w-full truncate px-1 text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                {displayName(value)}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={(e) => {
@@ -121,7 +212,7 @@ export default function CloudUploadZone({
               }`}
             >
               <X size={12} strokeWidth={2.5} aria-hidden />
-              Retirer
+              {t('retirer')}
             </button>
           </>
         ) : (
@@ -135,22 +226,22 @@ export default function CloudUploadZone({
             >
               <CloudUpload className="h-5 w-5 text-gold" strokeWidth={1.85} aria-hidden />
             </div>
-            <span className={`relative z-10 text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>
+            <span className={`relative z-10 break-words px-1 text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>
               {label}
             </span>
             <span
-              className={`relative z-10 flex max-w-[16rem] items-center justify-center gap-1.5 text-[11px] leading-snug ${
+              className={`relative z-10 flex max-w-full items-center justify-center gap-1.5 break-words px-1 text-[11px] leading-snug ${
                 isLight ? 'text-text-light' : 'text-slate-400'
               }`}
             >
               <Upload className="h-3.5 w-3.5 shrink-0 text-gold/75" aria-hidden />
-              {hint ?? 'Glisser-déposer ou cliquer · PDF, JPG, PNG'}
+              {hint ?? t('glisserDeposer')}
             </span>
           </>
         )}
       </div>
       {error ? (
-        <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700">
+        <p className="mt-2 break-words rounded-md border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700">
           {error}
         </p>
       ) : null}

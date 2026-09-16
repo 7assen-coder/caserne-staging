@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function FullScreenLayer({
   open,
@@ -12,6 +13,8 @@ export default function FullScreenLayer({
   className = '',
   contentClassName = '',
 }) {
+  const { t } = useTranslation(['common', 'a11y']);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === 'Escape' && onClose?.();
@@ -31,14 +34,14 @@ export default function FullScreenLayer({
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
-        aria-label="Fermer"
+        aria-label={t('a11y:closeDialog')}
         onClick={onClose}
       />
       <div
         className={`relative h-full w-full overflow-hidden bg-white shadow-pop ring-1 ring-light-gray ${className}`}
         role="dialog"
         aria-modal
-        aria-label={title || 'Fenêtre'}
+        aria-label={title || t('a11y:closeDialog')}
       >
         {chrome ? (
           <>
@@ -50,8 +53,8 @@ export default function FullScreenLayer({
               <button
                 type="button"
                 onClick={onClose}
-                className="-mr-2 -mt-2 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-light-gray bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Fermer"
+                className="-me-2 -mt-2 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-light-gray bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label={t('common:close')}
               >
                 <X size={20} />
               </button>
@@ -73,4 +76,3 @@ export default function FullScreenLayer({
     </div>
   );
 }
-

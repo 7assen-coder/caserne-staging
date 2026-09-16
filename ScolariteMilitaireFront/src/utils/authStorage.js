@@ -1,32 +1,42 @@
-const TOKEN_KEY = 'esp_token';
 const REMEMBER_KEY = 'esp_remember_me';
+const LEGACY_TOKEN_KEY = 'esp_token';
 
-export function getAccessToken() {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
-}
-
-export function setAccessToken(token, rememberMe = true) {
+/** Wipe legacy JWT copies from browser storage (XSS surface). */
+export function clearLegacyTokens() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-  if (rememberMe) {
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(REMEMBER_KEY, '1');
-  } else {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(REMEMBER_KEY);
+  try {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    /* ignore */
   }
 }
 
 export function clearAccessToken() {
+  clearLegacyTokens();
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REMEMBER_KEY);
+  try {
+    localStorage.removeItem(REMEMBER_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setRememberMePreference(rememberMe = true) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (rememberMe) localStorage.setItem(REMEMBER_KEY, '1');
+    else localStorage.removeItem(REMEMBER_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isRememberMeSession() {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem(REMEMBER_KEY) === '1';
+  try {
+    return localStorage.getItem(REMEMBER_KEY) === '1';
+  } catch {
+    return false;
+  }
 }

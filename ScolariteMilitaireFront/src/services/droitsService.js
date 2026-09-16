@@ -1,16 +1,12 @@
 import { eleveService } from './eleveService';
+import { apiPaths } from './apiPaths';
 import {
   defaultMontantForCompagnie,
   resolveEleveCompagnie,
 } from '../data/droitsCatalog';
-import {
-  getBatchMeta,
-  getLignesForBatch,
-  setBatchDefaultMontant,
-  unlockBatch,
-  upsertManyLignes,
-  validateBatch,
-} from '../utils/droitsStore';
+import { apiPatch, apiPost, notifyChanged, withExpectedVersion } from '../utils/opsApi';
+
+export const DROITS_CHANGED = 'esp-droits-changed';
 
 function normalizeEleve(eleve) {
   return {
@@ -20,22 +16,6 @@ function normalizeEleve(eleve) {
       section: eleve.section ?? '',
     },
   };
-}
-
-function studentsForCompagnie(eleves, compagnie) {
-  return eleves.filter((e) => resolveEleveCompagnie(e) === compagnie);
-}
-
-async function listElevesForDroits() {
-  let eleves = [];
-  try {
-    eleves = (await eleveService.list({})) ?? [];
-  } catch {
-    eleves = [];
-  }
-
-  eleves = eleves.map(normalizeEleve);
-  return eleves;
 }
 
 function toRow(eleve, ligne, defaultMontant) {
@@ -52,52 +32,108 @@ function toRow(eleve, ligne, defaultMontant) {
     etat: ligne?.etat === 'percu' ? 'percu' : 'non_percu',
     remarques: ligne?.remarques ?? '',
     ligneId: ligne?.id ?? null,
+    rowVersion: ligne?.row_version ?? 1,
   };
 }
 
 export const droitsService = {
   async loadBatch(annee, mois, compagnie) {
-    const eleves = await listElevesForDroits();
-
-    const meta = getBatchMeta(annee, mois, compagnie);
-    const defaultMontant = meta.defaultMontant ?? defaultMontantForCompagnie(compagnie);
-    const lignes = getLignesForBatch(annee, mois, compagnie);
-    const ligneByEleve = Object.fromEntries(lignes.map((l) => [String(l.eleveId), l]));
-
-    const compagnieEleves = studentsForCompagnie(eleves, compagnie);
+    const eleves = ((await eleveService.listAllPages({})) ?? []).map(normalizeEleve);
+    const batch = await apiPost(apiPaths.droits.assurer, {
+      annee: Number(annee),
+      mois: Number(mois),
+      compagnie,
+      default_montant: defaultMontantForCompagnie(compagnie),
+    });
+    await apiPost(apiPaths.droits.seed(batch.id), {});
+    const refreshed = await apiPost(apiPaths.droits.assurer, {
+      annee: Number(annee),
+      mois: Number(mois),
+      compagnie,
+    });
+    const defaultMontant = Number(refreshed.default_montant ?? defaultMontantForCompagnie(compagnie));
+    const lignes = refreshed.lignes ?? [];
+    const ligneByEleve = Object.fromEntries(lignes.map((l) => [String(l.eleve), l]));
+    const compagnieEleves = eleves.filter((e) => resolveEleveCompagnie(e) === compagnie);
     const rows = compagnieEleves
       .map((e) => toRow(e, ligneByEleve[String(e.id)], defaultMontant))
-      .sort((a, b) => {
-        const nameA = `${a.nom ?? ''} ${a.prenom ?? ''}`.trim();
-        const nameB = `${b.nom ?? ''} ${b.prenom ?? ''}`.trim();
-        return nameA.localeCompare(nameB, 'fr');
-      });
+      .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr'));
 
     return {
       annee: Number(annee),
       mois: Number(mois),
       compagnie,
-      validated: Boolean(meta.validatedAt),
-      validatedAt: meta.validatedAt ?? null,
+      batchId: refreshed.id,
+      validated: Boolean(refreshed.validated_at),
+      validatedAt: refreshed.validated_at ?? null,
       defaultMontant,
+      batchRowVersion: refreshed.row_version ?? 1,
       rows,
     };
   },
 
-  saveAll(annee, mois, compagnie, rows) {
-    upsertManyLignes(annee, mois, compagnie, rows);
+  async saveAll(annee, mois, compagnie, rows, batchId) {
+    let id = batchId;
+    if (!id) {
+      const batch = await this.loadBatch(annee, mois, compagnie);
+      id = batch.batchId;
+    }
+    await Promise.all(
+      (rows ?? []).map(async (row) => {
+        if (row.ligneId) {
+          await apiPatch(
+            apiPaths.droits.ligne(row.ligneId),
+            withExpectedVersion(
+              {
+                montant: row.montant,
+                etat: row.etat,
+                remarques: row.remarques ?? '',
+              },
+              row.rowVersion,
+            ),
+          );
+        } else {
+          await apiPost(apiPaths.droits.lignes, {
+            batch: id,
+            eleve: row.eleveId,
+            montant: row.montant,
+            etat: row.etat,
+            remarques: row.remarques ?? '',
+          });
+        }
+      }),
+    );
+    notifyChanged(DROITS_CHANGED);
   },
 
-  validate(annee, mois, compagnie, rows) {
-    upsertManyLignes(annee, mois, compagnie, rows);
-    return validateBatch(annee, mois, compagnie);
+  async validate(annee, mois, compagnie, rows, batchId) {
+    await this.saveAll(annee, mois, compagnie, rows, batchId);
+    const batch = batchId
+      ? { id: batchId }
+      : await apiPost(apiPaths.droits.assurer, { annee, mois, compagnie });
+    await apiPost(apiPaths.droits.valider(batch.id), {});
+    notifyChanged(DROITS_CHANGED);
   },
 
-  unlock(annee, mois, compagnie) {
-    return unlockBatch(annee, mois, compagnie);
+  async unlock(annee, mois, compagnie, batchId) {
+    const batch = batchId
+      ? { id: batchId }
+      : await apiPost(apiPaths.droits.assurer, { annee, mois, compagnie });
+    await apiPost(apiPaths.droits.unlock(batch.id), {});
+    notifyChanged(DROITS_CHANGED);
   },
 
-  setDefaultMontant(annee, mois, compagnie, montant) {
-    return setBatchDefaultMontant(annee, mois, compagnie, montant);
+  async setDefaultMontant(annee, mois, compagnie, montant, batchId, batchRowVersion) {
+    const batch = batchId
+      ? { id: batchId, row_version: batchRowVersion }
+      : await apiPost(apiPaths.droits.assurer, { annee, mois, compagnie });
+    await apiPatch(
+      `/droits/batches/${batch.id}/`,
+      withExpectedVersion(
+        { default_montant: montant },
+        batchRowVersion ?? batch.row_version,
+      ),
+    );
+    notifyChanged(DROITS_CHANGED);
   },
 };

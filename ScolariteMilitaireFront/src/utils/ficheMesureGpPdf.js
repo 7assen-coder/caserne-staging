@@ -1,52 +1,41 @@
 /**
- * Fiche mesure GP — fond officiel (template-bg.jpg) + valeurs dynamiques uniquement.
- * Le visuel (logo GP, diagrammes, bordures, « …… CM ») provient du modèle officiel.
+ * Fiche mesure GP — composed PDF (no template-bg overlay).
  */
 import { jsPDF } from 'jspdf';
 import { saveAs } from './saveAsFile.js';
 import { sanitizeExportText } from './etudiantsListExport';
+import {
+  FICHE_MESURE_LAYOUT,
+  MEASURE_KEYS,
+  LOGO_PATH,
+} from './ficheMesureLayout.js';
+import { renderFicheMesurePage } from './ficheMesureRender.js';
+import { INSTITUTION } from '../data/institution.js';
+import { formatSectionLabel } from './eleveScolariteAuto.js';
+
+export { renderFicheMesurePage } from './ficheMesureRender.js';
 
 const BASE = import.meta.env.BASE_URL;
-const TEMPLATE_BG = 'fiche-mesure/template-bg.jpg';
-const NAVY = [15, 27, 51];
+const imageCache = new Map();
 
-/** Positions en mm (A4 210×297) calibrées sur « Fiche mesure GP.pdf » officiel. */
-const LAYOUT = {
-  header: {
-    nom: { x: 23, y: 71, size: 10 },
-    date: { x: 133, y: 71, size: 10 },
-    prenom: { x: 23, y: 79.5, size: 10 },
-    grade: { x: 115, y: 79.5, size: 9 },
-  },
-  measurements: {
-    tailleCm: { xEnd: 53, y: 124, size: 9 },
-    tourPoitrine: { xEnd: 124, y: 101, size: 9 },
-    tourCeinture: { xEnd: 193, y: 101, size: 9 },
-    tourTaille: { xEnd: 124, y: 124, size: 9 },
-    tourBassin: { xEnd: 193, y: 124, size: 9 },
-    tourCou: { xEnd: 53, y: 162, size: 9 },
-    longueurManche: { xEnd: 124, y: 162, size: 9 },
-    longueurDos: { xEnd: 193, y: 162, size: 9 },
-    pointure: { xEnd: 53, y: 213, size: 9, gapBeforeSuffix: 2 },
-    longueurCote: { xEnd: 124, y: 213, size: 9 },
-  },
-};
-
-let bgCache = null;
-
-async function loadTemplateBackground() {
-  if (bgCache) return bgCache;
-  const res = await fetch(`${BASE}${TEMPLATE_BG}`);
-  if (!res.ok) {
-    throw new Error('Modèle « Fiche mesure GP » introuvable (fiche-mesure/template-bg.jpg).');
+async function loadImageDataUrl(relPath, loader) {
+  if (imageCache.has(relPath)) return imageCache.get(relPath);
+  let dataUrl;
+  if (loader) {
+    dataUrl = await loader(relPath);
+  } else {
+    const res = await fetch(`${BASE}${relPath}`);
+    if (!res.ok) throw new Error(`Asset introuvable : ${relPath}`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < buf.length; i += 8192) {
+      binary += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
+    }
+    const mime = relPath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    dataUrl = `data:${mime};base64,${btoa(binary)}`;
   }
-  const buf = new Uint8Array(await res.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < buf.length; i += 8192) {
-    binary += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
-  }
-  bgCache = `data:image/jpeg;base64,${btoa(binary)}`;
-  return bgCache;
+  imageCache.set(relPath, dataUrl);
+  return dataUrl;
 }
 
 function safe(v) {
@@ -65,50 +54,12 @@ function formatMeasure(v) {
 }
 
 function buildGrade(compagnie, section) {
-  return [safe(compagnie), safe(section)].filter(Boolean).join(' · ');
+  return [safe(compagnie), safe(formatSectionLabel(section, compagnie))].filter(Boolean).join(' · ');
 }
 
-function drawField(doc, text, { x, y, size }) {
-  const value = safe(text);
-  if (!value) return;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(size);
-  doc.setTextColor(...NAVY);
-  doc.text(value, x, y);
-  doc.setTextColor(0, 0, 0);
-}
-
-/** Valeur seule, alignée à droite juste avant « CM » déjà imprimé sur le fond. */
-function drawMeasureValue(doc, text, { xEnd, y, size, gapBeforeSuffix = 7 }) {
-  const value = formatMeasure(text);
-  if (!value) return;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(size);
-  doc.setTextColor(...NAVY);
-  const w = doc.getTextWidth(value);
-  doc.text(value, xEnd - w - gapBeforeSuffix, y);
-  doc.setTextColor(0, 0, 0);
-}
-
-/**
- * Génère et télécharge la fiche mesure préremplie.
- * @param {{ eleve?: object, mensurations?: object, taille?: string|number, poids?: string|number }} opts
- */
-export async function downloadFicheMesureGp({ eleve, mensurations, taille, poids } = {}) {
+function collectMeasures({ eleve, mensurations, taille, poids }) {
   const m = mensurations || eleve?.dossierMilitaire || {};
-  const compagnie = m.compagnie ?? eleve?.compagnie;
-  const section = m.section ?? eleve?.section;
-
-  const bg = await loadTemplateBackground();
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  doc.addImage(bg, 'JPEG', 0, 0, 210, 297);
-
-  drawField(doc, eleve?.nom, LAYOUT.header.nom);
-  drawField(doc, eleve?.prenom, LAYOUT.header.prenom);
-  drawField(doc, new Date().toLocaleDateString('fr-FR'), LAYOUT.header.date);
-  drawField(doc, buildGrade(compagnie, section), LAYOUT.header.grade);
-
-  const measures = {
+  return {
     tailleCm: taille ?? eleve?.sante?.tailleCm,
     tourPoitrine: m.tourPoitrine,
     tourCeinture: m.tourCeinture,
@@ -119,21 +70,72 @@ export async function downloadFicheMesureGp({ eleve, mensurations, taille, poids
     longueurDos: m.longueurDos,
     longueurCote: m.longueurCote,
     pointure: m.pointure,
+    poids: poids ?? eleve?.sante?.poids,
   };
-
-  for (const [key, pos] of Object.entries(LAYOUT.measurements)) {
-    drawMeasureValue(doc, measures[key], pos);
-  }
-
-  void poids;
-
-  const mat = safe(eleve?.matricule) || 'etudiant';
-  saveAs(doc.output('blob'), `fiche-mesure-${mat}.pdf`);
 }
 
-/** Alias conservé pour le formulaire (étape militaire). */
+/**
+ * @param {{ eleve?: object, mensurations?: object, taille?: string|number, poids?: string|number }} opts
+ * @param {{ loadImage?: (path: string) => Promise<string> }} [io]
+ */
+export async function buildFicheMesureGpBlob(opts = {}, io = {}) {
+  const m = opts.mensurations || opts.eleve?.dossierMilitaire || {};
+  const compagnie = m.compagnie ?? opts.eleve?.compagnie;
+  const section = m.section ?? opts.eleve?.section;
+  const measures = collectMeasures(opts);
+
+  const measuresFmt = {};
+  for (const key of MEASURE_KEYS) {
+    const v = measures[key];
+    if (v == null || String(v).trim() === '') continue;
+    measuresFmt[key] = formatMeasure(v);
+  }
+
+  const loader = io.loadImage;
+  const logo = await loadImageDataUrl(LOGO_PATH, loader);
+  /** @type {Record<string, string>} */
+  const diagrams = {};
+  await Promise.all(
+    FICHE_MESURE_LAYOUT.measureCards.map(async (card) => {
+      try {
+        diagrams[card.key] = await loadImageDataUrl(card.diagram, loader);
+      } catch {
+        // optional
+      }
+    }),
+  );
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  renderFicheMesurePage(
+    doc,
+    {
+      nom: opts.eleve?.nom,
+      prenom: opts.eleve?.prenom,
+      date: new Date().toLocaleDateString('fr-FR'),
+      grade: buildGrade(compagnie, section),
+      corps: INSTITUTION.nomCourt,
+      measures: measuresFmt,
+    },
+    { logo, diagrams },
+  );
+
+  return doc.output('blob');
+}
+
+export async function downloadFicheMesureGp(opts = {}) {
+  const blob = await buildFicheMesureGpBlob(opts);
+  const mat = safe(opts.eleve?.matricule) || 'etudiant';
+  saveAs(blob, `fiche-mesure-${mat}.pdf`);
+}
+
 export async function generateFicheTaillesPdf(opts) {
   return downloadFicheMesureGp(opts);
 }
 
-export { parseFicheTaillesText } from './ficheTaillesParse';
+export { parseFicheTaillesText } from './ficheTaillesParse.js';
+export {
+  FICHE_MESURE_LAYOUT,
+  parseMesuresPayload,
+  encodeMesuresPayload,
+  MEASURE_KEYS,
+} from './ficheMesureLayout.js';

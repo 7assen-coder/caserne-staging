@@ -10,28 +10,131 @@ services:
     ports:
       - "5433:5432"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # Phase 23 — S3-compatible durable media (private bucket)
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minio}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minio} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb -p local/$${AWS_STORAGE_BUCKET_NAME:-polyspace-media} || true;
+      mc anonymous set none local/$${AWS_STORAGE_BUCKET_NAME:-polyspace-media} || true;
+      exit 0;
+      "
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minio}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # Use Gunicorn WSGI server for production instead of Django's runserver
-    command: "gunicorn backend.wsgi:application --bind 0.0.0.0:8080 --workers 3"
+    # Phase 19 — env-driven workers (override via GUNICORN_*)
+    command: ["/code/gunicorn.sh"]
     volumes:
       - media_data:/code/media
     ports:
       - "8000:8080"
+    env_file:
+      - ./backend/.env
     environment:
+      # SECRET_KEY / DEBUG come from backend/.env (required — no insecure defaults)
       # Override at deploy: ALLOWED_HOSTS=<PUBLIC_IP>,localhost,127.0.0.1,backend
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY:-esp-demo-change-me-oracle-hassen-2026}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - DJANGO_ENV=${DJANGO_ENV:-local}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=esp
       - DB_USER=esp
       - DB_PASSWORD=esp
+      - CONN_MAX_AGE=${CONN_MAX_AGE:-60}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-2}
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.resend.com}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-resend}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-Polyspace <noreply@polyspace.mr>}
+      - PLATFORM_NAME=${PLATFORM_NAME:-Polyspace}
+      - USE_S3_MEDIA=${USE_S3_MEDIA:-true}
+      - MEDIA_DELIVERY=${MEDIA_DELIVERY:-stream}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minio}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
+      - AWS_S3_ADDRESSING_STYLE=path
     depends_on:
       - db
+      - redis
+      - minio-init
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: "celery -A backend worker -l info --concurrency=${CELERY_CONCURRENCY:-2}"
+    volumes:
+      - media_data:/code/media
+    env_file:
+      - ./backend/.env
+    environment:
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - DJANGO_ENV=${DJANGO_ENV:-local}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=esp
+      - DB_USER=esp
+      - DB_PASSWORD=esp
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.resend.com}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-resend}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-Polyspace <noreply@polyspace.mr>}
+      - PLATFORM_NAME=${PLATFORM_NAME:-Polyspace}
+      - USE_S3_MEDIA=${USE_S3_MEDIA:-true}
+      - MEDIA_DELIVERY=${MEDIA_DELIVERY:-stream}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minio}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-polyspace-media}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://minio:9000}
+      - AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
+      - AWS_S3_ADDRESSING_STYLE=path
+    depends_on:
+      - db
+      - redis
+      - backend
+      - minio-init
 
   frontend:
     build:
@@ -40,6 +143,7 @@ services:
       args:
         NGINX_CONF: nginx.compose.conf
     volumes:
+      # Only used when MEDIA_DELIVERY=xaccel (local disk). With MinIO/stream, unused.
       - media_data:/usr/share/nginx/media:ro
     ports:
       - "9081:80"
@@ -49,3 +153,4 @@ services:
 volumes:
   pg_data:
   media_data:
+  minio_data:

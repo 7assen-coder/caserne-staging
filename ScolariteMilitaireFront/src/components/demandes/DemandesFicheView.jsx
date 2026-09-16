@@ -9,6 +9,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import Button from '../common/Button';
+import LoadingBlock from '../common/LoadingBlock';
+import QueryErrorPanel from '../common/QueryErrorPanel';
 import DemandeItemForm from './DemandeItemForm';
 import DemandePdfCell from './DemandePdfCell';
 import DemandeStatutBadge from './DemandeStatutBadge';
@@ -19,6 +21,7 @@ import { initials } from '../../utils/formatters';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { humanizeError } from '../../utils/apiErrors';
+import { useVersionConflict } from '../../hooks/useVersionConflict';
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -49,12 +52,14 @@ function MiniStat({ label, value, accent }) {
 export default function DemandesFicheView({
   dossier,
   loading,
+  error = null,
   onBack,
   onRefresh,
   canEdit = true,
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const { capture, modal: versionModal } = useVersionConflict({ onReload: onRefresh });
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -89,12 +94,16 @@ export default function DemandesFicheView({
     if (!editItem?.id) return;
     setBusy('edit');
     try {
-      await demandeService.updateDemande(editItem.id, payload, files);
+      await demandeService.updateDemande(
+        editItem.id,
+        { ...payload, rowVersion: editItem.rowVersion },
+        files,
+      );
       toast.success('Demande mise à jour.');
       setEditItem(null);
       await onRefresh?.();
     } catch (err) {
-      toast.error(humanizeError(err));
+      if (!capture(err)) toast.error(humanizeError(err));
       throw err;
     } finally {
       setBusy(null);
@@ -113,26 +122,27 @@ export default function DemandesFicheView({
       if (!ok) return;
       setBusy(item.id);
       try {
-        demandeService.deleteDemande(item.id);
+        await demandeService.deleteDemande(item.id, item.rowVersion);
         toast.success('Demande supprimée.');
         await onRefresh?.();
       } catch (err) {
-        toast.error(humanizeError(err));
+        if (!capture(err)) toast.error(humanizeError(err));
       } finally {
         setBusy(null);
       }
     },
-    [confirm, toast, onRefresh],
+    [confirm, toast, onRefresh, capture],
   );
 
   const handlePdfUpdate = async (itemId, field, file) => {
+    const item = demandes.find((d) => String(d.id) === String(itemId));
     setPdfBusy(`${itemId}-${field}`);
     try {
-      await demandeService.updateDemandePdf(itemId, field, file);
+      await demandeService.updateDemandePdf(itemId, field, file, item?.rowVersion);
       toast.success('PDF enregistré.');
       await onRefresh?.();
     } catch (err) {
-      toast.error(humanizeError(err));
+      if (!capture(err)) toast.error(humanizeError(err));
     } finally {
       setPdfBusy(null);
     }
@@ -152,14 +162,43 @@ export default function DemandesFicheView({
 
   if (loading && !eleve?.id) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-slate-500">
-        Chargement du dossier demandes…
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-navy"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Retour au registre
+        </button>
+        <LoadingBlock label="Chargement du dossier demandes…" />
+      </div>
+    );
+  }
+
+  if (error || (!loading && !eleve?.id)) {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-navy"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Retour au registre
+        </button>
+        <QueryErrorPanel
+          error={error ?? new Error('Fiche introuvable')}
+          title="Impossible de charger la fiche demandes."
+          onRetry={onRefresh}
+        />
       </div>
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-8">
+      {versionModal}
       <button
         type="button"
         onClick={onBack}

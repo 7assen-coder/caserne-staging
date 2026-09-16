@@ -26,8 +26,9 @@ COPY . /code/
 
 # 7. Set the entrypoint
 COPY entrypoint.sh /code/
-RUN chmod +x /code/entrypoint.sh
+COPY gunicorn.sh /code/
+RUN chmod +x /code/entrypoint.sh /code/gunicorn.sh /code/docker/test-entrypoint.sh
 ENTRYPOINT ["/code/entrypoint.sh"]
 
-# Render injects PORT; local/docker-compose can override the command
-CMD ["sh", "-c", "gunicorn backend.wsgi:application --bind 0.0.0.0:${PORT:-8080} --workers 3"]
+# Render injects PORT; override workers via GUNICORN_* env (VPS: 9/2)
+CMD ["/code/gunicorn.sh"]

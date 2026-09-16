@@ -1,0 +1,6 @@
+{
+  "generic": "Une erreur est survenue.",
+  "network": "Impossible de joindre le serveur. Vérifiez votre connexion internet.",
+  "timeout": "La requête a pris trop de temps. Réessayez.",
+  "forbidden": "Accès refusé."
+}

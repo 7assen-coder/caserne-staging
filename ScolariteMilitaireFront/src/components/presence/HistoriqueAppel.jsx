@@ -2,19 +2,24 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import Badge from '../common/Badge';
+import QueryErrorPanel from '../common/QueryErrorPanel';
+import LoadingBlock from '../common/LoadingBlock';
+import EmptyState from '../common/EmptyState';
 import ResultatAppel from './ResultatAppel';
 import PresenceExportMenu from './PresenceExportMenu';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { presenceService } from '../../services/presenceService';
 import { SECTIONS, TYPES_RASSEMBLEMENT, STATUT_LABEL } from '../../utils/constants';
 import { formatDateTime } from '../../utils/formatters';
-import { PRESENCE_CHANGED } from '../../utils/presenceStore';
+import { PRESENCE_CHANGED } from '../../services/presenceService';
 import {
   exportPresenceHistoriqueExcel,
   exportPresenceHistoriquePdf,
 } from '../../utils/presenceListExport';
 import { useToast } from '../../context/ToastContext';
 import { humanizeError } from '../../utils/apiErrors';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 
 function filtersSummary(filters) {
   const parts = [];
@@ -33,25 +38,29 @@ export default function HistoriqueAppel({
   const filters = controlledFilters ?? localFilters;
   const setFilters = onFiltersChange ?? setLocalFilters;
   const [selectedId, setSelectedId] = useState(null);
-  const [key, setKey] = useState(0);
   const [exportBusy, setExportBusy] = useState(null);
   const toast = useToast();
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    const refresh = () => setKey((k) => k + 1);
+    const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.presence.all });
     window.addEventListener(PRESENCE_CHANGED, refresh);
     return () => window.removeEventListener(PRESENCE_CHANGED, refresh);
-  }, []);
+  }, [queryClient]);
 
-  const { data, loading } = useFetch(
-    () => presenceService.list(filters),
-    [filters.section, filters.type, filters.q, key, refreshKey],
-  );
+  const enabled = bootstrapped && isAuthenticated;
+  const { data, isPending: loading, error, refetch, isError } = useQuery({
+    queryKey: [...queryKeys.presence.historique(filters), refreshKey],
+    queryFn: () => presenceService.list(filters),
+    enabled,
+  });
 
-  const { data: selectedAppel } = useFetch(
-    () => (selectedId ? presenceService.get(selectedId) : Promise.resolve(null)),
-    [selectedId, key, refreshKey],
-  );
+  const { data: selectedAppel } = useQuery({
+    queryKey: [...queryKeys.presence.appel(selectedId), refreshKey],
+    queryFn: () => presenceService.get(selectedId),
+    enabled: enabled && !!selectedId,
+  });
 
   const appels = data ?? [];
   const ligneCount = appels.reduce((n, a) => n + (a.detail?.length ?? a.total ?? 0), 0);
@@ -149,17 +158,27 @@ export default function HistoriqueAppel({
           <span>Statut</span>
         </div>
 
-        {loading ? (
-          <div className="animate-pulse px-5 py-8">
-            <div className="h-10 rounded bg-slate-100" />
+        {isError ? (
+          <div className="p-4">
+            <QueryErrorPanel
+              error={error}
+              title="Impossible de charger l’historique des appels."
+              onRetry={() => refetch()}
+            />
           </div>
         ) : null}
 
-        {!loading && appels.length === 0 ? (
-          <p className="px-6 py-12 text-center text-sm text-slate-500">
-            Aucun appel enregistré. Lancez un premier appel depuis l’onglet « Lancer un appel ».
-          </p>
-        ) : (
+        {loading ? <LoadingBlock label="Chargement de l’historique…" /> : null}
+
+        {!loading && !isError && appels.length === 0 ? (
+          <EmptyState
+            reason="empty"
+            title="Aucun appel enregistré"
+            description="Lancez un premier appel depuis l’onglet « Lancer un appel »."
+          />
+        ) : null}
+
+        {!loading && !isError && appels.length > 0 ? (
           <ul className="divide-y divide-slate-100">
             {appels.map((row) => (
               <li key={row.id}>
@@ -190,7 +209,7 @@ export default function HistoriqueAppel({
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </div>
     </div>
   );

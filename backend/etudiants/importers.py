@@ -29,7 +29,7 @@ VALID_NIVEAU    = {'3', '4', '4-DD', '4-E', '5-DD'}
 DEPT_MAP = {
     # codes directs
     'IRT': 'IRT', 'SID': 'SID', 'GE': 'GE',
-    'GM': 'GM', 'GC': 'GC', 'GC-HE': 'GC-HE', 'MPG': 'MPG',
+    'GM': 'GM', 'GC': 'GC-HE', 'GC-HE': 'GC-HE', 'MPG': 'MPG',
     # noms longs (normalisés sans accents)
     'INFORMATIQUE RESEAUX ET TELECOMMUNICATIONS': 'IRT',
     'INFORMATIQUE RESEAU ET TELECOMMUNICATION': 'IRT',
@@ -47,9 +47,9 @@ DEPT_MAP = {
 NIVEAU_ALIASES = {
     '3E ANNEE': '3', '3EME': '3', '3': '3',
     '4E ANNEE': '4', '4EME': '4', '4': '4',
-    '4E ANNEE DOUBLE DIPLOME': '4-DD', '4DD': '4-DD', '4-DD': '4-DD',
-    '4E ANNEE ECHANGE': '4-E', '4E': '4-E', '4-E': '4-E',
-    '5E ANNEE DOUBLE DIPLOME': '5-DD', '5DD': '5-DD', '5-DD': '5-DD',
+    '4E ANNEE DOUBLE DIPLOME': '4-DD', '4DD': '4-DD', '4-DD': '4-DD', '4E DD': '4-DD',
+    '5E E': '4-E', '5E': '4-E', '4E ANNEE ECHANGE': '4-E', '4E': '4-E', '4-E': '4-E',
+    '5E ANNEE DOUBLE DIPLOME': '5-DD', '5DD': '5-DD', '5-DD': '5-DD', '5E DD': '5-DD',
 }
 
 
@@ -120,22 +120,36 @@ def _resolve_dept(raw):
 # ─── Lecteurs de fichier ──────────────────────────────────────────────────────
 
 def read_excel(file_obj):
+    """
+    Read matching sheet. Returns (rows, meta).
+
+    meta = {sheet_name, format} where format is liste_definitive_3a|4a|legacy.
+    Raises ValueError if headers match neither liste définitive nor legacy template.
+    """
     try:
         import openpyxl
     except ImportError:
         raise ImportError("openpyxl est requis. pip install openpyxl")
+
+    from etudiants.importers_liste_definitive import (
+        detect_import_format,
+        pick_liste_sheet,
+    )
+
     wb = openpyxl.load_workbook(file_obj, data_only=True)
-    ws = wb.active
+    sheet_name = pick_liste_sheet(wb.sheetnames) or wb.active.title
+    ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
-        return []
+        return [], {'sheet_name': sheet_name, 'format': 'legacy'}
     headers = [str(h).strip() if h is not None else f'col_{i}' for i, h in enumerate(rows[0])]
+    fmt = detect_import_format(headers, sheet_name)
     result = []
     for row in rows[1:]:
         if all(v is None or str(v).strip() == '' for v in row):
             continue
         result.append(dict(zip(headers, row)))
-    return result
+    return result, {'sheet_name': sheet_name, 'format': fmt}
 
 
 def read_csv(file_obj):
@@ -304,9 +318,15 @@ class RowMapper:
         return {
             'eleve': eleve_data,
             'dossier_academique': da_data,
+            'dossier_militaire': _auto_dossier_militaire(niveau, dept_code),
             'dossier_sante': ds_data,
             'contact_parent': cp_data,
         }, errors
+
+
+def _auto_dossier_militaire(niveau, dept_code):
+    from etudiants.importers_liste_definitive import dossier_militaire_from_niveau_dept
+    return dossier_militaire_from_niveau_dept(niveau or '3', dept_code or '')
 
 
 # ─── Import principal ─────────────────────────────────────────────────────────
@@ -315,18 +335,39 @@ class BulkImporter:
     def __init__(self):
         self.mapper = RowMapper()
 
-    def run(self, rows):
+    def run(self, rows, meta=None):
+        from etudiants.importers_liste_definitive import (
+            FORMAT_LEGACY,
+            FORMAT_LISTE_3A,
+            FORMAT_LISTE_4A,
+            ListeDefinitiveMapper,
+        )
+
+        meta = meta or {}
+        fmt = meta.get('format') or FORMAT_LEGACY
+        sheet_name = meta.get('sheet_name') or ''
+        use_liste = fmt in (FORMAT_LISTE_3A, FORMAT_LISTE_4A)
+        liste_mapper = ListeDefinitiveMapper() if use_liste else None
+
         created = 0
         skipped = 0
         all_errors = []
 
         for idx, raw_row in enumerate(rows):
             row_num = idx + 2
-            mapped, field_errors = self.mapper.map(raw_row, row_num)
+            if use_liste:
+                mapped, field_errors = liste_mapper.map(raw_row, row_num, sheet_name)
+                fatal_fields = ListeDefinitiveMapper.FATAL
+            else:
+                mapped, field_errors = self.mapper.map(raw_row, row_num)
+                fatal_fields = frozenset({'matricule', 'nom_famille', 'prenom'})
 
             if field_errors:
-                fatal = [e for e in field_errors if e['field'] in ('matricule', 'nom_famille', 'prenom')]
-                all_errors.extend(field_errors)
+                fatal = [e for e in field_errors if e['field'] in fatal_fields]
+                if use_liste:
+                    all_errors.extend(fatal)
+                else:
+                    all_errors.extend(field_errors)
                 if fatal:
                     skipped += 1
                     continue
@@ -344,17 +385,26 @@ class BulkImporter:
                     msg = f"NNI {mapped['eleve'].get('nni')} déjà existant."
                 all_errors.append({'row': row_num, 'field': 'db', 'message': msg})
 
-        return {'created': created, 'skipped': skipped, 'errors': all_errors}
+        return {'created': created, 'skipped': skipped, 'errors': all_errors[:200]}
 
     def _create_row(self, mapped):
-        eleve = Eleve.objects.create(**mapped['eleve'])
+        eleve = Eleve.objects.create(**dict(mapped['eleve']))
 
-        da = mapped['dossier_academique']
+        da = dict(mapped['dossier_academique'])
         da['eleve'] = eleve
         DossierAcademique.objects.create(**da)
 
+        dm = mapped.get('dossier_militaire')
+        if dm and (dm.get('compagnie') or dm.get('section')):
+            DossierMilitaire.objects.create(
+                eleve=eleve,
+                compagnie=dm.get('compagnie') or '',
+                section=dm.get('section') or '',
+                sport_pratique=dm.get('sport_pratique') or '',
+            )
+
         if mapped.get('dossier_sante'):
-            ds = mapped['dossier_sante']
+            ds = dict(mapped['dossier_sante'])
             if not ds.get('poids_kg') or not ds.get('taille_cm'):
                 ds['poids_kg'] = None
                 ds['taille_cm'] = None
@@ -362,7 +412,7 @@ class BulkImporter:
             DossierSante.objects.create(**ds)
 
         if mapped.get('contact_parent'):
-            cp = mapped['contact_parent']
+            cp = dict(mapped['contact_parent'])
             cp['eleve'] = eleve
             ContactParent.objects.create(**cp)
 
@@ -382,7 +432,7 @@ def generate_excel_template():
     ws.title = 'Etudiants'
 
     columns = [
-        ('matricule',                '12001',           True,  'Numéro matricule entier unique'),
+        ('matricule',                '251280',           True,  'Matricule 6 chiffres (YYNNNN)'),
         ('nom_famille',              'Ould Ahmed',       True,  'Nom de famille'),
         ('prenom',                   'Mohamed',          True,  'Prénom(s)'),
         ('nni',                      '9800123456',       True,  '10 chiffres'),

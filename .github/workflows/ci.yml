@@ -1,0 +1,107 @@
+# Local parity: make test-ci-local / make test-docker — see docs/ops-testing.md
+name: CI
+
+on:
+  push:
+    branches: [demo/oracle-hassen, main]
+  pull_request:
+    branches: [demo/oracle-hassen, main]
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: esp
+          POSTGRES_USER: esp
+          POSTGRES_PASSWORD: esp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U esp -d esp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DEBUG: "False"
+      DJANGO_ENV: local
+      SECRET_KEY: "ci-test-key-polyspace-phase33-xxxxxxxxxxxxxxxxxxxxxxxxxx"
+      USE_LOCMEM_CACHE: "True"
+      HEALTHZ_REQUIRE_REDIS: "False"
+      SECURE_SSL_REDIRECT: "False"
+      CELERY_TASK_ALWAYS_EAGER: "True"
+      EMAIL_BACKEND: "django.core.mail.backends.locmem.EmailBackend"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: esp
+      DB_USER: esp
+      DB_PASSWORD: esp
+      DB_SSLMODE: disable
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: pip-audit (prod requirements)
+        run: |
+          pip install pip-audit==2.9.0
+          mkdir -p "$RUNNER_TEMP/pip-audit-cache"
+          PIP_AUDIT_CACHE_DIR="$RUNNER_TEMP/pip-audit-cache" pip-audit -r requirements.txt
+      - name: Migrate
+        run: python manage.py migrate --noinput
+      - name: Makemigrations check
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests
+        run: python manage.py test accounts etudiants operations backend.tests -v 1
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ScolariteMilitaireFront
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ScolariteMilitaireFront/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: npm audit (omit dev, high+)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint (phase 33 paths)
+        run: npm run lint:ci
+      - name: Nginx cache contract
+        run: npm run test:nginx-cache
+      - name: Unit tests
+        run: npm run test
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://example.test/api
+          VITE_FRONTEND_ONLY: "false"
+          VITE_USE_MOCK_ELEVES: "false"
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E login-page smoke
+        run: npx playwright test e2e/smoke.login-page.spec.js e2e/smoke.a11y-rtl.spec.js
+        env:
+          CI: "true"
+
+  ci-ok:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CI green"

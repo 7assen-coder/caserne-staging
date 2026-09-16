@@ -1,6 +1,8 @@
 import random
 from django.core.management.base import BaseCommand
 from faker import Faker
+
+# Requires: pip install -r requirements-dev.txt (Faker not in prod image).
 from etudiants.models import (
     Eleve, ContactParent, DossierSante, DossierAcademique, 
     DossierMilitaire, Hebergement, DocumentEleve

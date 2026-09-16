@@ -1,0 +1,18 @@
+{
+  "gestion": "Gestion",
+  "dashboard": "Tableau de bord",
+  "students": "Gestion des étudiants",
+  "dossiers": "Dossiers",
+  "scolarite": "Scolarité",
+  "equipement": "Équipement",
+  "sanctions": "Sanctions",
+  "droits": "Droits",
+  "demandes": "Demandes",
+  "medical": "Suivi médical",
+  "presence": "Présence",
+  "journal": "Journal",
+  "parametres": "Paramètres",
+  "myProfile": "Mon profil",
+  "auditLogs": "Gestion de logs",
+  "mainNav": "Navigation principale"
+}

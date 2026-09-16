@@ -1,0 +1,17 @@
+{
+  "pageTitle": "Mon profil",
+  "pageSubtitle": "Compte et sécurité",
+  "accountFallback": "Compte ESP",
+  "sessionActive": "Session active",
+  "personalInfo": "Identité",
+  "personalInfoHint": "Informations de votre compte",
+  "security": "Sécurité",
+  "securityHint": "Changer le mot de passe (code OTP par e-mail)",
+  "prenom": "Prénom",
+  "nom": "Nom",
+  "email": "E-mail",
+  "telephone": "Téléphone",
+  "grade": "Grade",
+  "empty": "Non renseigné",
+  "breadcrumbAria": "Fil d’Ariane"
+}

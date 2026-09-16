@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Backend on shared Docker network `polyspace` (docker-compose.prod.yml)
+  - job_name: django
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8080"]
+    # Optional: honor_labels / bearer if METRICS_TOKEN set
+    # authorization:
+    #   type: Bearer
+    #   credentials: <METRICS_TOKEN>
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]

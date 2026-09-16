@@ -1,0 +1,4 @@
+# Empty dashboards provider — import django-prometheus dashboards in UI
+apiVersion: 1
+
+providers: []

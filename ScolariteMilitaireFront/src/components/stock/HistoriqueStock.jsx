@@ -1,11 +1,18 @@
 import Card from '../common/Card';
 import DataTable from '../common/DataTable';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryKeys';
+import { useAuth } from '../../hooks/useAuth';
 import { stockService } from '../../services/stockService';
 import { formatDateTime } from '../../utils/formatters';
 
 export default function HistoriqueStock() {
-  const { data } = useFetch(() => stockService.mouvements(), []);
+  const { bootstrapped, isAuthenticated } = useAuth();
+  const { data } = useQuery({
+    queryKey: queryKeys.stock.mouvements(),
+    queryFn: () => stockService.mouvements(),
+    enabled: bootstrapped && isAuthenticated,
+  });
 
   const columns = [
     { key: 'date', label: 'Date', sortable: true, render: (r) => formatDateTime(r.date) },

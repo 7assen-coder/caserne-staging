@@ -30,7 +30,7 @@ async function tryAddLogo(doc) {
 }
 
 export async function exportJournalRegistreExcel(students, filenameBase = 'registre-journal-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const headers = [
     'Matricule',
     'Nom et prénom',

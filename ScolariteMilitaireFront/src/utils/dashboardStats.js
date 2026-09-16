@@ -1,4 +1,5 @@
 export function eleveNeedsAttention(e) {
+  if (e?.profilIncomplet) return true;
   const tel = String(e.contact?.telephone ?? e.tel1 ?? '').trim();
   const badTel = !tel || tel === '00000000' || tel === 'N/A';
   const em = String(e.contact?.emailPerso ?? e.emailPerso ?? '').trim().toLowerCase();
@@ -7,6 +8,7 @@ export function eleveNeedsAttention(e) {
 }
 
 export function alertLabelForEleve(e) {
+  if (e?.profilIncomplet) return 'Dossier à compléter';
   const tel = String(e.contact?.telephone ?? e.tel1 ?? '').trim();
   const badTel = !tel || tel === '00000000' || tel === 'N/A';
   const em = String(e.contact?.emailPerso ?? e.emailPerso ?? '').trim().toLowerCase();

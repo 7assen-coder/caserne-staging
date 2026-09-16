@@ -6,8 +6,16 @@ from .models import (
 
 @admin.register(Eleve)
 class EleveAdmin(admin.ModelAdmin):
-    list_display = ('matricule', 'prenom', 'nom_famille', 'nni', 'sexe', 'categorie_bac')
+    list_display = (
+        'matricule', 'prenom', 'nom_famille', 'nni', 'sexe',
+        'profil_incomplet', 'categorie_bac', 'row_version',
+    )
+    list_filter = ('profil_incomplet', 'sexe', 'categorie_bac')
     search_fields = ('matricule', 'prenom', 'nom_famille', 'nni')
+    readonly_fields = (
+        'row_version', 'updated_at', 'created_at',
+        'annee_premiere_inscription', 'email_pro',
+    )
 
 @admin.register(DossierSante)
 class DossierSanteAdmin(admin.ModelAdmin):

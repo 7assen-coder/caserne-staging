@@ -5,7 +5,8 @@ import { consultationTypeLabel } from '../data/medicalCatalog';
 import { fetchEspLogoDataUrl, sanitizeExportText } from './etudiantsListExport';
 import { APP_NAME } from '../data/institution';
 import { buildMedicalDetailExportRows } from './medicalStats';
-import { loadConsultations } from './medicalStore';
+import { apiList } from './opsApi';
+import { apiPaths } from '../services/apiPaths';
 
 const SYNTHESIS_COLUMNS = [
   { key: 'matricule', label: 'Matricule' },
@@ -42,14 +43,9 @@ async function tryAddLogo(doc) {
 }
 
 function synthesisRows(students) {
-  const all = loadConsultations();
   return students.map((s) => {
-    const items = all.filter((i) => String(i.eleveId) === String(s.id));
-    const last = items.sort((a, b) =>
-      String(b.dateConsultation).localeCompare(String(a.dateConsultation)),
-    )[0];
-    const derniere = last
-      ? `${formatDateFr(last.dateConsultation)} · ${last.motif ?? '—'}`
+    const derniere = s.derniereDate
+      ? `${formatDateFr(s.derniereDate)} · ${s.derniereMotif ?? '—'}`
       : '—';
     return {
       matricule: sanitizeExportText(s.matricule),
@@ -58,14 +54,28 @@ function synthesisRows(students) {
       groupeSanguin: sanitizeExportText(s.groupeSanguin || '—'),
       departement: sanitizeExportText(s.departement),
       niveau: sanitizeExportText(s.niveau),
-      nbConsultations: String(s.nbConsultations ?? items.length),
+      nbConsultations: String(s.nbConsultations ?? 0),
       derniere: sanitizeExportText(derniere),
     };
   });
 }
 
+async function fetchConsultationsMapped() {
+  const raw = await apiList(apiPaths.consultations.list);
+  return raw.map((r) => ({
+    id: r.id,
+    eleveId: String(r.eleve),
+    code: r.code ?? '',
+    type: r.type ?? 'consultation',
+    motif: r.motif ?? '',
+    dateConsultation: r.date_consultation ?? '',
+    avisInfirmerie: r.avis_infirmerie ?? '',
+    pjPdf: r.pj_pdf ? { name: 'pj.pdf' } : null,
+  }));
+}
+
 export async function exportMedicalSynthesisExcel(students, filenameBase = 'synthese-medical-esp') {
-  const XLSX = await import('xlsx');
+  const XLSX = await import('xlsx-js-style');
   const rows = synthesisRows(students);
   const ws = XLSX.utils.json_to_sheet(
     rows.map((r) =>
@@ -79,8 +89,8 @@ export async function exportMedicalSynthesisExcel(students, filenameBase = 'synt
 }
 
 export async function exportMedicalDetailExcel(students, filenameBase = 'registre-medical-esp') {
-  const XLSX = await import('xlsx');
-  const detail = buildMedicalDetailExportRows(students);
+  const XLSX = await import('xlsx-js-style');
+  const detail = buildMedicalDetailExportRows(students, await fetchConsultationsMapped());
   const rows = detail.map(({ item, student }) => ({
     Matricule: student.matricule ?? '',
     Étudiant: `${student.prenom ?? ''} ${student.nom ?? ''}`.trim(),
@@ -144,7 +154,7 @@ export async function exportMedicalDetailPdf(
   doc.setTextColor(80, 80, 80);
   doc.text(`Filtres : ${sanitizeExportText(filtersLabel)}`, 40, 32);
 
-  const detail = buildMedicalDetailExportRows(students);
+  const detail = buildMedicalDetailExportRows(students, await fetchConsultationsMapped());
   const head = ['Matricule', 'Étudiant', 'Code', 'Type', 'Motif', 'Date', 'Avis infirmerie', 'PJ'];
   const body = detail.map(({ item, student }) => [
     sanitizeExportText(student.matricule),

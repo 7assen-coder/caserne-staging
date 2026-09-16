@@ -72,7 +72,7 @@ export default function ExportModal({
           </p>
         ) : null}
         <p className="text-xs text-slate-500">
-          Excel : registre transposé (libellés en lignes, étudiants en colonnes), sans mensurations.
+          Excel : une ligne par étudiant (colonnes affichées), sans mensurations.
           PDF : tableau classique avec en-tête officiel ESP.
         </p>
         <p className="text-xs text-slate-500">

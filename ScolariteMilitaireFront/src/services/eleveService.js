@@ -1,10 +1,13 @@
-import { api } from './api';
+import { api, withUploadTimeout } from './api';
 import { WILAYAS_MR } from '../data/wilayasMauritanie';
 import { eleves as mockElevesRaw } from '../data/mockData';
 import { todayIso } from '../utils/anneeUniversitaire';
 import { isFrontendOnly, useMockEleves } from '../utils/frontendMode';
 import { normalizeDepartementForApi } from '../utils/constants';
 import { formatApiError } from '../utils/apiErrors';
+import { formatListField } from '../utils/listField';
+import { mediaUrl } from '../utils/mediaUrl';
+import { apiPaths } from './apiPaths';
 import {
   findImportedById,
   loadImportedEleves,
@@ -13,7 +16,13 @@ import {
 import {
   parcoursToStatutAcademique,
   statutAcademiqueToParcours,
+  normalizeSectionLabel,
 } from '../utils/eleveScolariteAuto';
+import { formatMoyenneFr } from '../utils/eleveFormValidation';
+import {
+  eleveNeedsAttention,
+  repartitionParFiliere,
+} from '../utils/dashboardStats';
 
 function normalizeMockEleve(e) {
   return {
@@ -45,17 +54,80 @@ function filterEleveRows(rows, filters = {}) {
   }
   if (filters.section) {
     list = list.filter((e) => {
-      const s = e.dossierMilitaire?.section ?? e.section ?? '';
-      return s === filters.section;
+      const s = normalizeSectionLabel(
+        e.dossierMilitaire?.section ?? e.section ?? '',
+        e.dossierMilitaire?.compagnie ?? e.compagnie,
+      );
+      return s === normalizeSectionLabel(filters.section, filters.compagnie);
     });
+  }
+  if (filters.compagnie) {
+    list = list.filter((e) => e.dossierMilitaire?.compagnie === filters.compagnie);
   }
   return list;
 }
 
-async function listFromApi(filters) {
-  const { data } = await api.get('/eleves/');
-  let rows = Array.isArray(data) ? data.map(adaptEleveFromApi) : [];
-  return filterEleveRows(rows, filters);
+/** Build query params for GET /eleves/ (server filters). */
+function elevesListParams(filters = {}) {
+  const params = {};
+  const q = (filters.q ?? '').trim();
+  if (q) params.q = q;
+  if (filters.departement) params.departement = filters.departement;
+  const annee = (filters.annee ?? filters.niveau ?? '').trim();
+  if (annee) {
+    params.niveau = NIVEAU_UI_TO_API[annee] || annee;
+  }
+  if (filters.compagnie) params.compagnie = filters.compagnie;
+  if (filters.section) params.section = filters.section;
+  if (filters.sexe) params.sexe = filters.sexe;
+  if (filters.ordering) params.ordering = filters.ordering;
+  const page = filters.page ?? filters.pageNumber;
+  if (page != null) params.page = page;
+  const pageSize = filters.pageSize ?? filters.page_size;
+  if (pageSize != null) params.page_size = pageSize;
+  return params;
+}
+
+/**
+ * One page from GET /api/eleves/ (slim serializer + server filters).
+ * @returns {{ count: number, results: object[], page: number, pageSize: number }}
+ */
+async function listPageFromApi(filters = {}) {
+  const page = Math.max(1, Number(filters.page ?? 1) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 25) || 25));
+  const params = elevesListParams({ ...filters, page, pageSize });
+  const { data } = await api.get(apiPaths.eleves.list, { params });
+  if (Array.isArray(data)) {
+    return {
+      count: data.length,
+      results: data.map(adaptEleveFromApi),
+      page: 1,
+      pageSize: data.length || pageSize,
+    };
+  }
+  const results = Array.isArray(data?.results) ? data.results.map(adaptEleveFromApi) : [];
+  return {
+    count: Number(data?.count) || results.length,
+    results,
+    page,
+    pageSize,
+  };
+}
+
+/** Drain all pages (slim list) — exports / dashboard / section roster only. */
+async function listAllPagesFromApi(filters = {}) {
+  const rows = [];
+  let page = 1;
+  const pageSize = 100;
+  let guard = 0;
+  while (guard < 50) {
+    guard += 1;
+    const { count, results } = await listPageFromApi({ ...filters, page, pageSize });
+    rows.push(...results);
+    if (rows.length >= count || results.length === 0) break;
+    page += 1;
+  }
+  return rows;
 }
 
 function listFromMock(filters) {
@@ -88,7 +160,6 @@ const NIVEAU_API_TO_UI = {
   '4-DD': '4e DD',
   '4-E': '5e E',
   '5-DD': '5e DD',
-  '5': '5e année',
 };
 const NIVEAU_UI_TO_API = Object.fromEntries(
   Object.entries(NIVEAU_API_TO_UI).map(([api, ui]) => [ui, api]),
@@ -108,15 +179,15 @@ function niveauActuelFromApi(code) {
 function niveauActuelToApi(uiLabel) {
   const s = String(uiLabel ?? '').trim();
   if (NIVEAU_UI_TO_API[s]) return NIVEAU_UI_TO_API[s];
-  if (s === '5e année') return '4-E';
   if (['3', '4', '4-DD', '4-E', '5-DD'].includes(s)) return s;
   return '3';
 }
 
 function normalizeVoieAcces(raw) {
   const s = String(raw ?? '').trim();
+  if (!s) return '';
   if (/^[1-4]$/.test(s)) return s;
-  return VOIE_LABEL_TO_CODE[s] || '1';
+  return VOIE_LABEL_TO_CODE[s] || '';
 }
 
 function departementDisplayFromApi(code) {
@@ -139,6 +210,8 @@ function adaptEleveFromApi(item) {
   const lieuParts = splitLieuNaissance(item.lieu_naissance);
   return {
     id: item.id,
+    rowVersion: item.row_version ?? 1,
+    updatedAt: item.updated_at ?? null,
     dossierAcademiqueId: item.dossier_academique?.id ?? null,
     dossierSanteId: item.dossier_sante?.id ?? null,
     dossierMilitaireId: item.dossier_militaire?.id ?? null,
@@ -148,10 +221,13 @@ function adaptEleveFromApi(item) {
     matricule: item.matricule ?? '',
     nom: item.nom_famille ?? '',
     prenom: item.prenom ?? '',
+    nomAr: item.nom_famille_ar ?? '',
+    prenomAr: item.prenom_ar ?? '',
     nni: item.nni ?? '',
     numeroBac: item.num_bac ?? '',
     sexe: item.sexe === 'F' ? 'F' : 'M',
     statut: parcoursToStatutAcademique(item.dossier_academique?.parcours),
+    profilIncomplet: Boolean(item.profil_incomplet),
     dateNaissance: item.date_naissance ?? '',
     lieuNaissance: item.lieu_naissance ?? '',
     wilayaNaissance: lieuParts.wilaya,
@@ -159,7 +235,7 @@ function adaptEleveFromApi(item) {
     nationalite: item.nationalite ?? '',
     categorieBac: item.categorie_bac ?? '',
     serieBac: item.serie_bac ?? '',
-    moyenneBac: item.moyenne_bac ?? '',
+    moyenneBac: formatMoyenneFr(item.moyenne_bac ?? ''),
     ecoleBac: item.ecole_bac ?? '',
     anneePremiereInscription: item.annee_premiere_inscription ?? '',
     datePremiereInscription: item.date_premiere_inscription ?? '',
@@ -177,10 +253,23 @@ function adaptEleveFromApi(item) {
     facebook: item.facebook ?? '',
     linkedin: item.linkedin ?? '',
     filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
-    photoUrl:
-      item.documents?.photo_identite_militaire ||
-      item.documents?.photo_identite_civile ||
-      '',
+    // Fiche hero: prefer sharp master; list UIs should use photoThumbUrl.
+    photoUrl: mediaUrl(
+      item.documents?.photo_identite_militaire
+        || item.documents?.photo_identite_civile
+        || item.documents?.photo_identite_militaire_thumb_320
+        || item.documents?.photo_identite_civile_thumb_320
+        || '',
+    ),
+    photoThumbUrl: mediaUrl(
+      item.documents?.photo_identite_militaire_thumb_320
+        || item.documents?.photo_identite_civile_thumb_320
+        || item.documents?.photo_identite_militaire_thumb_128
+        || item.documents?.photo_identite_civile_thumb_128
+        || item.documents?.photo_identite_militaire
+        || item.documents?.photo_identite_civile
+        || '',
+    ),
     scolarite: {
       departement: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
       filiere: departementDisplayFromApi(item.dossier_academique?.departement ?? ''),
@@ -193,20 +282,22 @@ function adaptEleveFromApi(item) {
       etablissementPremierCycle: item.etablissement_diplome ?? '',
     },
     mobilite: {
-      type: item.dossier_academique?.etablissement_double_diplome
-        ? 'Double diplôme'
-        : item.dossier_academique?.etablissement_echange
-          ? 'Semestre d’échange'
-          : '',
+      type: item.dossier_academique?.type_mobilite
+        || (item.dossier_academique?.etablissement_double_diplome
+          ? 'Double diplôme'
+          : item.dossier_academique?.etablissement_echange
+            ? 'Semestre d’échange'
+            : ''),
       etablissement:
         item.dossier_academique?.etablissement_double_diplome
         || item.dossier_academique?.etablissement_echange
         || '',
       specialite: item.dossier_academique?.specialite_mobilite ?? '',
-      raison: '',
-      anneeDebut: '',
-      anneeFin: '',
+      raison: item.dossier_academique?.raison_mobilite ?? '',
+      anneeDebut: item.dossier_academique?.annee_debut_mobilite ?? '',
+      anneeFin: item.dossier_academique?.annee_fin_mobilite ?? '',
     },
+    semestres: item.dossier_academique?.donnees_semestres ?? {},
     sante: {
       groupeSanguin: item.dossier_sante?.groupe_sanguin ?? '',
       assureur: item.dossier_sante?.assureur ?? '',
@@ -217,10 +308,19 @@ function adaptEleveFromApi(item) {
       poids: item.dossier_sante?.poids_kg ?? '',
       tailleCm: item.dossier_sante?.taille_cm ?? '',
       imc: item.dossier_sante?.imc ?? '',
+      dossierMedicalPdf: item.dossier_sante?.dossier_medical_pdf
+        ? { url: mediaUrl(item.dossier_sante.dossier_medical_pdf) }
+        : null,
+      photoMedicale: item.dossier_sante?.photo_medicale
+        ? { url: mediaUrl(item.dossier_sante.photo_medicale) }
+        : null,
     },
     dossierMilitaire: {
       compagnie: item.dossier_militaire?.compagnie ?? '',
-      section: item.dossier_militaire?.section ?? '',
+      section: normalizeSectionLabel(
+        item.dossier_militaire?.section ?? '',
+        item.dossier_militaire?.compagnie ?? '',
+      ),
       sportPratique: item.dossier_militaire?.sport_pratique ?? '',
       tourPoitrine: item.dossier_militaire?.tour_poitrine ?? '',
       tourCeinture: item.dossier_militaire?.tour_ceinture ?? '',
@@ -233,7 +333,10 @@ function adaptEleveFromApi(item) {
       pointure: item.dossier_militaire?.pointure ?? '',
     },
     compagnie: item.dossier_militaire?.compagnie ?? '',
-    section: item.dossier_militaire?.section ?? '',
+    section: normalizeSectionLabel(
+      item.dossier_militaire?.section ?? '',
+      item.dossier_militaire?.compagnie ?? '',
+    ),
     hebergement: {
       batiment: item.hebergement?.batiment ?? '',
       etage: item.hebergement?.etage ?? '',
@@ -268,7 +371,30 @@ function adaptEleveFromApi(item) {
       nomMere: item.contacts_parents?.nom_famille_mere ?? '',
       fonctionMere: item.contacts_parents?.fonction_mere ?? '',
     },
-    documents: item.documents ?? null,
+    documents: (() => {
+      const d = item.documents;
+      if (!d || typeof d !== 'object') return null;
+      const out = { ...d };
+      const fileKeys = [
+        'cin',
+        'acte_naissance',
+        'diplome_acces',
+        'diplome_bac',
+        'photo_identite_militaire',
+        'photo_identite_civile',
+        'photo_militaire_integrale',
+        'photo_identite_militaire_thumb_128',
+        'photo_identite_militaire_thumb_320',
+        'photo_identite_civile_thumb_128',
+        'photo_identite_civile_thumb_320',
+        'photo_militaire_integrale_thumb_128',
+        'photo_militaire_integrale_thumb_320',
+      ];
+      for (const k of fileKeys) {
+        if (out[k]) out[k] = mediaUrl(out[k]);
+      }
+      return out;
+    })(),
   };
 }
 
@@ -312,39 +438,71 @@ function mergeRelatedIdsFromApiPayload(values, apiEleve) {
 }
 
 function toElevePayload(values) {
+  const incomplete = Boolean(values.profilIncomplet);
+  const filledOr = (raw, fallback, { asNull = false } = {}) => {
+    const s = String(raw ?? '').trim();
+    if (s) return s;
+    if (incomplete) return asNull ? null : '';
+    return fallback;
+  };
   const matParsed = Number.parseInt(String(values.matricule ?? '').replace(/\D/g, ''), 10);
   const matricule = Number.isFinite(matParsed) ? matParsed : 0;
+  const moyenneRaw = String(values.moyenneBac ?? '').trim().replace(',', '.');
+  let moyenne_bac = null;
+  if (moyenneRaw) {
+    const n = Number.parseFloat(moyenneRaw);
+    moyenne_bac = Number.isFinite(n) ? String(n) : (incomplete ? null : '0');
+  } else if (!incomplete) {
+    moyenne_bac = '0';
+  }
+  const voie = normalizeVoieAcces(values.scolarite?.voieAcces || values.voieAcces);
   return {
     matricule,
-    num_bac: String(values.numeroBac ?? '').trim() || '—',
-    nni: values.nni || '',
+    num_bac: filledOr(values.numeroBac, '—'),
+    nni: String(values.nni ?? '').trim() || (incomplete ? null : ''),
     sexe: values.sexe === 'F' ? 'F' : 'H',
     prenom: values.prenom || '',
     nom_famille: values.nom || '',
+    prenom_ar: values.prenomAr || null,
+    nom_famille_ar: values.nomAr || null,
     date_naissance: values.dateNaissance || null,
-    lieu_naissance: composeLieuNaissance(values) || '—',
-    nationalite: (values.nationalite ?? '').toString().trim() || '—',
+    lieu_naissance: filledOr(composeLieuNaissance(values), '—'),
+    nationalite: filledOr(values.nationalite, '—'),
     categorie_bac:
       values.categorieBac === 'Étranger' || values.categorieBac === 'Etranger'
         ? 'Etranger'
-        : values.categorieBac || 'National',
-    serie_bac: (values.serieBac ?? '').trim() || 'C',
-    moyenne_bac: values.moyenneBac || '0',
-    ecole_bac: (values.ecoleBac ?? '').trim() || '—',
-    date_premiere_inscription:
-      String(values.datePremiereInscription ?? '').trim() || todayIso(),
-    voie_acces: normalizeVoieAcces(values.scolarite?.voieAcces || values.voieAcces),
-    diplome_acces: values.scolarite?.diplomeAcces || values.diplomeAcces || 'N/A',
+        : filledOr(values.categorieBac, 'National'),
+    serie_bac: filledOr(values.serieBac, 'C'),
+    moyenne_bac,
+    ecole_bac: filledOr(values.ecoleBac, '—'),
+    date_premiere_inscription: (() => {
+      const s = String(values.datePremiereInscription ?? '').trim();
+      if (s) return s;
+      return incomplete ? null : todayIso();
+    })(),
+    voie_acces: voie,
+    diplome_acces: filledOr(
+      values.scolarite?.diplomeAcces || values.diplomeAcces,
+      'N/A',
+    ),
     etablissement_diplome: values.scolarite?.etablissementPremierCycle || values.etablissementDiplome || '',
-    adresse_primaire: values.contact?.adresse || values.adressePrimaire || 'N/A',
+    adresse_primaire: filledOr(
+      values.contact?.adresse || values.adressePrimaire,
+      'N/A',
+    ),
     adresse_secondaire: values.contact?.adresseSecondaire || values.adresseSecondaire || '',
     resident_avec_parents: values.residentAvecParents === 'Oui' || values.residentAvecParents === true,
     compte_bankily: values.compteBankily || '',
-    email_perso: values.contact?.emailPerso || values.emailPerso || 'user@example.com',
-    tel1: values.contact?.telephone || values.tel1 || '00000000',
+    email_perso: (() => {
+      const s = String(values.contact?.emailPerso || values.emailPerso || '').trim();
+      if (s) return s;
+      return incomplete ? null : 'user@example.com';
+    })(),
+    tel1: filledOr(values.contact?.telephone || values.tel1, '00000000'),
     tel2_whatsapp: values.contact?.tel2 || values.tel2Whatsapp || '',
     facebook: '',
     linkedin: '',
+    expected_version: Number(values.rowVersion ?? values.expected_version ?? 0) || undefined,
   };
 }
 
@@ -394,24 +552,109 @@ function dossierAcademiquePayload(values, eleveId) {
 }
 
 export const eleveService = {
-  async list(filters = {}) {
-    const imported = listFromImportedOnly(filters);
+  /** One server page (preferred for list UIs). */
+  async listPage(filters = {}) {
     if (useMockEleves() || isFrontendOnly()) {
+      const all = useMockEleves()
+        ? mergeWithImported(listFromMock(filters), filters)
+        : listFromImportedOnly(filters);
+      const page = Math.max(1, Number(filters.page ?? 1) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 25) || 25));
+      const start = (page - 1) * pageSize;
+      return {
+        count: all.length,
+        results: all.slice(start, start + pageSize),
+        page,
+        pageSize,
+      };
+    }
+    return listPageFromApi(filters);
+  },
+
+  /** All matching rows via slim paginated API (exports / KPIs / section roster). */
+  async listAllPages(filters = {}) {
+    if (useMockEleves() || isFrontendOnly()) {
+      if (!useMockEleves()) return listFromImportedOnly(filters);
+      return mergeWithImported(listFromMock(filters), filters);
+    }
+    return listAllPagesFromApi(filters);
+  },
+
+  /**
+   * @deprecated Prefer listPage for tables; listAllPages for exports.
+   * API mode: drains slim pages (not nested detail).
+   */
+  async list(filters = {}) {
+    if (useMockEleves() || isFrontendOnly()) {
+      const imported = listFromImportedOnly(filters);
       if (!useMockEleves()) {
         return imported;
       }
       return mergeWithImported(listFromMock(filters), filters);
     }
     try {
-      const rows = await listFromApi(filters);
-      return mergeWithImported(rows, filters);
+      return await listAllPagesFromApi(filters);
     } catch (err) {
       if (shouldUseMockFallback()) {
         console.warn('[eleveService] Mock élèves activé (VITE_USE_MOCK_ELEVES).', err?.message);
         return mergeWithImported(listFromMock(filters), filters);
       }
-      return imported;
+      throw err;
     }
+  },
+
+  /** Phase 18 — server aggregates for dashboard KPIs (cached on API). */
+  async dashboardStats() {
+    if (useMockEleves() || isFrontendOnly()) {
+      const rows = await this.listAllPages({});
+      const dossiersASurveiller = rows.filter(eleveNeedsAttention).length;
+      const enMobilite = rows.filter((e) => {
+        const m = e?.mobilite;
+        return Boolean(m && (m.type || m.etablissement || m.specialite));
+      }).length;
+      return {
+        total_eleves: rows.length,
+        needs_attention: dossiersASurveiller,
+        mobilite_count: enMobilite,
+        compagnies: new Set(rows.map((e) => e.dossierMilitaire?.compagnie).filter(Boolean)).size,
+        completion_pct:
+          rows.length > 0
+            ? Math.round(((rows.length - dossiersASurveiller) / rows.length) * 100)
+            : 0,
+        par_filiere: repartitionParFiliere(rows),
+        attention_sample: rows.filter(eleveNeedsAttention).slice(0, 4).map((e) => ({
+          id: e.id,
+          matricule: e.matricule,
+          prenom: e.prenom,
+          nom: e.nom,
+          tel1: e.tel1 ?? e.contact?.telephone,
+          emailPerso: e.emailPerso ?? e.contact?.emailPerso,
+          departement: e.scolarite?.departement,
+        })),
+        mobilite_sample: rows
+          .filter((e) => e?.mobilite && (e.mobilite.type || e.mobilite.etablissement))
+          .slice(0, 4)
+          .map((e) => ({
+            id: e.id,
+            matricule: e.matricule,
+            prenom: e.prenom,
+            nom: e.nom,
+            departement: e.scolarite?.departement,
+          })),
+        repartition_compagnies: (() => {
+          const map = new Map();
+          rows.forEach((e) => {
+            const c = e.dossierMilitaire?.compagnie || 'Non assignée';
+            map.set(c, (map.get(c) || 0) + 1);
+          });
+          return [...map.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([compagnie, total]) => ({ compagnie, total }));
+        })(),
+      };
+    }
+    const { data } = await api.get(apiPaths.eleves.stats);
+    return data;
   },
 
   async get(id) {
@@ -429,7 +672,7 @@ export const eleveService = {
     }
 
     try {
-      const { data } = await api.get(`/eleves/${id}/`);
+      const { data } = await api.get(apiPaths.eleves.detail(id));
       return adaptEleveFromApi(data);
     } catch (err) {
       if (shouldUseMockFallback()) {
@@ -441,31 +684,31 @@ export const eleveService = {
   },
 
   async createEleve(values) {
-    const { data } = await api.post('/eleves/', toElevePayload(values));
+    const { data } = await api.post(apiPaths.eleves.list, toElevePayload(values));
     return adaptEleveFromApi(data);
   },
 
   createDossierSante(eleveId, values) {
-    return api.post('/dossiers-sante/', {
+    return api.post(apiPaths.sante.list, {
       groupe_sanguin: values.sante?.groupeSanguin || '',
-      assureur: values.sante?.assureur || '',
+      assureur: formatListField(values.sante?.assureur || ''),
       num_assure: values.sante?.numeroAssure || '',
-      antecedents_medicaux: values.sante?.antecedents || '',
-      maladies_chroniques: values.sante?.maladiesChroniques || '',
-      medicaments_a_vie: values.sante?.medicaments || '',
+      antecedents_medicaux: formatListField(values.sante?.antecedents || ''),
+      maladies_chroniques: formatListField(values.sante?.maladiesChroniques || ''),
+      medicaments_a_vie: formatListField(values.sante?.medicaments || ''),
       poids_kg: values.sante?.poids || '',
       taille_cm: values.sante?.tailleCm || '',
       eleve: eleveId,
     });
   },
   updateDossierSante(id, eleveId, values) {
-    return api.put(`/dossiers-sante/${id}/`, {
+    return api.put(apiPaths.sante.detail(id), {
       groupe_sanguin: values.sante?.groupeSanguin || '',
-      assureur: values.sante?.assureur || '',
+      assureur: formatListField(values.sante?.assureur || ''),
       num_assure: values.sante?.numeroAssure || '',
-      antecedents_medicaux: values.sante?.antecedents || '',
-      maladies_chroniques: values.sante?.maladiesChroniques || '',
-      medicaments_a_vie: values.sante?.medicaments || '',
+      antecedents_medicaux: formatListField(values.sante?.antecedents || ''),
+      maladies_chroniques: formatListField(values.sante?.maladiesChroniques || ''),
+      medicaments_a_vie: formatListField(values.sante?.medicaments || ''),
       poids_kg: values.sante?.poids || '',
       taille_cm: values.sante?.tailleCm || '',
       eleve: eleveId,
@@ -474,10 +717,10 @@ export const eleveService = {
 
   createDossierMilitaire(eleveId, values) {
     const dm = values.dossierMilitaire || {};
-    return api.post('/dossiers-militaires/', {
+    return api.post(apiPaths.militaire.list, {
       compagnie: dm.compagnie || '',
-      section: dm.section || '',
-      sport_pratique: dm.sportPratique || '',
+      section: normalizeSectionLabel(dm.section, dm.compagnie) || dm.section || '',
+      sport_pratique: formatListField(dm.sportPratique || ''),
       tour_poitrine: dm.tourPoitrine || '',
       tour_ceinture: dm.tourCeinture || '',
       tour_taille: dm.tourTaille || '',
@@ -492,10 +735,10 @@ export const eleveService = {
   },
   updateDossierMilitaire(id, eleveId, values) {
     const dm = values.dossierMilitaire || {};
-    return api.put(`/dossiers-militaires/${id}/`, {
+    return api.put(apiPaths.militaire.detail(id), {
       compagnie: dm.compagnie || '',
-      section: dm.section || '',
-      sport_pratique: dm.sportPratique || '',
+      section: normalizeSectionLabel(dm.section, dm.compagnie) || dm.section || '',
+      sport_pratique: formatListField(dm.sportPratique || ''),
       tour_poitrine: dm.tourPoitrine || '',
       tour_ceinture: dm.tourCeinture || '',
       tour_taille: dm.tourTaille || '',
@@ -510,10 +753,10 @@ export const eleveService = {
   },
 
   createDossierAcademique(eleveId, values) {
-    return api.post('/dossiers-academiques/', dossierAcademiquePayload(values, eleveId));
+    return api.post(apiPaths.academique.list, dossierAcademiquePayload(values, eleveId));
   },
   updateDossierAcademique(id, eleveId, values) {
-    return api.put(`/dossiers-academiques/${id}/`, dossierAcademiquePayload(values, eleveId));
+    return api.put(apiPaths.academique.detail(id), dossierAcademiquePayload(values, eleveId));
   },
 
   createDocuments(eleveId, values) {
@@ -529,7 +772,7 @@ export const eleveService = {
     if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
     if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
-    return api.post('/documents/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post(apiPaths.docs.list, fd, withUploadTimeout({ headers: { 'Content-Type': 'multipart/form-data' } }));
   },
   updateDocuments(id, eleveId, values) {
     const fd = new FormData();
@@ -544,11 +787,11 @@ export const eleveService = {
     if (docs.photoIdentiteMilitaire instanceof File) fd.append('photo_identite_militaire', docs.photoIdentiteMilitaire);
     if (docs.photoMilitaireIntegrale instanceof File) fd.append('photo_militaire_integrale', docs.photoMilitaireIntegrale);
     fd.append('eleve', String(eleveId));
-    return api.put(`/documents/${id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.put(apiPaths.docs.detail(id), fd, withUploadTimeout({ headers: { 'Content-Type': 'multipart/form-data' } }));
   },
 
   createContactsParents(eleveId, values) {
-    return api.post('/contacts-parents/', {
+    return api.post(apiPaths.contacts.list, {
       prenom_pere: values.parents?.prenomPere || '',
       nom_famille_pere: values.parents?.nomFamillePere || values.nom || '',
       fonction_pere: values.parents?.fonctionPere || '',
@@ -566,7 +809,7 @@ export const eleveService = {
     });
   },
   updateContactsParents(id, eleveId, values) {
-    return api.put(`/contacts-parents/${id}/`, {
+    return api.put(apiPaths.contacts.detail(id), {
       prenom_pere: values.parents?.prenomPere || '',
       nom_famille_pere: values.parents?.nomFamillePere || values.nom || '',
       fonction_pere: values.parents?.fonctionPere || '',
@@ -585,7 +828,7 @@ export const eleveService = {
   },
 
   createHebergement(eleveId, values) {
-    return api.post('/hebergements/', {
+    return api.post(apiPaths.hebergements.list, {
       batiment: values.hebergement?.batiment || '',
       etage: values.hebergement?.etage || '',
       aile: values.hebergement?.aile || '',
@@ -598,7 +841,7 @@ export const eleveService = {
     });
   },
   updateHebergement(id, eleveId, values) {
-    return api.put(`/hebergements/${id}/`, {
+    return api.put(apiPaths.hebergements.detail(id), {
       batiment: values.hebergement?.batiment || '',
       etage: values.hebergement?.etage || '',
       aile: values.hebergement?.aile || '',
@@ -616,9 +859,14 @@ export const eleveService = {
     if (!Number.isFinite(nid) || nid <= 0) {
       throw new Error('Invalid student id.');
     }
-    await api.put(`/eleves/${nid}/`, toElevePayload(values));
+    const payload = toElevePayload(values);
+    if (!payload.expected_version) {
+      const { data: head } = await api.get(apiPaths.eleves.detail(nid));
+      payload.expected_version = head.row_version ?? 1;
+    }
+    await api.put(apiPaths.eleves.detail(nid), payload);
 
-    const { data: freshRaw } = await api.get(`/eleves/${nid}/`);
+    const { data: freshRaw } = await api.get(apiPaths.eleves.detail(nid));
     const merged = mergeRelatedIdsFromApiPayload(values, freshRaw);
 
     const related = [];
@@ -668,15 +916,19 @@ export const eleveService = {
       );
     }
 
-    const { data: outRaw } = await api.get(`/eleves/${nid}/`);
+    const { data: outRaw } = await api.get(apiPaths.eleves.detail(nid));
     return adaptEleveFromApi(outRaw);
   },
 
-  delete(id) {
+  delete(id, { expectedVersion } = {}) {
     if (String(id).startsWith('import-') || findImportedById(id)) {
       removeImportedById(id);
       return Promise.resolve();
     }
-    return api.delete(`/eleves/${id}/`);
+    const headers = {};
+    if (expectedVersion != null) {
+      headers['If-Match'] = `"${expectedVersion}"`;
+    }
+    return api.delete(apiPaths.eleves.detail(id), { headers, data: { expected_version: expectedVersion } });
   },
 };

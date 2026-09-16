@@ -2,17 +2,19 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, RotateCcw, Send, X as XIcon } from 'lucide-react';
 import Button from '../common/Button';
+import QueryErrorPanel from '../common/QueryErrorPanel';
 import ResultatAppel from './ResultatAppel';
-import { useFetch } from '../../hooks/useFetch';
+import { useQuery } from '@tanstack/react-query';
 import { eleveService } from '../../services/eleveService';
 import { presenceService } from '../../services/presenceService';
 import { SECTIONS, TYPES_RASSEMBLEMENT, MOTIFS_ABSENCE } from '../../utils/constants';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../context/ToastContext';
 import { formatApiError } from '../../utils/apiErrors';
+import { queryKeys } from '../../lib/queryKeys';
 
 export default function LancerAppel({ onSubmitted }) {
-  const { user } = useAuth();
+  const { user, bootstrapped, isAuthenticated } = useAuth();
   const toast = useToast();
   const [section, setSection] = useState(SECTIONS[0]);
   const [type, setType] = useState(TYPES_RASSEMBLEMENT[0].value);
@@ -21,10 +23,11 @@ export default function LancerAppel({ onSubmitted }) {
   const [submitted, setSubmitted] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const { data: eleves, loading, error } = useFetch(
-    () => eleveService.list({ section }),
-    [section],
-  );
+  const { data: eleves, isPending: loading, error, refetch, isError } = useQuery({
+    queryKey: queryKeys.presence.eleves({ section }),
+    queryFn: () => eleveService.listAllPages({ section }),
+    enabled: bootstrapped && isAuthenticated && !!section,
+  });
 
   const reset = () => {
     setStatuts({});
@@ -182,13 +185,17 @@ export default function LancerAppel({ onSubmitted }) {
           </span>
         </div>
 
-        {error ? (
-          <p className="mx-5 my-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 sm:mx-6">
-            {formatApiError(error)}
-          </p>
+        {isError ? (
+          <div className="mx-5 my-4 sm:mx-6">
+            <QueryErrorPanel
+              error={error}
+              title="Impossible de charger les élèves pour l’appel."
+              onRetry={() => refetch()}
+            />
+          </div>
         ) : null}
 
-        {!loading && !error && (eleves ?? []).length === 0 ? (
+        {!loading && !isError && (eleves ?? []).length === 0 ? (
           <div className="px-6 py-14 text-center">
             <p className="text-sm font-medium text-slate-700">
               Aucun élève dans la section « {section} ».

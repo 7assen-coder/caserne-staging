@@ -1,8 +1,10 @@
-*db.sqlite3
-*__pycache__
-*migrations
+*.sqlite3
+db.sqlite3
+__pycache__/
+*.py[cod]
 *.env
-*.venv
-*venv
+.env
+.venv/
+venv/
 staticfiles/
 media/
