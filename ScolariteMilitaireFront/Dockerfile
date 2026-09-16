@@ -2,8 +2,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 # Phase 39 — lockfile only (never npm install in images/CI)
+# .npmrc sets legacy-peer-deps for eslint@10 vs jsx-a11y peer range
 RUN npm ci
 
 COPY . .
