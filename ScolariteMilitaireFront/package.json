@@ -23,7 +23,7 @@
     "@sentry/react": "^8.55.2",
     "@tanstack/react-query": "^5.102.8",
     "axios": "^1.15.2",
-    "docx": "^9.6.1",
+    "docx": "^9.7.1",
     "file-saver": "^2.0.5",
     "i18next": "^26.4.2",
     "jspdf": "^4.2.1",
