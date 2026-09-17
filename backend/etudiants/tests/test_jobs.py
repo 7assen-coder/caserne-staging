@@ -43,14 +43,31 @@ def _make_eleve(**overrides):
 
 
 def _xlsx_minimal():
+    """Minimal dossier-format workbook (sole accepted import shape)."""
     import openpyxl
+
+    from etudiants.dossier_excel_template import COLUMN_HEADERS
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.append([
-        'matricule', 'nom_famille', 'prenom', 'nni', 'sexe', 'date_naissance',
-    ])
-    ws.append([91001, 'TestNom', 'TestPrenom', '2100999001', 'H', '2002-01-15'])
+    ws.title = 'Etudiants'
+    ws.append(['Polyspace — modèle dossier élève'])
+    ws.append(list(COLUMN_HEADERS))
+    row = {h: '' for h in COLUMN_HEADERS}
+    row.update({
+        'matricule': 91001,
+        'nom_famille': 'TestNom',
+        'prenom': 'TestPrenom',
+        'nni': '2100999001',
+        'sexe': 'M',
+        'date_naissance': '15/01/2002',
+        'departement': 'IRT',
+        'niveau': '3e année',
+        'statut_academique': 'Normal',
+        'voie_acces': '1',
+        'email_perso': 'test.import@gmail.com',
+    })
+    ws.append([row[h] for h in COLUMN_HEADERS])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
