@@ -1,76 +1,88 @@
-/** Colonnes du modèle d’import (front uniquement — fiche étudiant complète). */
-export const IMPORT_TEMPLATE_COLUMNS = [
-  ['matricule', 'ESP/24/IRT/101'],
-  ['nom_famille', 'Ould Ahmed'],
-  ['prenom', 'Mohamed'],
-  ['nni', '9800123456'],
-  ['sexe', 'H'],
-  ['date_naissance', '2002-05-15'],
-  ['lieu_naissance', 'Nouakchott'],
-  ['nationalite', 'Mauritanienne'],
-  ['num_bac', 'BAC-2021-001'],
-  ['serie_bac', 'C'],
-  ['categorie_bac', 'National'],
-  ['moyenne_bac', '14.50'],
-  ['ecole_bac', 'Lycée Nationale'],
-  ['date_premiere_inscription', '2024-09-01'],
-  ['annee_premiere_inscription', '2024-2025'],
-  ['voie_acces', '1'],
-  ['diplome_acces', 'Baccalauréat'],
-  ['etablissement_diplome', 'Lycée Nationale'],
-  ['departement', 'IRT'],
-  ['niveau', '3'],
-  ['semestre', 'S1'],
-  ['parcours', 'En cours normal'],
-  ['compagnie', '1re Compagnie'],
-  ['section', 'Section 1'],
-  ['sport_pratique', 'Football'],
-  ['email_perso', 'med@gmail.com'],
-  ['email_pro', '101@esp.mr'],
-  ['telephone', '22334455'],
-  ['whatsapp', '22334456'],
-  ['adresse_primaire', 'Tevragh Zeina, Nouakchott'],
-  ['adresse_secondaire', ''],
-  ['resident_avec_parents', 'Non'],
-  ['compte_bankily', ''],
-  ['groupe_sanguin', 'O+'],
-  ['poids_kg', '72'],
-  ['taille_cm', '178'],
-  ['assureur', 'CNAM'],
-  ['num_assure', 'AS12345'],
-  ['antecedents_medicaux', '—'],
-  ['maladies_chroniques', '—'],
-  ['medicaments', '—'],
-  ['prenom_pere', 'Ahmed'],
-  ['nom_famille_pere', 'Ould Ahmed'],
-  ['fonction_pere', 'Fonctionnaire'],
-  ['tel_pere', '20001122'],
-  ['prenom_mere', 'Fatimetou'],
-  ['nom_famille_mere', 'Mint Mohamed'],
-  ['fonction_mere', 'Enseignante'],
-  ['tel_mere', '20009988'],
-  ['nom_urgence', 'Père'],
-  ['tel_urgence', '20001122'],
-  ['batiment', 'Résidence 1'],
-  ['etage', '2'],
-  ['aile', 'A'],
-  ['chambre', '205'],
-  ['lit', 'B'],
-  ['tour_poitrine', '96'],
-  ['tour_ceinture', '82'],
-  ['tour_taille', '78'],
-  ['tour_bassin', '94'],
-  ['tour_cou', '38'],
-  ['longueur_manche', '62'],
-  ['longueur_dos', '72'],
-  ['longueur_cote', '58'],
-  ['pointure', '42'],
-  ['taille_chemise', 'M'],
-  ['taille_pantalon', '42'],
-  ['etablissement_echange', ''],
-  ['etablissement_double_diplome', ''],
-  ['specialite_mobilite', ''],
-];
+/** Client-side fallback template = dossier COLUMN_HEADERS (frontend-only mode). */
+
+import { DOSSIER_COLUMN_HEADERS } from '../data/dossierExcelColumns';
+
+/** Minimal example row aligned with dossier headers. */
+const EXAMPLE_BY_HEADER = {
+  matricule: '251280',
+  nom_famille: 'Ould Ahmed',
+  prenom: 'Mohamed',
+  nni: '9800123456',
+  sexe: 'M',
+  date_naissance: '15/05/2002',
+  nationalite: 'Mauritanie',
+  wilaya_naissance: 'Nouakchott',
+  commune_naissance: 'Tevragh-Zeina',
+  commune_naissance_autre: '',
+  lieu_naissance: '',
+  num_bac: '12345',
+  categorie_bac: 'National',
+  serie_bac: 'C',
+  moyenne_bac: '14,50',
+  ecole_bac: 'Lycée Nationale',
+  departement: 'IRT',
+  niveau: '3e année',
+  statut_academique: 'Normal',
+  annee_univ_1ere: '2024-2025',
+  date_premiere_inscription: '01/09/2024',
+  voie_acces: '1',
+  diplome_acces: 'CNIM',
+  etablissement_diplome: 'IPGEI',
+  etablissement_mobilite: '',
+  specialite_mobilite: '',
+  annee_debut_mobilite: '',
+  adresse_primaire: 'Tevragh-Zeina',
+  adresse_secondaire: '',
+  telephone: '31234567',
+  tel2: '',
+  email_perso: 'med.ahmed@gmail.com',
+  resident_avec_parents: 'Oui',
+  prenom_pere: 'Ahmed',
+  nom_famille_pere: 'Ould Ahmed',
+  fonction_pere: '',
+  prenom_mere: '',
+  nom_famille_mere: '',
+  fonction_mere: '',
+  tel_pere: '',
+  tel_pere_whatsapp: '',
+  tel_mere: '',
+  tel_mere_whatsapp: '',
+  nom_urgence: '',
+  tel_urgence: '20001122',
+  tel_urgence_whatsapp: '',
+  groupe_sanguin: 'O+',
+  num_assure: '',
+  assureur: '',
+  antecedents_medicaux: '',
+  maladies_chroniques: '',
+  medicaments: '',
+  poids_kg: '72',
+  taille_cm: '178',
+  compte_bankily: '',
+  sport_pratique: 'Football',
+  tour_poitrine: '',
+  tour_ceinture: '',
+  tour_taille: '',
+  tour_bassin: '',
+  tour_cou: '',
+  longueur_manche: '',
+  longueur_dos: '',
+  longueur_cote: '',
+  pointure: '',
+  batiment: '',
+  etage: '',
+  aile: '',
+  chambre: '',
+  lit: '',
+  responsable_chambre: '',
+  responsable_aile: '',
+  responsable_etage: '',
+};
+
+export const IMPORT_TEMPLATE_COLUMNS = DOSSIER_COLUMN_HEADERS.map((h) => [
+  h,
+  EXAMPLE_BY_HEADER[h] ?? '',
+]);
 
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -86,14 +98,18 @@ export async function downloadClientImportTemplate(type = 'xlsx') {
   const example = IMPORT_TEMPLATE_COLUMNS.map(([, v]) => v);
 
   if (type === 'csv') {
-    const lines = [headers.join(';'), example.join(';')];
+    const lines = [headers.join(';')];
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
-    triggerDownload(blob, 'modele-import-etudiants.csv');
+    triggerDownload(blob, 'Polyspace_modele_dossier_eleve.csv');
     return;
   }
 
   const XLSX = await import('xlsx-js-style');
-  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Polyspace — modèle dossier élève'],
+    headers,
+    example,
+  ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Etudiants');
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -101,6 +117,6 @@ export async function downloadClientImportTemplate(type = 'xlsx') {
     new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
-    'modele-import-etudiants.xlsx',
+    'Polyspace_modele_dossier_eleve.xlsx',
   );
 }

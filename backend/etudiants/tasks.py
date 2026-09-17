@@ -40,7 +40,7 @@ def run_bulk_import(self, job_id: str):
 
     try:
         name = (job.original_name or job.source_file.name or '').lower()
-        meta = {'sheet_name': '', 'format': 'legacy'}
+        meta = {'sheet_name': '', 'format': 'dossier'}
         with job.source_file.open('rb') as fh:
             if name.endswith('.csv'):
                 rows = read_csv(fh)

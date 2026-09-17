@@ -4,11 +4,11 @@ import { formatDisplayText } from './displayText';
 /** Ordre des champs sur la carte mobile (liste étudiants). */
 export const MOBILE_LIST_COLUMN_ORDER = [
   'matricule',
-  'nom',
+  'prenom',
+  'nom_famille',
   'departement',
   'niveau',
-  'compagnie',
-  'section',
+  'statut_academique',
 ];
 
 function NomPrenomCell({ eleve: r }) {
@@ -47,11 +47,18 @@ export function buildDataTableColumns(visibleIds) {
       accessor: (r) => displayCellValue(col, r),
     };
 
-    if (col.id === 'nom') {
-      return { ...base, render: (r) => <NomPrenomCell eleve={r} /> };
+    if (col.id === 'prenom' || col.id === 'nom_famille') {
+      if (col.id === 'prenom') {
+        return { ...base, render: (r) => <NomPrenomCell eleve={r} /> };
+      }
+      // Avoid duplicate compound cell when both prenom + nom_famille are visible
+      return {
+        ...base,
+        render: (r) => <span className="text-slate-900">{displayCellValue(col, r)}</span>,
+      };
     }
 
-    const plain = ['matricule', 'niveau', 'departement', 'compagnie', 'section', 'semestre'];
+    const plain = ['matricule', 'niveau', 'departement', 'statut_academique'];
     if (plain.includes(col.id)) {
       return {
         ...base,

@@ -90,7 +90,7 @@ export async function downloadTemplateFromApi(type = 'xlsx') {
   const url = URL.createObjectURL(data);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `modele_import_eleves.${type === 'csv' ? 'csv' : 'xlsx'}`;
+  a.download = `Polyspace_modele_dossier_eleve.${type === 'csv' ? 'csv' : 'xlsx'}`;
   a.click();
   URL.revokeObjectURL(url);
 }

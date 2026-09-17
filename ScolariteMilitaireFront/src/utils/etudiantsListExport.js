@@ -28,8 +28,8 @@ export function sanitizeExportText(value) {
     .trim();
 }
 
-function matrixForExport(eleves, colonneIds) {
-  const { headers, rows, cols } = buildExportMatrix(eleves, colonneIds);
+function matrixForExport(eleves, colonneIds, { headerMode = 'label' } = {}) {
+  const { headers, rows, cols } = buildExportMatrix(eleves, colonneIds, { headerMode });
   return {
     headers: headers.map(sanitizeExportText),
     rows: rows.map((row) => row.map(sanitizeExportText)),
@@ -107,9 +107,10 @@ export async function exportEtudiantsExcel(
   filenameBase = 'liste-etudiants-esp',
 ) {
   const exportIds = resolveColonnesExportSansMensurations(colonneIds).map((c) => c.id);
-  const { headers, rows } = matrixForExport(eleves, exportIds);
+  // snake_case headers = dossier import format (re-importable subset)
+  const { headers, rows } = matrixForExport(eleves, exportIds, { headerMode: 'id' });
   if (!headers.length) {
-    throw new Error('Sélectionnez au moins une colonne à exporter (hors mensurations).');
+    throw new Error('Sélectionnez au moins une colonne à exporter.');
   }
 
   const XLSX = await import('xlsx-js-style');
@@ -121,9 +122,9 @@ export async function exportEtudiantsExcel(
   wb.Props = {
     Title: `${APP_NAME} — Registre étudiants`,
     Author: APP_NAME,
-    Comments: 'Mensurations exclues — une ligne par étudiant.',
+    Comments: 'Format dossier Polyspace (en-têtes snake_case).',
   };
-  XLSX.utils.book_append_sheet(wb, ws, 'Registre');
+  XLSX.utils.book_append_sheet(wb, ws, 'Etudiants');
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   saveAs(
     new Blob([buffer], {

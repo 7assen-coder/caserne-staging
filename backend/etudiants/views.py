@@ -702,14 +702,18 @@ class ImportTemplateView(APIView):
             if fmt == 'csv':
                 content = generate_csv_template().encode('utf-8-sig')
                 resp = HttpResponse(content, content_type='text/csv; charset=utf-8-sig')
-                resp['Content-Disposition'] = 'attachment; filename="modele_import_etudiants.csv"'
+                resp['Content-Disposition'] = (
+                    'attachment; filename="Polyspace_modele_dossier_eleve.csv"'
+                )
                 return resp
             content = generate_excel_template()
             resp = HttpResponse(
                 content,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             )
-            resp['Content-Disposition'] = 'attachment; filename="modele_import_etudiants.xlsx"'
+            resp['Content-Disposition'] = (
+                'attachment; filename="Polyspace_modele_dossier_eleve.xlsx"'
+            )
             return resp
         except Exception as exc:
             return Response({'error': str(exc)}, status=500)

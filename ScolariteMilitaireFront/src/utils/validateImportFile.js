@@ -13,14 +13,13 @@ export function validateImportFile(file, t) {
   }
 
   const name = file.name.toLowerCase();
-  const allowed =
-    name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.docx');
+  const allowed = name.endsWith('.xlsx') || name.endsWith('.xls');
   if (!allowed) {
     return {
       ok: false,
       message: t
         ? t('eleves:importInvalidFormat')
-        : 'Format non accepté. Utilisez Excel (.xlsx) ou Word (.docx).',
+        : 'Format non accepté. Utilisez le modèle Excel dossier (.xlsx).',
     };
   }
 

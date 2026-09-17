@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import FileUploadField from '../components/common/FileUploadField';
 import { useToast } from '../context/ToastContext';
 import { useInvalidateEleves } from '../hooks/useElevesQueries';
-import { uploadFileToImportApi } from '../utils/importEtudiantsBulk';
+import { downloadTemplateFromApi, uploadFileToImportApi } from '../utils/importEtudiantsBulk';
 import { notifyElevesChanged } from '../utils/importedElevesStore';
 import { isDocxFile, validateImportFile } from '../utils/validateImportFile';
 import { humanizeError } from '../utils/apiErrors';
@@ -16,6 +16,20 @@ export default function ImportEtudiantsPage() {
   const invalidateEleves = useInvalidateEleves();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadTemplate() {
+    setDownloading(true);
+    try {
+      await downloadTemplateFromApi('xlsx');
+      toast.success(t('eleves:importTemplateDownloaded'));
+    } catch (err) {
+      console.error(err);
+      toast.error(humanizeError(err));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function handleFileUpload(file) {
     if (!file) return;
@@ -95,27 +109,36 @@ export default function ImportEtudiantsPage() {
 
       <section className="min-w-0 overflow-hidden rounded-2xl border border-light-gray bg-white shadow-sm xl:col-span-12">
         <div className="border-b border-light-gray px-4 py-4 sm:px-6">
-          <h2 className="text-sm font-semibold text-navy">{t('eleves:importGuideTitle')}</h2>
-          <dl className="mt-3 space-y-3 text-sm text-slate-700">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <dt className="font-semibold text-slate-900">{t('eleves:importCols3ALabel')}</dt>
-              <dd className="mt-0.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                {t('eleves:importCols3A')}
-              </dd>
+              <h2 className="text-sm font-semibold text-navy">{t('eleves:importGuideTitle')}</h2>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600 sm:text-sm">
+                {t('eleves:importGuideBody')}
+              </p>
             </div>
-            <div>
-              <dt className="font-semibold text-slate-900">{t('eleves:importCols4ALabel')}</dt>
-              <dd className="mt-0.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                {t('eleves:importCols4A')}
-              </dd>
-            </div>
-          </dl>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={downloading || busy}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-60"
+            >
+              <Download size={16} aria-hidden />
+              {downloading
+                ? t('eleves:importTemplateDownloading')
+                : t('eleves:importDownloadTemplate')}
+            </button>
+          </div>
+          <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-slate-600 sm:text-sm">
+            <li>{t('eleves:importGuidePoint1')}</li>
+            <li>{t('eleves:importGuidePoint2')}</li>
+            <li>{t('eleves:importGuidePoint3')}</li>
+          </ul>
         </div>
 
         <div className="px-4 py-5 sm:px-6 sm:py-6">
           <FileUploadField
             label={t('eleves:importUploadLabel')}
-            accept=".xlsx,.xls,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             hint={t('eleves:importAcceptHint')}
             validateFn={(file) => validateImportFile(file, t)}
             disabled={busy}
@@ -152,16 +175,11 @@ function ImportStatusBanner({ status, t }) {
               })}
             </li>
           ))}
-          {status.errors.length > 15 && (
+          {status.errors.length > 15 ? (
             <li>
               {t('eleves:importMoreErrors', {
                 count: status.errors.length - 15,
               })}
-            </li>
-          )}
-          {status.errors.length >= 200 ? (
-            <li className="list-none pt-1 text-slate-600">
-              {t('eleves:importErrorsCapped')}
             </li>
           ) : null}
         </ul>

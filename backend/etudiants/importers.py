@@ -121,34 +121,75 @@ def _resolve_dept(raw):
 
 def read_excel(file_obj):
     """
-    Read matching sheet. Returns (rows, meta).
+    Read dossier Excel. Returns (rows, meta).
 
-    meta = {sheet_name, format} where format is liste_definitive_3a|4a|legacy.
-    Raises ValueError if headers match neither liste définitive nor legacy template.
+    meta = {sheet_name, format} where format is always 'dossier'.
+    Raises ValueError for liste définitive 3A/4A, legacy templates, or bad headers.
     """
     try:
         import openpyxl
     except ImportError:
         raise ImportError("openpyxl est requis. pip install openpyxl")
 
-    from etudiants.importers_liste_definitive import (
-        detect_import_format,
-        pick_liste_sheet,
+    from etudiants.importers_dossier import (
+        detect_dossier_format,
+        find_dossier_header_row,
+        looks_like_liste_or_legacy,
     )
 
     wb = openpyxl.load_workbook(file_obj, data_only=True)
-    sheet_name = pick_liste_sheet(wb.sheetnames) or wb.active.title
+    # Prefer sheet named Etudiants when present
+    sheet_name = 'Etudiants' if 'Etudiants' in wb.sheetnames else wb.active.title
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
-        return [], {'sheet_name': sheet_name, 'format': 'legacy'}
-    headers = [str(h).strip() if h is not None else f'col_{i}' for i, h in enumerate(rows[0])]
-    fmt = detect_import_format(headers, sheet_name)
+        raise ValueError(
+            'Fichier Excel vide. Téléchargez le modèle dossier Polyspace.'
+        )
+
+    found = find_dossier_header_row(rows)
+    if not found:
+        # Probe first non-empty row for clear reject messages
+        probe = []
+        for row in rows[:10]:
+            cells = [str(c).strip() if c is not None else '' for c in row]
+            if any(cells):
+                probe = cells
+                break
+        hint = looks_like_liste_or_legacy(probe)
+        if hint == 'liste_definitive':
+            raise ValueError(
+                'Format liste définitive 3A/4A non pris en charge. '
+                'Téléchargez le modèle dossier Polyspace (colonnes matricule, nom_famille, …).'
+            )
+        if hint == 'legacy':
+            raise ValueError(
+                'Ancien modèle d’import non pris en charge. '
+                'Téléchargez le modèle dossier Polyspace via Import → Télécharger le modèle.'
+            )
+        raise ValueError(
+            'En-têtes dossier introuvables. '
+            'Téléchargez le modèle Polyspace (ligne d’en-têtes snake_case).'
+        )
+
+    header_idx, headers = found
+    fmt = detect_dossier_format(headers)
     result = []
-    for row in rows[1:]:
+    for row in rows[header_idx + 1:]:
         if all(v is None or str(v).strip() == '' for v in row):
             continue
-        result.append(dict(zip(headers, row)))
+        row_dict = dict(zip(headers, row))
+        # Skip empty data area + hidden dropdown ref lists written below the table
+        mat = row_dict.get('matricule')
+        if mat is None or str(mat).strip() == '':
+            continue
+        mat_s = str(mat).strip()
+        if mat_s.startswith('_'):
+            break  # ref lists start with _pays / _wilayas / …
+        digits = re.sub(r'\D', '', mat_s)
+        if not digits:
+            continue
+        result.append(row_dict)
     return result, {'sheet_name': sheet_name, 'format': fmt}
 
 
@@ -336,38 +377,29 @@ class BulkImporter:
         self.mapper = RowMapper()
 
     def run(self, rows, meta=None):
-        from etudiants.importers_liste_definitive import (
-            FORMAT_LEGACY,
-            FORMAT_LISTE_3A,
-            FORMAT_LISTE_4A,
-            ListeDefinitiveMapper,
-        )
+        from etudiants.importers_dossier import FORMAT_DOSSIER, DossierRowMapper
 
         meta = meta or {}
-        fmt = meta.get('format') or FORMAT_LEGACY
-        sheet_name = meta.get('sheet_name') or ''
-        use_liste = fmt in (FORMAT_LISTE_3A, FORMAT_LISTE_4A)
-        liste_mapper = ListeDefinitiveMapper() if use_liste else None
+        fmt = meta.get('format') or FORMAT_DOSSIER
+        if fmt != FORMAT_DOSSIER:
+            raise ValueError(
+                'Format d’import non pris en charge. '
+                'Utilisez uniquement le modèle dossier Polyspace.'
+            )
 
+        dossier_mapper = DossierRowMapper()
         created = 0
         skipped = 0
         all_errors = []
 
         for idx, raw_row in enumerate(rows):
             row_num = idx + 2
-            if use_liste:
-                mapped, field_errors = liste_mapper.map(raw_row, row_num, sheet_name)
-                fatal_fields = ListeDefinitiveMapper.FATAL
-            else:
-                mapped, field_errors = self.mapper.map(raw_row, row_num)
-                fatal_fields = frozenset({'matricule', 'nom_famille', 'prenom'})
+            mapped, field_errors = dossier_mapper.map(raw_row, row_num)
+            fatal_fields = DossierRowMapper.FATAL
 
             if field_errors:
                 fatal = [e for e in field_errors if e['field'] in fatal_fields]
-                if use_liste:
-                    all_errors.extend(fatal)
-                else:
-                    all_errors.extend(field_errors)
+                all_errors.extend(field_errors)
                 if fatal:
                     skipped += 1
                     continue
@@ -396,12 +428,26 @@ class BulkImporter:
 
         dm = mapped.get('dossier_militaire')
         if dm and (dm.get('compagnie') or dm.get('section')):
-            DossierMilitaire.objects.create(
-                eleve=eleve,
-                compagnie=dm.get('compagnie') or '',
-                section=dm.get('section') or '',
-                sport_pratique=dm.get('sport_pratique') or '',
-            )
+            dm_payload = {
+                'eleve': eleve,
+                'compagnie': dm.get('compagnie') or '',
+                'section': dm.get('section') or '',
+                'sport_pratique': dm.get('sport_pratique') or '',
+            }
+            for field in (
+                'tour_poitrine',
+                'tour_ceinture',
+                'tour_taille',
+                'tour_bassin',
+                'tour_cou',
+                'longueur_manche',
+                'longueur_dos',
+                'longueur_cote',
+                'pointure',
+            ):
+                if dm.get(field) is not None:
+                    dm_payload[field] = dm[field]
+            DossierMilitaire.objects.create(**dm_payload)
 
         if mapped.get('dossier_sante'):
             ds = dict(mapped['dossier_sante'])
@@ -416,136 +462,24 @@ class BulkImporter:
             cp['eleve'] = eleve
             ContactParent.objects.create(**cp)
 
+        if mapped.get('hebergement'):
+            heb = dict(mapped['hebergement'])
+            heb['eleve'] = eleve
+            Hebergement.objects.create(**heb)
+
 
 # ─── Générateur de templates ──────────────────────────────────────────────────
 
 def generate_excel_template():
-    try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
-    except ImportError:
-        raise ImportError("openpyxl requis. pip install openpyxl")
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Etudiants'
-
-    columns = [
-        ('matricule',                '251280',           True,  'Matricule 6 chiffres (YYNNNN)'),
-        ('nom_famille',              'Ould Ahmed',       True,  'Nom de famille'),
-        ('prenom',                   'Mohamed',          True,  'Prénom(s)'),
-        ('nni',                      '9800123456',       True,  '10 chiffres'),
-        ('sexe',                     'H',                True,  'H ou F'),
-        ('date_naissance',           '2002-05-15',       True,  'Format AAAA-MM-JJ'),
-        ('lieu_naissance',           'Nouakchott',       False, ''),
-        ('nationalite',              'Mauritanienne',    False, ''),
-        ('email_perso',              'med@gmail.com',    False, ''),
-        ('telephone',                '22334455',         False, '8 chiffres'),
-        ('adresse_primaire',         'Tevragh Zeina',    False, ''),
-        ('num_bac',                  'BAC-2021-001',     False, ''),
-        ('serie_bac',                'C',                False, 'C, D, TMGM, TSGM, LM, LO'),
-        ('categorie_bac',            'National',         False, 'National ou Etranger'),
-        ('moyenne_bac',              '14.50',            False, '0 à 20'),
-        ('ecole_bac',                'Lycée Nationale',  False, ''),
-        ('date_premiere_inscription','2024-09-01',       False, 'Format AAAA-MM-JJ'),
-        ('voie_acces',               '1',                False, '1,2,3,4'),
-        ('diplome_acces',            'Baccalauréat',     False, ''),
-        ('departement',              'IRT',              True,  'IRT, GE, GM, GC-HE, SID, MPG'),
-        ('niveau',                   '3',                True,  '3, 4, 4-DD, 4-E, 5-DD'),
-        ('semestre',                 'S1',               False, 'S1 à S8'),
-        ('parcours',                 'En cours normal',  False, ''),
-        ('groupe_sanguin',           'O+',               False, 'A+,A-,B+,B-,AB+,AB-,O+,O-'),
-        ('poids_kg',                 '72',               False, ''),
-        ('taille_cm',                '178',              False, ''),
-        ('tel_urgence',              '20001122',         False, ''),
-        ('nom_urgence',              'Père',             False, ''),
-        ('tel_pere',                 '20001122',         False, ''),
-        ('tel_mere',                 '20009988',         False, ''),
-    ]
-
-    navy_fill     = PatternFill('solid', fgColor='1B2A4A')
-    required_fill = PatternFill('solid', fgColor='C8A54E')
-    opt_fill      = PatternFill('solid', fgColor='2D3E5F')
-    example_fill  = PatternFill('solid', fgColor='F9F4E8')
-    thin_border   = Border(
-        left=Side(style='thin', color='D1D9E6'), right=Side(style='thin', color='D1D9E6'),
-        top=Side(style='thin', color='D1D9E6'),  bottom=Side(style='thin', color='D1D9E6'),
-    )
-    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    left   = Alignment(horizontal='left',   vertical='center')
-
-    # Titre
-    ws.merge_cells(f'A1:{get_column_letter(len(columns))}1')
-    c = ws['A1']
-    c.value = 'MODÈLE IMPORT ÉTUDIANTS — ESP'
-    c.font = Font(color='FFFFFF', bold=True, size=13)
-    c.fill = navy_fill
-    c.alignment = center
-    ws.row_dimensions[1].height = 28
-
-    # En-têtes
-    for col_idx, (col_name, _, required, comment) in enumerate(columns, start=1):
-        cell = ws.cell(row=2, column=col_idx, value=col_name)
-        cell.fill = required_fill if required else opt_fill
-        cell.font = Font(color='1B2A4A' if required else 'FFFFFF', bold=True, size=10)
-        cell.alignment = center
-        cell.border = thin_border
-        if comment:
-            from openpyxl.comments import Comment
-            cell.comment = Comment(comment, 'ESP Import')
-    ws.row_dimensions[2].height = 24
-
-    # Exemple
-    for col_idx, (_, example, _, _) in enumerate(columns, start=1):
-        cell = ws.cell(row=3, column=col_idx, value=example)
-        cell.fill = example_fill
-        cell.font = Font(color='1B2A4A', size=10)
-        cell.alignment = left
-        cell.border = thin_border
-    ws.row_dimensions[3].height = 18
-
-    # Zones de saisie
-    empty_fill = PatternFill('solid', fgColor='FFFFFF')
-    alt_fill   = PatternFill('solid', fgColor='F5F7FB')
-    for row_idx in range(4, 54):
-        fill = empty_fill if row_idx % 2 == 0 else alt_fill
-        for col_idx in range(1, len(columns) + 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value='')
-            cell.fill = fill
-            cell.font = Font(size=10)
-            cell.alignment = left
-            cell.border = thin_border
-        ws.row_dimensions[row_idx].height = 16
-
-    ws.freeze_panes = 'A3'
-    ws.auto_filter.ref = f'A2:{get_column_letter(len(columns))}2'
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    """Serve the unified dossier workbook (same as Desktop preview)."""
+    from etudiants.dossier_excel_template import workbook_to_bytes
+    return workbook_to_bytes()
 
 
 def generate_csv_template():
-    headers = [
-        'matricule', 'nom_famille', 'prenom', 'nni', 'sexe', 'date_naissance',
-        'lieu_naissance', 'nationalite', 'email_perso', 'telephone',
-        'adresse_primaire', 'num_bac', 'serie_bac', 'categorie_bac',
-        'moyenne_bac', 'ecole_bac', 'date_premiere_inscription', 'voie_acces',
-        'diplome_acces', 'departement', 'niveau', 'semestre', 'parcours',
-        'groupe_sanguin', 'poids_kg', 'taille_cm',
-        'tel_urgence', 'nom_urgence', 'tel_pere', 'tel_mere',
-    ]
-    example = [
-        '12001', 'Ould Ahmed', 'Mohamed', '9800123456', 'H', '2002-05-15',
-        'Nouakchott', 'Mauritanienne', 'med@gmail.com', '22334455',
-        'Tevragh Zeina', 'BAC-2021-001', 'C', 'National',
-        '14.50', 'Lycée Nationale', '2024-09-01', '1',
-        'Baccalauréat', 'IRT', '3', 'S1', 'En cours normal',
-        'O+', '72', '178', '20001122', 'Père', '20001122', '20009988',
-    ]
+    """Header-only CSV from dossier COLUMN_HEADERS."""
+    from etudiants.dossier_excel_template import COLUMN_HEADERS
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=';')
-    writer.writerow(headers)
-    writer.writerow(example)
+    writer.writerow(COLUMN_HEADERS)
     return buf.getvalue()

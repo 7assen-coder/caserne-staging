@@ -1,14 +1,13 @@
 """
-Liste définitive mapper tests.
-
-Field matrix documented in etudiants.importers_liste_definitive module docstring.
+Liste définitive mapper unit tests (helpers still used for auto compagnie/section).
+Bulk import of 3A/4A files is rejected — see test_dossier_import.py.
 """
 
 from pathlib import Path
 
 from django.test import TestCase
 
-from etudiants.importers import BulkImporter, read_excel
+from etudiants.importers import read_excel
 from etudiants.importers_liste_definitive import (
     FORMAT_LISTE_3A,
     FORMAT_LISTE_4A,
@@ -23,7 +22,6 @@ from etudiants.importers_liste_definitive import (
     section_from_dept_niveau,
     split_nom_prenom,
 )
-from etudiants.models import DossierAcademique, DossierMilitaire, Eleve
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 
@@ -116,108 +114,37 @@ class DetectFormatTests(TestCase):
             detect_import_format(['foo', 'bar'], 'Sheet1')
 
 
-class FixtureReadTests(TestCase):
-    def test_read_3a_fixture(self):
-        path = FIXTURES / 'liste_definitive_3a_sample.xlsx'
-        with path.open('rb') as fh:
-            rows, meta = read_excel(fh)
-        self.assertEqual(meta['format'], FORMAT_LISTE_3A)
-        self.assertEqual(meta['sheet_name'], '3A')
-        self.assertEqual(len(rows), 5)
+class ListeMapperStillWorksUnit(TestCase):
+    """Mapper unit tests against fixtures (import path rejects these files)."""
 
-        mapped, errors = ListeDefinitiveMapper().map(rows[0], 2, '3A')
-        # Redoublant row
-        self.assertEqual(mapped['eleve']['prenom'], 'Saadna')
-        self.assertEqual(mapped['eleve']['nom_famille'], 'Mohamed Ahmed')
-        self.assertEqual(mapped['eleve']['voie_acces'], '')
-        self.assertEqual(mapped['dossier_academique']['parcours'], 'Redoublant')
-        self.assertEqual(mapped['dossier_academique']['niveau_actuel'], '3')
-        self.assertTrue(mapped['eleve']['profil_incomplet'])
-        self.assertIsNone(mapped['eleve']['nni'])
+    def test_map_3a_row_from_fixture_if_readable(self):
+        # Build a synthetic row matching liste shape for unit map
+        row = {
+            'N°': 1,
+            'Matricule': 251001,
+            'Nom et Prénom': 'Tettou cheikh',
+            'Département': 'MPG',
+            'Voie': 'Voie 1',
+            'S': 'F',
+            'Institut': 'IPGEI',
+            'NNI': '',
+            'Date de naissance': '',
+            'Lieu de naissance': '',
+            'Mail Personnel': 'cheickhtetou@gmail.com',
+            'Tél': '',
+        }
+        mapped, errors = ListeDefinitiveMapper().map(row, 2, '3A')
+        self.assertEqual(mapped['eleve']['prenom'], 'Tettou')
+        self.assertEqual(mapped['eleve']['nom_famille'], 'cheikh')
+        self.assertEqual(mapped['eleve']['voie_acces'], '1')
+        self.assertEqual(mapped['dossier_militaire']['compagnie'], '1re Compagnie')
         self.assertFalse(any(e['field'] in ListeDefinitiveMapper.FATAL for e in errors))
 
-        mapped2, _ = ListeDefinitiveMapper().map(rows[1], 3, '3A')
-        self.assertEqual(mapped2['eleve']['prenom'], 'Tettou')
-        self.assertEqual(mapped2['eleve']['nom_famille'], 'cheikh')
-        self.assertEqual(mapped2['eleve']['sexe'], 'F')
-        self.assertEqual(mapped2['eleve']['voie_acces'], '1')
-        self.assertEqual(mapped2['eleve']['etablissement_diplome'], 'IPGEI')
-        self.assertEqual(mapped2['eleve']['email_perso'], 'cheickhtetou@gmail.com')
-        self.assertEqual(mapped2['dossier_militaire']['compagnie'], '1re Compagnie')
-        self.assertEqual(mapped2['dossier_militaire']['section'], 'Section 13')  # MPG
 
-        mapped3, _ = ListeDefinitiveMapper().map(rows[3], 5, '3A')
-        self.assertEqual(mapped3['dossier_academique']['departement'], 'GC-HE')
-        self.assertEqual(mapped3['eleve']['voie_acces'], '3')  # Voie 2 + ISME
-        self.assertEqual(mapped3['dossier_militaire']['section'], 'Section 13')  # GC-HE
-
-        mapped_irt, _ = ListeDefinitiveMapper().map(rows[2], 4, '3A')
-        self.assertEqual(mapped_irt['dossier_academique']['departement'], 'IRT')
-        self.assertEqual(mapped_irt['dossier_militaire']['section'], 'Section 11')
-
-    def test_read_4a_fixture(self):
-        path = FIXTURES / 'liste_definitive_4a_sample.xlsx'
-        with path.open('rb') as fh:
-            rows, meta = read_excel(fh)
-        self.assertEqual(meta['format'], FORMAT_LISTE_4A)
-        mapped, errors = ListeDefinitiveMapper().map(rows[0], 2, '4A')
-        self.assertEqual(mapped['dossier_academique']['niveau_actuel'], '4')
-        self.assertEqual(mapped['eleve']['voie_acces'], '')
-        self.assertEqual(mapped['eleve']['sexe'], 'F')
-        self.assertIsNone(mapped['eleve']['nni'])
-        self.assertEqual(mapped['dossier_militaire']['compagnie'], '2e Compagnie')
-        self.assertEqual(mapped['dossier_militaire']['section'], 'Section 22')  # 4A + GE
-        self.assertFalse(any(e['field'] in ListeDefinitiveMapper.FATAL for e in errors))
-
-        mapped_single, _ = ListeDefinitiveMapper().map(rows[2], 4, '4A')
-        self.assertEqual(mapped_single['eleve']['prenom'], 'SingleToken')
-        self.assertEqual(mapped_single['eleve']['nom_famille'], '')
-        self.assertEqual(mapped_single['eleve']['sexe'], 'H')  # M → H
-        self.assertEqual(mapped_single['dossier_militaire']['section'], 'Section 21')  # 4A + IRT
-
-
-class BulkImportListeTests(TestCase):
-    def test_import_3a_sample_creates_incomplete(self):
+class RejectListeViaReadExcel(TestCase):
+    def test_read_excel_rejects_3a(self):
         path = FIXTURES / 'liste_definitive_3a_sample.xlsx'
         with path.open('rb') as fh:
-            rows, meta = read_excel(fh)
-        report = BulkImporter().run(rows, meta=meta)
-        self.assertEqual(report['created'], 5, report)
-        self.assertEqual(report['skipped'], 0, report)
-        e = Eleve.objects.get(matricule=251001)
-        self.assertTrue(e.profil_incomplet)
-        self.assertEqual(e.prenom, 'Tettou')
-        self.assertEqual(e.nom_famille, 'cheikh')
-        self.assertEqual(e.voie_acces, '1')
-        self.assertEqual(e.sexe, 'F')
-        da = DossierAcademique.objects.get(eleve=e)
-        self.assertEqual(da.niveau_actuel, '3')
-        dm = DossierMilitaire.objects.get(eleve=e)
-        self.assertEqual(dm.compagnie, '1re Compagnie')
-        self.assertEqual(dm.section, 'Section 13')  # MPG
-
-        red = Eleve.objects.get(matricule=24053)
-        self.assertEqual(red.voie_acces, '')
-        self.assertEqual(red.dossier_academique.parcours, 'Redoublant')
-        self.assertIsNone(red.nni)
-        self.assertIn(red.email_perso, (None, ''))
-
-        # re-import → duplicates skipped
-        report2 = BulkImporter().run(rows, meta=meta)
-        self.assertEqual(report2['created'], 0)
-        self.assertEqual(report2['skipped'], 5)
-        self.assertEqual(Eleve.objects.count(), 5)
-
-    def test_import_4a_sample(self):
-        path = FIXTURES / 'liste_definitive_4a_sample.xlsx'
-        with path.open('rb') as fh:
-            rows, meta = read_excel(fh)
-        report = BulkImporter().run(rows, meta=meta)
-        self.assertEqual(report['created'], 5, report)
-        e = Eleve.objects.get(matricule=24002)
-        self.assertEqual(e.voie_acces, '')
-        self.assertTrue(e.profil_incomplet)
-        self.assertEqual(e.dossier_academique.niveau_actuel, '4')
-        dm = DossierMilitaire.objects.get(eleve=e)
-        self.assertEqual(dm.compagnie, '2e Compagnie')
-        self.assertEqual(dm.section, 'Section 22')
+            with self.assertRaises(ValueError) as ctx:
+                read_excel(fh)
+        self.assertIn('liste définitive', str(ctx.exception).lower())
